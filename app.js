@@ -220,3 +220,103 @@ if ('serviceWorker' in navigator) {
 btnPreview.disabled = true;
 btnExport.disabled = true;
 initOpenSCAD();
+
+// ---- THE THREE.JS STL WORKSPACE VIEWPORT ENGINE ----
+
+let scene, camera, renderer, controls, currentMesh = null;
+
+function init3DWorkspace() {
+    const container = document.getElementById('3d-viewer');
+    if (!container) return;
+
+    // 1. Scene Setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x222222);
+
+    // 2. Camera Viewport Calculation
+    camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 1000);
+    camera.position.set(30, 30, 40);
+
+    // 3. WebGL Canvas Core Renderer Mounting
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // 4. Mouse Orbit Controls Integration
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+
+    // 5. Dual Lighting Environment Setup
+    const ambientLight = new THREE.AmbientLight(0x666666);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight1.position.set(1, 1, 1).normalize();
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.DirectionalLight(0x555555, 0.5);
+    dirLight2.position.set(-1, -1, -1).normalize();
+    scene.add(dirLight2);
+
+    // 6. Window Resize Auto Tracker
+    window.addEventListener('resize', () => {
+        camera.aspect = container.clientWidth / container.clientHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(container.clientWidth, container.clientHeight);
+    });
+
+    // Start looping rendering frame animations
+    function animate() {
+        requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+    }
+    animate();
+}
+
+// Global invocation hook to feed new Binary data layouts into our canvas space
+function update3DModelViewer(blobUrl) {
+    if (!scene) {
+        init3DWorkspace(); // Lazily builds scene workspace environment frames on first render pass
+    }
+
+    // Clear old geometry out of GPU registers
+    if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.geometry.dispose();
+        currentMesh.material.dispose();
+        currentMesh = null;
+    }
+
+    const loader = new THREE.STLLoader();
+    loader.load(blobUrl, (geometry) => {
+        geometry.computeVertexNormals();
+        
+        // Clean metallic mesh styling setup
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0x007acc, 
+            roughness: 0.4,
+            metalness: 0.2
+        });
+        
+        currentMesh = new THREE.Mesh(geometry, material);
+        
+        // Center alignment calculations
+        geometry.computeBoundingBox();
+        const center = new THREE.Vector3();
+        geometry.boundingBox.getCenter(center);
+        currentMesh.position.sub(center); // Centers model precisely at coordinate point [0,0,0]
+
+        scene.add(currentMesh);
+        
+        // Automatically frame camera bounds dynamically to fit whatever scale size the model is
+        const boundingSphere = geometry.boundingSphere;
+        const radius = boundingSphere.radius;
+        camera.position.set(radius * 2, radius * 2, radius * 2);
+        camera.lookAt(0, 0, 0);
+        controls.target.set(0, 0, 0);
+        controls.update();
+    });
+}
