@@ -54,7 +54,6 @@ async function initOpenSCAD() {
         
         let openSCADFactory = null;
         
-        // Target the exact named export we uncovered!
         if (typeof OpenSCADModule.createOpenSCAD === 'function') {
             openSCADFactory = OpenSCADModule.createOpenSCAD;
         } else if (typeof OpenSCADModule.default === 'function') {
@@ -68,6 +67,7 @@ async function initOpenSCAD() {
 
         // Initialize the engine using the verified factory function
         openSCADInstance = await openSCADFactory({
+            noInitialRun: true, // CRITICAL: Tells the WASM engine to stay open and wait for clicks!
             locateFile: (path) => `https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/${path}`,
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => logToConsole(`[ERROR]: ${text}`)
@@ -85,8 +85,8 @@ async function initOpenSCAD() {
 // ---- THE PREVIEW TRIGGER (F5 Style) ----
 
 btnPreview.addEventListener('click', async () => {
-    if (!openSCADInstance) {
-        logToConsole('Error: OpenSCAD engine is not ready yet.');
+    if (!openSCADInstance || !openSCADInstance.FS) {
+        logToConsole('Error: OpenSCAD filesystem is unavailable or engine is not ready.');
         return;
     }
 
