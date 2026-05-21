@@ -48,13 +48,14 @@ fileLoad.addEventListener('change', (event) => {
 // ---- OPENSCAD WASM INITIALIZATION ----
 
 async function initOpenSCAD() {
-    logToConsole('Downloading OpenSCAD WASM engine from CDN...');
+    logToConsole('Loading OpenSCAD module from CDN...');
     try {
-        // We now switch to jsDelivr CDN, which handles ES module dynamic imports beautifully
-        const OpenSCADModule = await import('https://cdn.jsdelivr.net/npm/@openscad/openscad-wasm@2024.1.25/dist/openscad.js');
+        // Load the wrapper script using the correctly formatted package name
+        const OpenSCADModule = await import('https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/openscad.js');
         
         openSCADInstance = await OpenSCADModule.default({
-            locateFile: (path) => `https://cdn.jsdelivr.net/npm/@openscad/openscad-wasm@2024.1.25/dist/${path}`,
+            // Fetch the heavy binary using the correctly formatted package name
+            locateFile: (path) => `https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/${path}`,
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => logToConsole(`[ERROR]: ${text}`)
         });
@@ -85,10 +86,8 @@ btnPreview.addEventListener('click', async () => {
         logToConsole('Code loaded into virtual memory.');
 
         // 2. Execute OpenSCAD using explicit absolute file paths.
-        // We add '--enable=manifold' which handles fast modern rendering calculations.
         logToConsole('Compiling geometry via WASM...');
-        
-        openSCADInstance.callMain(['/input.scad', '--enable=manifold', '-o', '/output.stl']);
+        openSCADInstance.callMain(['/input.scad', '-o', '/output.stl']);
         
         // 3. Verify if the file was created successfully in the absolute path
         if (openSCADInstance.FS.analyzePath('/output.stl').exists) {
@@ -118,8 +117,7 @@ btnPreview.addEventListener('click', async () => {
         logToConsole(`Execution error: ${error.message}`);
         console.error(error);
     } finally {
-        // CRITICAL EMSCRIPTEN RESET: 
-        // Emscripten keeps an internal argument count pointer. We reset it to allow unlimited clicks.
+        // Reset argument pointers for next clicks
         if (openSCADInstance && openSCADInstance.stubForNextCallMain) {
             openSCADInstance.stubForNextCallMain();
         }
