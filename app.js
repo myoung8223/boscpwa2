@@ -52,29 +52,45 @@ async function initOpenSCAD() {
     try {
         const OpenSCADModule = await import('https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/openscad.js');
         
-        let openSCADFactory = null;
-        
-        if (typeof OpenSCADModule.createOpenSCAD === 'function') {
-            openSCADFactory = OpenSCADModule.createOpenSCAD;
-        } else if (typeof OpenSCADModule.default === 'function') {
-            openSCADFactory = OpenSCADModule.default;
-        }
-        
+        const openSCADFactory = OpenSCADModule.createOpenSCAD || OpenSCADModule.default;
         if (!openSCADFactory) {
-            const availableKeys = Object.keys(OpenSCADModule).join(', ') || 'none';
-            throw new Error(`Initialization function not found. Module keys: [${availableKeys}].`);
+            throw new Error("Could not locate the createOpenSCAD factory wrapper.");
         }
 
-        // Initialize the engine using the verified factory function
-        openSCADInstance = await openSCADFactory({
-            noInitialRun: true, // CRITICAL: Tells the WASM engine to stay open and wait for clicks!
-            locateFile: (path) => `https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/${path}`,
-            print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
-            printErr: (text) => logToConsole(`[ERROR]: ${text}`)
+        logToConsole('Downloading and compiling WASM binary layout...');
+
+        // CRITICAL FIX: Wrap instantiation in a Promise that listens to the runtime event
+        openSCADInstance = await new Promise((resolve, reject) => {
+            try {
+                const instance = openSCADFactory({
+                    noInitialRun: true,
+                    locateFile: (path) => `https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/${path}`,
+                    print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
+                    printErr: (text) => logToConsole(`[ERROR]: ${text}`),
+                    
+                    // Fires the exact millisecond the virtual filesystem and runtime are fully constructed
+                    onRuntimeInitialized: () => {
+                        resolve(instance);
+                    }
+                });
+
+                // Fail-safe protection: if the engine natively returns a modern Promise, track it too
+                if (instance && typeof instance.then === 'function') {
+                    instance.then(resolve).catch(reject);
+                }
+            } catch (initError) {
+                reject(initError);
+            }
         });
 
-        logToConsole('OpenSCAD WASM Engine fully loaded and ready!');
-        btnPreview.disabled = false;
+        // Final verification check
+        if (openSCADInstance && openSCADInstance.FS) {
+            logToConsole('OpenSCAD WASM Engine fully loaded and ready!');
+            btnPreview.disabled = false;
+        } else {
+            throw new Error("WASM initialized but virtual filesystem (FS) layer is missing.");
+        }
+
     } catch (err) {
         logToConsole(`Failed to initialize OpenSCAD: ${err.message}`);
         console.error(err);
