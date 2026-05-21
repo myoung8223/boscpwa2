@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/4.0.0/model-viewer.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>boscpwa - OpenSCAD PWA</title>
@@ -62,7 +63,9 @@ union() {
                 3D Preview Window<br>
                 <span style="font-size:0.9rem; color:#666;">Click 'Preview' to view geometry</span>
             </div>
-            <model-viewer id="3d-viewer" camera-controls interaction-prompt="none" shadow-intensity="1"></model-viewer>
+            <model-viewer id="3d-viewer" camera-controls auto-rotate shadow-intensity="1" background-color="#2a2a2a">
+                <div id="placeholder-text">Your 3D model will render here...</div>
+            </model-viewer>
         </div>
     </div>
 
