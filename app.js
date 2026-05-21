@@ -52,26 +52,21 @@ async function initOpenSCAD() {
     try {
         const OpenSCADModule = await import('https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/openscad.js');
         
-        // Smart search: check every possible way Emscripten might have packed the factory function
         let openSCADFactory = null;
         
-        if (typeof OpenSCADModule.default === 'function') {
+        // Target the exact named export we uncovered!
+        if (typeof OpenSCADModule.createOpenSCAD === 'function') {
+            openSCADFactory = OpenSCADModule.createOpenSCAD;
+        } else if (typeof OpenSCADModule.default === 'function') {
             openSCADFactory = OpenSCADModule.default;
-        } else if (typeof OpenSCADModule.OpenSCAD === 'function') {
-            openSCADFactory = OpenSCADModule.OpenSCAD;
-        } else if (typeof window.OpenSCAD === 'function') {
-            openSCADFactory = window.OpenSCAD;
-        } else if (typeof window.Module === 'function') {
-            openSCADFactory = window.Module;
         }
         
-        // If it's still missing, pull a diagnostic report to see what it actually looks like
         if (!openSCADFactory) {
             const availableKeys = Object.keys(OpenSCADModule).join(', ') || 'none';
-            throw new Error(`Initialization function not found. Module keys: [${availableKeys}]. Globals: OpenSCAD=${typeof window.OpenSCAD}, Module=${typeof window.Module}`);
+            throw new Error(`Initialization function not found. Module keys: [${availableKeys}].`);
         }
 
-        // Initialize the engine using the found factory function
+        // Initialize the engine using the verified factory function
         openSCADInstance = await openSCADFactory({
             locateFile: (path) => `https://cdn.jsdelivr.net/npm/openscad-wasm@0.0.4/${path}`,
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
