@@ -293,34 +293,47 @@ function update3DModelViewer(blobUrl) {
 
     const loader = new THREE.STLLoader();
     loader.load(blobUrl, (geometry) => {
+        // 1. Force recalculation of surface normals so light interacts with faces correctly
         geometry.computeVertexNormals();
         
-        // Clean metallic mesh styling setup
+        // 2. High-contrast material styling so it stands out against dark backgrounds
         const material = new THREE.MeshStandardMaterial({ 
-            color: 0x007acc, 
-            roughness: 0.4,
-            metalness: 0.2
+            color: 0x3b82f6,      // Vibrant blue mesh
+            roughness: 0.3,
+            metalness: 0.1,
+            roughnessMap: null    // Ensure no fallback bugs affect rendering
         });
         
         currentMesh = new THREE.Mesh(geometry, material);
         
-        // Center alignment calculations
+        // 3. Compute accurate bounding boxes
         geometry.computeBoundingBox();
+        geometry.computeBoundingSphere();
+        
         const center = new THREE.Vector3();
         geometry.boundingBox.getCenter(center);
-        currentMesh.position.sub(center); // Centers model precisely at coordinate point [0,0,0]
+        
+        // Offset the mesh position so its absolute physical core rests at world coordinates [0, 0, 0]
+        currentMesh.position.set(-center.x, -center.y, -center.z);
 
         scene.add(currentMesh);
         
-        // --- FIXED BLOCK: Compute the sphere bounds before reading the radius ---
-        geometry.computeBoundingSphere(); 
-        const boundingSphere = geometry.boundingSphere;
-        const radius = boundingSphere.radius;
+        // 4. DYNAMIC CAMERA FRAMING
+        const radius = geometry.boundingSphere.radius;
         
-        // Automatically frame camera bounds dynamically to fit whatever scale size the model is
-        camera.position.set(radius * 2, radius * 2, radius * 2);
-        camera.lookAt(0, 0, 0);
+        // Fallback safety if radius calculates to 0 or fails
+        const targetDistance = radius > 0 ? radius * 3.5 : 50; 
+
+        // Reposition camera dynamically based on the calculated size scale
+        camera.position.set(targetDistance, targetDistance, targetDistance);
+        
+        // Reset orbit controls behavior to orbit cleanly around world origin [0,0,0]
         controls.target.set(0, 0, 0);
+        camera.lookAt(0, 0, 0);
+        
         controls.update();
+        console.log(`[Viewer]: Mesh rendered successfully. Bounding radius: ${radius}`);
+    }, undefined, (err) => {
+        console.error('[Viewer Error]: Failed to read raw STL bytes:', err);
     });
 }
