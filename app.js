@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "39"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "40"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -209,7 +209,7 @@ async function initOpenSCAD() {
     // Clear out the console box completely before writing our clean layout
     consoleBox.textContent = "";
     
-    logToConsole('Basic OpenSCAD PWA - By: Mike Young');
+    //logToConsole('Basic OpenSCAD PWA - By: Mike Young');
     logToConsole(`Build ${BUILD_NUMBER} - May 22, 2026`);
     logToConsole('System ready. Instantiating WASM...');
     
