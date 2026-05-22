@@ -22,6 +22,7 @@ A lightweight, browser-optimized Progressive Web App (PWA) that compiles and ren
 - [ ] **Adjustable Axes and Grid:** Additional controls for the axes and grid would be handy.
 - [ ] **Orthogonal Projection:** Add a button for toggling between perspective and orthogonal 3D projection.
 - [ ] **Camera Movement Improvements:** Improve the camera movement, perhaps with translation accelleration.
+- [ ] **Improve PWA Icon:** The icon is a little dark. It could use a snazzier icon.
 
 ## Getting Started
 
