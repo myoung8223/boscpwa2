@@ -312,9 +312,12 @@ function update3DModelViewer(blobUrl) {
 
         scene.add(currentMesh);
         
-        // Automatically frame camera bounds dynamically to fit whatever scale size the model is
+        // --- FIXED BLOCK: Compute the sphere bounds before reading the radius ---
+        geometry.computeBoundingSphere(); 
         const boundingSphere = geometry.boundingSphere;
         const radius = boundingSphere.radius;
+        
+        // Automatically frame camera bounds dynamically to fit whatever scale size the model is
         camera.position.set(radius * 2, radius * 2, radius * 2);
         camera.lookAt(0, 0, 0);
         controls.target.set(0, 0, 0);
