@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "33"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "34"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -207,7 +207,7 @@ async function initOpenSCAD() {
         logToConsole('Restored draft layout from your last active session.');
     } else {
         //editor.value = `// Welcome to your Mobile PWA CAD Environment\ncube([10, 15, 20], center=true);\n\ntranslate([0, 0, 15]) {\n    sphere(r=8);\n}`;
-        editor.value = `use </fonts/LiberationSans-Bold.ttf>\n\nlinear_extrude(height = 4) {\n    text(\n        text = "Hello, world!", \n        size = 14, \n        font = "Liberation Sans:style=Bold", \n        halign = "center", \n        valign = "center"\n    );\n}`;
+        editor.value = `linear_extrude(height = 4) {\n    text(\n        text = "Hello, world!", \n        size = 14, \n        font = "Liberation Sans:style=Bold", \n        halign = "center", \n        valign = "center"\n    );\n}`;
         logToConsole('Seeded editor workspace with default starter geometry.');
     }
 
