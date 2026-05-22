@@ -257,7 +257,14 @@ async function initOpenSCAD() {
         
         logToConsole('✅ Typography suite successfully cached in global memory!');
         logToConsole('OpenSCAD Engine ready! Alter code and click Preview freely.');
+
+        // 1. Enable the button for the user
         btnPreview.disabled = false;
+        
+        // ---- 2. TRIGGER THE AUTOMATIC FIRST-RUN PREVIEW ----
+        logToConsole('Running initial boot preview...');
+        btnPreview.click();
+        
     } catch (err) {
         logToConsole(`Failed to initialize OpenSCAD: ${err.message}`);
         console.error(err);
