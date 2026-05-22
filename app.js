@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "28"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "29"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -598,12 +598,22 @@ const loader = new THREE.STLLoader();
     loader.load(blobUrl, (geometry) => {
         geometry.computeVertexNormals();
         
+/*
         const material = new THREE.MeshStandardMaterial({ 
             color: activeModelColor, // Dynamically uses the persistent color preference!
             roughness: 0.3, 
             metalness: 0.1,
             wireframe: wireframeMode 
         });
+*/
+
+        const material = new THREE.MeshStandardMaterial({ 
+            color: activeModelColor, 
+            roughness: 0.65,    // Spreads the light out to fake a micro-texture sheen
+            metalness: 0.70,    // High metallic reflection catching environmental light
+            wireframe: wireframeMode 
+        });
+        
         currentMesh = new THREE.Mesh(geometry, material);
         
         // ---- COORDINATE ENGINE FIXED MATRIX CONVERSIONS ----
