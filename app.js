@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "3"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "4"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -289,9 +289,23 @@ function init3DWorkspace() {
         renderer.setSize(container.clientWidth, container.clientHeight);
     });
 
-    // Start looping rendering frame animations
+    // Start looping rendering frame animations with live size-checks
     function animate() {
         requestAnimationFrame(animate);
+        
+        // DYNAMIC BOUNDS CHECK: Force canvas size updates if container dimensions slip
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        
+        if (renderer.domElement.width !== width || renderer.domElement.height !== height) {
+            if (width > 0 && height > 0) {
+                camera.aspect = width / height;
+                camera.updateProjectionMatrix();
+                renderer.setSize(width, height, false); // "false" blocks layout thrashing loops
+                console.log(`[Viewport Fixed]: Resized Three.js canvas dynamically to match layout bounds: ${width}x${height}`);
+            }
+        }
+
         controls.update();
         renderer.render(scene, camera);
     }
