@@ -61,3 +61,7 @@ When the application boots up, the execution sequence initiates automatically:
 - **[OpenSCAD WASM](https://github.com/openscad/openscad-wasm)** — The official, sandboxed WebAssembly port translating functional CAD code into raw geometries entirely client-side.
 - **[scad2stl (Code for Fukui)](https://github.com/code4fukui/scad2stl)** — The precision runtime utility for handling script parsing and streaming compiled mesh translations safely out of the virtual WASM environment.
 - **Gemini (Flash, Thinking, & Pro)** — AI Engineering Assistant, Code Optimization, & Regex Architecture.
+
+## License
+
+This project is licensed under the **GNU General Public License v3.0 (GPL-3.0)** - see the [LICENSE](LICENSE) file for details. This license is required due to the upstream dependency on the GPL-licensed OpenSCAD WebAssembly engine.
