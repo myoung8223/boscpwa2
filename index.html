@@ -81,8 +81,13 @@
                 <input type="file" id="file-load" style="display:none;" accept=".scad">
                 <button class="file-btn" onclick="document.getElementById('file-load').click()">Load</button>
                 <button class="file-btn" id="btn-save">Save</button>
-
                 <button id="btn-wireframe" class="file-btn">Solid</button>
+
+                <div style="display: flex; align-items: center; gap: 5px; color: #ccc; font-size: 0.85rem; margin: 0 10px;">
+                    <label for="model-color">Color:</label>
+                    <input type="color" id="model-color" value="#3b82f6" style="border: none; background: transparent; width: 35px; height: 30px; cursor: pointer;">
+                </div>
+                
                 <button id="btn-preview" style="margin-left: auto; background: #ffc107; color: #000;">Preview</button>
                 <button id="btn-export" style="background: #28a745;">Export STL</button>
             </div>
