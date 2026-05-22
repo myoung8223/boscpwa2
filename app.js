@@ -246,7 +246,7 @@ async function initOpenSCAD() {
             instance.FS.mkdir('/fonts');
         } catch(e) { /* Directory already exists across warm reloads */ }
 
-        // Loop over every font file, download it locally, and mount it to the root engine
+        // Loop over every font file, download it locally, and mount it to both directories
         for (const fontName of fontFiles) {
             try {
                 const fontUrl = `./fonts/${fontName}`;
@@ -260,13 +260,16 @@ async function initOpenSCAD() {
                 const arrayBuffer = await response.arrayBuffer();
                 const fontData = new Uint8Array(arrayBuffer);
                 
-                // --- THE FIX: Write directly to the root directory (no /fonts/ prefix) ---
-                const virtualPath = fontName; 
-                instance.FS.writeFile(virtualPath, fontData);
+                // 1. Write to the root workspace folder for direct <filename.ttf> usage
+                instance.FS.writeFile(fontName, fontData);
                 
-                // Register it to the font subsystem fallback channel
+                // 2. Write to the /fonts/ subfolder as a fallback shadow copy
+                instance.FS.writeFile(`/fonts/${fontName}`, fontData);
+                
+                // Register both versions with the fallback subsystem manager
                 if (instance.fonts && typeof instance.fonts.registerFont === 'function') {
-                    instance.fonts.registerFont(virtualPath);
+                    instance.fonts.registerFont(fontName);
+                    instance.fonts.registerFont(`/fonts/${fontName}`);
                 }
             } catch (fontErr) {
                 console.error(`Error processing font asset "${fontName}":`, fontErr);
