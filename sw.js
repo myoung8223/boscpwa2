@@ -25,6 +25,7 @@ const ASSETS_TO_CACHE = [
   './libs/STLLoader.js',
   './libs/OrbitControls.js',
   './libs/openscad.js',
+  './libs/openscad.wasm.js',
   './libs/openscad.wasm',
   
   // Your local typography suite
