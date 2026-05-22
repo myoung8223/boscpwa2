@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "15"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "16"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -11,6 +11,22 @@ const btnExport = document.getElementById('btn-export');
 const viewer3d = document.getElementById('viewer-3d');
 const placeholderText = document.getElementById('placeholder-text');
 const btnWireframe = document.getElementById('btn-wireframe');
+
+// Add this near your other document.getElementById lines
+const modelColorInput = document.getElementById('model-color');
+
+// ---- PERSISTENT COLOR PREFERENCE INITIALIZATION ----
+// Look for a saved color string (like "#3b82f6"), fallback to default blue if empty
+const savedColorHexStr = localStorage.getItem('openscad_model_color') || '#3b82f6';
+
+// 1. Force the HTML color input element to match the saved preference immediately on page load
+if (modelColorInput) {
+    modelColorInput.value = savedColorHexStr;
+}
+
+// 2. Parse that string value into a Three.js-friendly hexadecimal integer (0x3b82f6)
+let activeModelColor = parseInt(savedColorHexStr.replace('#', '0x'), 16);
+// ----------------------------------------------------
 
 // Store the FACTORY engine globally instead of a single-use instance
 let openSCADFactory = null;
@@ -82,6 +98,22 @@ window.addEventListener('keydown', (event) => {
             logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]');
             btnPreview.click(); // Programmatically execute compiling sequence safely
         }
+    }
+});
+
+// Live update the material color whenever the color picker value shifts
+modelColorInput.addEventListener('input', (event) => {
+    const selectedHex = event.target.value;
+    
+    // Save the hex string preference to localStorage
+    localStorage.setItem('openscad_model_color', selectedHex);
+
+    // Convert hex string "#ffffff" to numeric 0xffffff format for Three.js
+    activeModelColor = parseInt(selectedHex.replace('#', '0x'), 16);
+    
+    // If a model is currently rendered on screen, update its color instantly
+    if (currentMesh && currentMesh.material) {
+        currentMesh.material.color.setHex(activeModelColor);
     }
 });
 
@@ -321,11 +353,15 @@ function init3DWorkspace() {
 
     // ---- 3D WORKSPACE GRID AND ORIGIN AXES ----
     const gridHelper = new THREE.GridHelper(100, 20, 0x007acc, 0x444444);
-    gridHelper.position.y = -0.01; 
+    // Rotate the grid to lie flat along the OpenSCAD X/Y plane
+    gridHelper.rotation.x = -Math.PI / 2;
+    //gridHelper.position.y = -0.01; 
     scene.add(gridHelper);
 
     // Main origin axes helper (X=Red, Y=Green, Z=Blue)
     const axesHelper = new THREE.AxesHelper(15);
+    // Rotate the axes helper so the Blue Z line points straight UP
+    axesHelper.rotation.x = -Math.PI / 2;    
     scene.add(axesHelper);
 
     // ---- FEATURE 2: CORNER NAVIGATION COMPASS GENERATOR ----
@@ -351,8 +387,10 @@ function init3DWorkspace() {
 
     // Create custom color-coded navigation arrows or standard axes line arrays for the corner
     const compassAxes = new THREE.AxesHelper(25);
+    // Rotate the corner compass axes to match the viewport alignment perfectly
+    compassAxes.rotation.x = -Math.PI / 2;
     compassScene.add(compassAxes);
-    
+
     // 5. Lighting Environment Setup
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
@@ -410,7 +448,7 @@ const loader = new THREE.STLLoader();
         geometry.computeVertexNormals();
         
         const material = new THREE.MeshStandardMaterial({ 
-            color: 0x3b82f6, 
+            color: activeModelColor, // Dynamically uses the persistent color preference!
             roughness: 0.3, 
             metalness: 0.1,
             wireframe: wireframeMode 
