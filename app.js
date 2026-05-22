@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "8"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "9"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -276,18 +276,23 @@ function init3DWorkspace() {
     dirLight1.position.set(50, 50, 50);
     scene.add(dirLight1);
 
-    // 6. Robust Animation Loop with Dynamic Resize Protection
+    // 6. Robust Animation Loop with Live Layout Boundary Matching
     function animate() {
         requestAnimationFrame(animate);
         
         const cw = container.clientWidth;
         const ch = container.clientHeight;
         
-        // Only update matrix if dimensions are valid and have actually changed
-        if (cw > 0 && ch > 0 && (renderer.domElement.width !== cw || renderer.domElement.height !== ch)) {
+        // Get current pixel size of the WebGL rendering surface
+        const currentSize = new THREE.Vector2();
+        renderer.getSize(currentSize);
+        
+        // Force update if the layout panel size shifts away from our rendering size
+        if (cw > 0 && ch > 0 && (currentSize.x !== cw || currentSize.y !== ch)) {
             camera.aspect = cw / ch;
             camera.updateProjectionMatrix();
-            renderer.setSize(cw, ch, false);
+            renderer.setSize(cw, ch, true); // Setting this to true forces canvas element geometry changes
+            console.log(`[Viewport Fixed]: Canvas adjusted to match panel bounds: ${cw}x${ch}`);
         }
 
         controls.update();
