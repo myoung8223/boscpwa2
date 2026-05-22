@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "43"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "44"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -46,10 +46,16 @@ function logToConsole(message) {
 
 // Helper to log to our UI console
 function logToConsole(message) {
-    // Regex matches '[ERROR]: ' at the absolute start of a line, or anywhere inside the string
-    const cleanMessage = message.replace(/^\[ERROR\]:\s*/gm, '');
+    // 1. First, strip out the misleading [ERROR]: badges
+    let cleanMessage = message.replace(/^\[ERROR\]:\s*/gm, '');
 
-    // Append the cleaned message to the console box
+    // 2. If the message is exactly one of our two sandbox warnings, silence it completely
+    if (cleanMessage.includes("Could not initialize localization") || 
+        cleanMessage.includes("Fontconfig error")) {
+        return; // Exit early without printing anything
+    }
+
+    // 3. Append the clean, professional diagnostics to the console
     consoleBox.textContent += `\n${cleanMessage}`;
     consoleBox.scrollTop = consoleBox.scrollHeight; // Auto scroll to bottom
 }
