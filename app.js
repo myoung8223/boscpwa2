@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "17"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "18"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -360,14 +360,14 @@ function init3DWorkspace() {
     */
 
     // ---- 3D WORKSPACE GRID AND ORIGIN AXES ----
-    const gridHelper = new THREE.GridHelper(100, 20, 0x007acc, 0x444444);
-    // Rotate the grid to lie flat along the OpenSCAD X/Y plane
-    //gridHelper.rotation.x = -Math.PI / 2;
-    //gridHelper.position.y = -0.01; 
+    // Size 400 with 40 divisions creates perfect 10mm grid cells across a 400x400mm bed
+    const gridHelper = new THREE.GridHelper(400, 40, 0x007acc, 0x444444);
+    // Push it down just a tiny hair so models sitting perfectly at Z=0 don't Z-fight with the lines
+    gridHelper.position.y = -0.05; 
     scene.add(gridHelper);
 
-    // Main origin axes helper (X=Red, Y=Green, Z=Blue)
-    const axesHelper = new THREE.AxesHelper(15);
+    // Main origin axes helper scaled up to 50mm long so it's clearly visible on the large bed
+    const axesHelper = new THREE.AxesHelper(50);
     // Rotate the axes helper so the Blue Z line points straight UP
     axesHelper.rotation.x = -Math.PI / 2;    
     scene.add(axesHelper);
