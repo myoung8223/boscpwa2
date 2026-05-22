@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "16"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "17"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -12,19 +12,22 @@ const viewer3d = document.getElementById('viewer-3d');
 const placeholderText = document.getElementById('placeholder-text');
 const btnWireframe = document.getElementById('btn-wireframe');
 
-// Add this near your other document.getElementById lines
 const modelColorInput = document.getElementById('model-color');
+// Grab our new button trigger element reference
+const btnColorTrigger = document.getElementById('btn-color-trigger');
 
 // ---- PERSISTENT COLOR PREFERENCE INITIALIZATION ----
-// Look for a saved color string (like "#3b82f6"), fallback to default blue if empty
 const savedColorHexStr = localStorage.getItem('openscad_model_color') || '#3b82f6';
 
-// 1. Force the HTML color input element to match the saved preference immediately on page load
 if (modelColorInput) {
     modelColorInput.value = savedColorHexStr;
 }
 
-// 2. Parse that string value into a Three.js-friendly hexadecimal integer (0x3b82f6)
+// Force the button's background color to show the selected color on load
+if (btnColorTrigger) {
+    btnColorTrigger.style.background = savedColorHexStr;
+}
+
 let activeModelColor = parseInt(savedColorHexStr.replace('#', '0x'), 16);
 // ----------------------------------------------------
 
@@ -101,17 +104,22 @@ window.addEventListener('keydown', (event) => {
     }
 });
 
-// Live update the material color whenever the color picker value shifts
+// Route button clicks directly into the hidden native color input element
+btnColorTrigger.addEventListener('click', () => {
+    modelColorInput.click();
+});
+
+// Live update the material color and button preview background when the palette value shifts
 modelColorInput.addEventListener('input', (event) => {
     const selectedHex = event.target.value;
     
-    // Save the hex string preference to localStorage
     localStorage.setItem('openscad_model_color', selectedHex);
 
-    // Convert hex string "#ffffff" to numeric 0xffffff format for Three.js
+    // Update the button's background fill to reflect the active color choice instantly
+    btnColorTrigger.style.background = selectedHex;
+
     activeModelColor = parseInt(selectedHex.replace('#', '0x'), 16);
     
-    // If a model is currently rendered on screen, update its color instantly
     if (currentMesh && currentMesh.material) {
         currentMesh.material.color.setHex(activeModelColor);
     }
@@ -354,7 +362,7 @@ function init3DWorkspace() {
     // ---- 3D WORKSPACE GRID AND ORIGIN AXES ----
     const gridHelper = new THREE.GridHelper(100, 20, 0x007acc, 0x444444);
     // Rotate the grid to lie flat along the OpenSCAD X/Y plane
-    gridHelper.rotation.x = -Math.PI / 2;
+    //gridHelper.rotation.x = -Math.PI / 2;
     //gridHelper.position.y = -0.01; 
     scene.add(gridHelper);
 
