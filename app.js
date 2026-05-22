@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "11"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "12"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -34,6 +34,11 @@ btnSave.addEventListener('click', () => {
     logToConsole('Saved model.scad successfully.');
 });
 
+// LocalStorage Continuous Keypress Auto-Save Hook
+editor.addEventListener('input', () => {
+    localStorage.setItem('openscad_editor_cache', editor.value);
+});
+
 // Load local .scad file
 fileLoad.addEventListener('change', (event) => {
     const file = event.target.files[0];
@@ -52,6 +57,19 @@ fileLoad.addEventListener('change', (event) => {
 
 async function initOpenSCAD() {
     logToConsole(`Build Version: v${BUILD_NUMBER}`);
+    
+    // ---- FEATURE 3: RESTORE PERSISTENT CODE CACHE ----
+    const savedCode = localStorage.getItem('openscad_editor_cache');
+    if (savedCode && savedCode.trim() !== "") {
+        editor.value = savedCode;
+        logToConsole('Restored draft layout from your last active session.');
+    } else {
+        // Fallback default starter geometry if local cache is completely empty
+        editor.value = `// Welcome to your Mobile PWA CAD Environment\ncube([10, 15, 20], center=true);\n\ntranslate([0, 0, 15]) {\n    sphere(r=8);\n}`;
+        logToConsole('Seeded editor workspace with default starter geometry.');
+    }
+    // --------------------------------------------------
+
     logToConsole('Loading browser-optimized OpenSCAD module...');
     try {
         const OpenSCADModule = await import('https://code4fukui.github.io/scad2stl/openscad.js');
@@ -268,6 +286,40 @@ function init3DWorkspace() {
     // ---------------------------------------------------
     */
 
+    // ---- 3D WORKSPACE GRID AND ORIGIN AXES ----
+    const gridHelper = new THREE.GridHelper(100, 20, 0x007acc, 0x444444);
+    gridHelper.position.y = -0.01; 
+    scene.add(gridHelper);
+
+    // Main origin axes helper (X=Red, Y=Green, Z=Blue)
+    const axesHelper = new THREE.AxesHelper(15);
+    scene.add(axesHelper);
+
+    // ---- FEATURE 2: CORNER NAVIGATION COMPASS GENERATOR ----
+    // Create a mini-overlay DOM container programmatically inside the viewer
+    const compassContainer = document.createElement('div');
+    compassContainer.style.position = 'absolute';
+    compassContainer.style.top = '10px';
+    compassContainer.style.right = '10px';
+    compassContainer.style.width = '80px';
+    compassContainer.style.height = '80px';
+    compassContainer.style.zIndex = '100';
+    compassContainer.style.pointerEvents = 'none'; // Keeps mouse events focused on main view orbit
+    container.appendChild(compassContainer);
+
+    // Setup an isolated mini-subscene for the compass
+    const compassScene = new THREE.Scene();
+    const compassCamera = new THREE.PerspectiveCamera(50, 1, 1, 100);
+    
+    const compassRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true }); // Alpha ensures container stays transparent
+    compassRenderer.setSize(80, 80);
+    compassRenderer.setPixelRatio(window.devicePixelRatio);
+    compassContainer.appendChild(compassRenderer.domElement);
+
+    // Create custom color-coded navigation arrows or standard axes line arrays for the corner
+    const compassAxes = new THREE.AxesHelper(25);
+    compassScene.add(compassAxes);
+    
     // 5. Lighting Environment Setup
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
@@ -283,20 +335,28 @@ function init3DWorkspace() {
         const cw = container.clientWidth;
         const ch = container.clientHeight;
         
-        // Get current pixel size of the WebGL rendering surface
         const currentSize = new THREE.Vector2();
         renderer.getSize(currentSize);
         
-        // Force update if the layout panel size shifts away from our rendering size
         if (cw > 0 && ch > 0 && (currentSize.x !== cw || currentSize.y !== ch)) {
             camera.aspect = cw / ch;
             camera.updateProjectionMatrix();
-            renderer.setSize(cw, ch, true); // Setting this to true forces canvas element geometry changes
-            console.log(`[Viewport Fixed]: Canvas adjusted to match panel bounds: ${cw}x${ch}`);
+            renderer.setSize(cw, ch, true);
         }
 
         controls.update();
         renderer.render(scene, camera);
+
+        // --- COMPASS SYNCHRONIZATION MATRIX PASSTHROUGH ---
+        if (compassCamera && compassRenderer) {
+            // Force the mini camera to sit at an identical layout angle vector relative to the origin
+            compassCamera.position.copy(camera.position);
+            compassCamera.position.sub(controls.target); // Subtract controls focus target to handle panning
+            compassCamera.position.setLength(60); // Constrain tracking orbit distance radius
+            compassCamera.lookAt(0, 0, 0);
+            
+            compassRenderer.render(compassScene, compassCamera);
+        }
     }
     animate();
 }
