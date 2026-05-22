@@ -12,14 +12,21 @@ const ASSETS_TO_CACHE = [
   './icon-512.png',
 
   // Three.js and its plugins (Exactly as they appear in your HTML)
-  'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
-  'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/STLLoader.js',
-  'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js',
+  //'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js',
+  //'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/STLLoader.js',
+  //'https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js',
 
   // The actual WASM compiler your app.js uses
-  'https://code4fukui.github.io/scad2stl/openscad.js',
-  'https://code4fukui.github.io/scad2stl/openscad.wasm',
+  //'https://code4fukui.github.io/scad2stl/openscad.js',
+  //'https://code4fukui.github.io/scad2stl/openscad.wasm',
 
+  // New local libraries
+  './libs/three.min.js',
+  './libs/STLLoader.js',
+  './libs/OrbitControls.js',
+  './libs/openscad.js',
+  './libs/openscad.wasm',
+  
   // Your local typography suite
   './fonts/LiberationSans-Regular.ttf',
   './fonts/LiberationSans-Bold.ttf',
