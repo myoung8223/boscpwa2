@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "36"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "37"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -69,6 +69,14 @@ fileLoad.addEventListener('change', (event) => {
     reader.onload = (e) => {
         editor.value = e.target.result;
         logToConsole(`Loaded file: ${file.name}`);
+
+        // ---- AUTOMATIC PREVIEW TRIGGER ----
+        // Safety check to ensure the engine is fully initialized before clicking
+        if (typeof btnPreview !== 'undefined' && !btnPreview.disabled) {
+            logToConsole('Running automatic preview for loaded file...');
+            btnPreview.click();
+        }
+        // -----------------------------------
     };
     reader.readAsText(file);
 });
