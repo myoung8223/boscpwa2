@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "1"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "2"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -51,7 +51,7 @@ fileLoad.addEventListener('change', (event) => {
 // ---- OPENSCAD WASM FACTORY PREPARATION ----
 
 async function initOpenSCAD() {
-    logToConsole(`System Ready. Build Version: v${BUILD_NUMBER}`);
+    logToConsole(`Build Version: v${BUILD_NUMBER}`);
     logToConsole('Loading browser-optimized OpenSCAD module...');
     try {
         const OpenSCADModule = await import('https://code4fukui.github.io/scad2stl/openscad.js');
@@ -262,6 +262,18 @@ function init3DWorkspace() {
     const ambientLight = new THREE.AmbientLight(0x666666);
     scene.add(ambientLight);
 
+    // ---- SANITY CHECK: INJECT RAW TEST GEOMETRY ----
+    const testGeometry = new THREE.BoxGeometry(10, 10, 10);
+    const testMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x00ff00, // Bright green neon box
+        roughness: 0.2 
+    });
+    const testBox = new THREE.Mesh(testGeometry, testMaterial);
+    testBox.position.set(0, 0, 0);
+    scene.add(testBox);
+    console.log("[Sanity Check]: Core green box added to workspace frame.");
+    // ------------------------------------------------
+    
     const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight1.position.set(1, 1, 1).normalize();
     scene.add(dirLight1);
