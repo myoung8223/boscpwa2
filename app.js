@@ -1,3 +1,6 @@
+// ---- BUILD VERSION CONTROLLER ----
+const BUILD_NUMBER = "1"; // <-- Increment this number whenever you commit!
+
 // Dom Elements
 const editor = document.getElementById('editor');
 const consoleBox = document.getElementById('console');
@@ -48,6 +51,7 @@ fileLoad.addEventListener('change', (event) => {
 // ---- OPENSCAD WASM FACTORY PREPARATION ----
 
 async function initOpenSCAD() {
+    logToConsole(`System Ready. Build Version: v${BUILD_NUMBER}`);
     logToConsole('Loading browser-optimized OpenSCAD module...');
     try {
         const OpenSCADModule = await import('https://code4fukui.github.io/scad2stl/openscad.js');
