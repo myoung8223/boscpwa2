@@ -2,7 +2,7 @@
 <a href="https://myoung8223.github.io/boscpwa" target="_blank">
 <img alt="image" src="https://raw.githubusercontent.com/myoung8223/boscpwa/refs/heads/main/title.png" />
 </a>
-A lightweight, browser-optimized Progressive Web App (PWA) that compiles and renders OpenSCAD geometry entirely client-side using WebAssembly (WASM). Write, preview, and iterate on 3D models instantly without local desktop installations. <a href="https://myoung8223.github.io/boscpwa" target="_blank">Link to GitHub Pages-hosted PWA</a>.
+Basic OpenSCAD PWA is a lightweight, browser-optimized Progressive Web App (PWA) that compiles and renders OpenSCAD geometry entirely client-side using WebAssembly (WASM). Once installed, it functions completely offline. Write, preview, and iterate on 3D models instantly without local desktop installations. The core purpose of this project is to make OpenSCAD design more feasible on web-based platforms, especially ChromeOS. OpenSCAD has tremedous potential in K12 education, which is currently dominated by ChromeOS in the United States. <a href="https://myoung8223.github.io/boscpwa" target="_blank">Link to GitHub Pages-hosted PWA</a>.
 
 ## Current Features
 
