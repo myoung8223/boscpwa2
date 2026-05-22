@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "20"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "21"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -199,28 +199,81 @@ editor.addEventListener('keydown', (event) => {
 async function initOpenSCAD() {
     logToConsole(`Build Version: v${BUILD_NUMBER}`);
     
-    // ---- FEATURE 3: RESTORE PERSISTENT CODE CACHE ----
+    // Restore persistent code cache
     const savedCode = localStorage.getItem('openscad_editor_cache');
     if (savedCode && savedCode.trim() !== "") {
         editor.value = savedCode;
         logToConsole('Restored draft layout from your last active session.');
     } else {
-        // Fallback default starter geometry if local cache is completely empty
         editor.value = `// Welcome to your Mobile PWA CAD Environment\ncube([10, 15, 20], center=true);\n\ntranslate([0, 0, 15]) {\n    sphere(r=8);\n}`;
         logToConsole('Seeded editor workspace with default starter geometry.');
     }
-    // --------------------------------------------------
 
     logToConsole('Loading browser-optimized OpenSCAD module...');
     try {
+        // Import the main WASM wrapper module
         const OpenSCADModule = await import('https://code4fukui.github.io/scad2stl/openscad.js');
         
+        // Resolve factory interface
         openSCADFactory = OpenSCADModule.default || OpenSCADModule.createOpenSCAD || OpenSCADModule;
-        
         if (typeof openSCADFactory !== 'function') {
             throw new Error("OpenSCAD factory interface could not be resolved.");
         }
 
+        // Initialize an instance of the factory to grab filesystem handles
+        const instance = await openSCADFactory();
+        
+        logToConsole('Loading typography packages from local repository...');
+        
+        // Array matching the exact filenames you uploaded to GitHub
+        const fontFiles = [
+            'LiberationSans-Regular.ttf',
+            'LiberationSans-Bold.ttf',
+            'LiberationSans-Italic.ttf',
+            'LiberationSans-BoldItalic.ttf',
+            'LiberationMono-Regular.ttf',
+            'LiberationMono-Bold.ttf',
+            'LiberationMono-Italic.ttf',
+            'LiberationMono-BoldItalic.ttf',
+            'LiberationSerif-Regular.ttf',
+            'LiberationSerif-Bold.ttf',
+            'LiberationSerif-Italic.ttf',
+            'LiberationSerif-BoldItalic.ttf'
+        ];
+
+        // Ensure the virtual WebAssembly directory structure exists
+        try {
+            instance.FS.mkdir('/fonts');
+        } catch(e) { /* Directory already exists across warm reloads */ }
+
+        // Loop over every font file, download it locally, and mount it to the core engine
+        for (const fontName of fontFiles) {
+            try {
+                const fontUrl = `${window.location.origin}/fonts/${fontName}`;
+                const response = await fetch(fontUrl);
+                
+                if (!response.ok) {
+                    logToConsole(`⚠️ Skipping font: Could not pull ${fontName} from host.`);
+                    continue;
+                }
+                
+                const arrayBuffer = await response.arrayBuffer();
+                const fontData = new Uint8Array(arrayBuffer);
+                
+                // Write the font file to the virtual filesystem
+                const virtualPath = `/fonts/${fontName}`;
+                instance.FS.writeFile(virtualPath, fontData);
+                
+                // Register it to bypass the missing Fontconfig framework subsystem
+                if (instance.fonts && typeof instance.fonts.registerFont === 'function') {
+                    instance.fonts.registerFont(virtualPath);
+                }
+            } catch (fontErr) {
+                console.error(`Error processing font asset "${fontName}":`, fontErr);
+            }
+        }
+        
+        logToConsole('✅ Symmetrical typography suite successfully registered!');
         logToConsole('OpenSCAD Engine ready! Alter code and click Preview freely.');
         btnPreview.disabled = false;
     } catch (err) {
