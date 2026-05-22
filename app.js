@@ -221,13 +221,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// Start preparation workflows
-btnPreview.disabled = true;
-btnExport.disabled = true;
-initOpenSCAD();
-
-// ---- THE THREE.JS STL WORKSPACE VIEWPORT ENGINE ----
-
 // ---- THE THREE.JS STL WORKSPACE VIEWPORT ENGINE ----
 
 let scene, camera, renderer, controls, currentMesh = null;
@@ -339,5 +332,14 @@ function update3DModelViewer(blobUrl) {
     }, undefined, (err) => console.error('[Viewer Error]:', err));
 }
 
-// BOOT THE WORKSPACE IMMEDIATELY ON PAGE LOAD
+// ---- BOOTSTRAP APPLICATION ----
+
+// 1. Lock UI buttons until WASM loads
+btnPreview.disabled = true;
+btnExport.disabled = true;
+
+// 2. Initialize background compiler
+initOpenSCAD();
+
+// 3. Boot 3D environment immediately so size caches correctly
 init3DWorkspace();
