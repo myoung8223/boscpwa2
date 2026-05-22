@@ -244,6 +244,11 @@ function init3DWorkspace() {
     renderer.shadowMap.enabled = true;
     container.appendChild(renderer.domElement);
 
+    // Force an immediate layout pass calculation on startup
+    camera.aspect = container.clientWidth / container.clientHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+    
     // 4. Mouse Orbit Controls Integration
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
