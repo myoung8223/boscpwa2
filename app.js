@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "4"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "5"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -264,15 +264,15 @@ function init3DWorkspace() {
 
     // ---- SANITY CHECK: INJECT RAW TEST GEOMETRY ----
     const testGeometry = new THREE.BoxGeometry(10, 10, 10);
-    const testMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x00ff00, // Bright green neon box
-        roughness: 0.2 
+    // Use MeshBasicMaterial - it ignores lighting and is always 100% visible
+    const testMaterial = new THREE.MeshBasicMaterial({ 
+        color: 0x00ff00, 
+        wireframe: true 
     });
     const testBox = new THREE.Mesh(testGeometry, testMaterial);
     testBox.position.set(0, 0, 0);
     scene.add(testBox);
-    console.log("[Sanity Check]: Core green box added to workspace frame.");
-    // ------------------------------------------------
+    console.log("[Sanity Check]: Core green wireframe box added to workspace frame.");
     
     const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
     dirLight1.position.set(1, 1, 1).normalize();
@@ -353,16 +353,16 @@ function update3DModelViewer(blobUrl) {
 
         scene.add(currentMesh);
         
-        // 4. DYNAMIC CAMERA FRAMING
+        // 4. DIAGNOSTIC CAMERA FRAMING
         const radius = geometry.boundingSphere.radius;
         
-        // Fallback safety if radius calculates to 0 or fails
-        const targetDistance = radius > 0 ? radius * 3.5 : 50; 
-
-        // Reposition camera dynamically based on the calculated size scale
-        camera.position.set(targetDistance, targetDistance, targetDistance);
+        // Change the material to basic wireframe so it ignores all lighting issues
+        currentMesh.material = new THREE.MeshBasicMaterial({ color: 0x3b82f6, wireframe: true });
         
-        // Reset orbit controls behavior to orbit cleanly around world origin [0,0,0]
+        // Force the camera wildly far away (200 units on all axes)
+        camera.position.set(200, 200, 200);
+        
+        // Explicitly lock the camera and controls onto the absolute center
         controls.target.set(0, 0, 0);
         camera.lookAt(0, 0, 0);
         
