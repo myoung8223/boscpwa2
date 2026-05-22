@@ -3,7 +3,7 @@
   "short_name": "BOSCPWA",
   "description": "A browser-based OpenSCAD Progressive Web App.",
   "start_url": "./index.html",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#222222",
   "theme_color": "#007acc",
   "orientation": "any",
