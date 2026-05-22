@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "14"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "15"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -405,7 +405,7 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    const loader = new THREE.STLLoader();
+const loader = new THREE.STLLoader();
     loader.load(blobUrl, (geometry) => {
         geometry.computeVertexNormals();
         
@@ -413,25 +413,33 @@ function update3DModelViewer(blobUrl) {
             color: 0x3b82f6, 
             roughness: 0.3, 
             metalness: 0.1,
-            wireframe: wireframeMode // Tracks toggle selection dynamically upon fresh renders!
+            wireframe: wireframeMode 
         });
-        
         currentMesh = new THREE.Mesh(geometry, material);
+        
+        // ---- COORDINATE ENGINE FIXED MATRIX CONVERSIONS ----
+        // 1. ABSOLUTELY NO AUTO-CENTERING REPOSITIONING. 
+        // Keep the model perfectly clamped to its code-defined coordinates.
+        currentMesh.position.set(0, 0, 0);
+
+        // 2. SWAP THE COORDINATE MATRIX TO MATCH OPENSCAD Z-UP ARCHITECTURE
+        // Rotating -90 degrees (-Math.PI / 2) maps OpenSCAD Z onto Three.js Y
+        currentMesh.rotation.x = -Math.PI / 2;
+
+        scene.add(currentMesh);
+        // --------------------------------------------------
         
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
         
-        const center = new THREE.Vector3();
-        geometry.boundingBox.getCenter(center);
-        currentMesh.position.set(-center.x, -center.y, -center.z);
-
-        scene.add(currentMesh);
-        
         const radius = geometry.boundingSphere.radius;
+        
+        // Target dynamic camera zoom distance based on overall model size volume
         const targetDistance = radius > 0 ? radius * 3.5 : 50; 
 
-        camera.position.set(targetDistance, targetDistance, targetDistance);
-        controls.target.set(0, 0, 0);
+        // Set an ergonomic initial perspective angle looking down at the origin
+        camera.position.set(targetDistance, targetDistance * 1.2, targetDistance);
+        controls.target.set(0, 0, 0); // Lock rotation pivot permanently to true [0,0,0] origin
         camera.lookAt(0, 0, 0);
         controls.update();
         
