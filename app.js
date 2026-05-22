@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "29"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "30"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -587,6 +587,17 @@ function init3DWorkspace() {
 function update3DModelViewer(blobUrl) {
     if (!workspaceInitialized) init3DWorkspace(); 
 
+    // ---- STEP 1: CAPTURE CURRENT VIEW STATE BEFORE WIPING SCENE ----
+    let savedPosition = null;
+    let savedTarget = null;
+    
+    // Only capture if a current model exists (meaning this isn't the first load)
+    if (currentMesh && camera && controls) {
+        savedPosition = camera.position.clone();
+        savedTarget = controls.target.clone();
+    }
+    // ---------------------------------------------------------------
+
     if (currentMesh) {
         scene.remove(currentMesh);
         currentMesh.geometry.dispose();
@@ -594,19 +605,10 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-const loader = new THREE.STLLoader();
+    const loader = new THREE.STLLoader();
     loader.load(blobUrl, (geometry) => {
         geometry.computeVertexNormals();
         
-/*
-        const material = new THREE.MeshStandardMaterial({ 
-            color: activeModelColor, // Dynamically uses the persistent color preference!
-            roughness: 0.3, 
-            metalness: 0.1,
-            wireframe: wireframeMode 
-        });
-*/
-
         const material = new THREE.MeshStandardMaterial({ 
             color: activeModelColor, 
             roughness: 0.65,    // Spreads the light out to fake a micro-texture sheen
@@ -631,16 +633,25 @@ const loader = new THREE.STLLoader();
         geometry.computeBoundingBox();
         geometry.computeBoundingSphere();
         
-        const radius = geometry.boundingSphere.radius;
-        
-        // Target dynamic camera zoom distance based on overall model size volume
-        const targetDistance = radius > 0 ? radius * 3.5 : 50; 
+        // ---- STEP 2: RESTORE VIEW OR INITIALIZE CAMERA POSITION ----
+        if (savedPosition && savedTarget) {
+            // SUBSEQUENT PREVIEWS: Seamlessly drop the camera right back where it was
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+        } else {
+            // FIRST RUN ONLY: Auto-fit the perspective zoom based on overall model volume
+            const radius = geometry.boundingSphere.radius;
+            const targetDistance = radius > 0 ? radius * 3.5 : 50; 
 
-        // Set an ergonomic initial perspective angle looking down at the origin
-        camera.position.set(targetDistance, targetDistance * 1.2, targetDistance);
-        controls.target.set(0, 0, 0); // Lock rotation pivot permanently to true [0,0,0] origin
-        camera.lookAt(0, 0, 0);
+            // Set an ergonomic initial perspective angle looking down at the origin
+            camera.position.set(targetDistance, targetDistance * 1.2, targetDistance);
+            controls.target.set(0, 0, 0); // Lock rotation pivot permanently to true [0,0,0] origin
+            camera.lookAt(0, 0, 0);
+        }
+        
+        // CRITICAL: Force OrbitControls to synchronize its internal matrices with the current state
         controls.update();
+        // ------------------------------------------------------------
         
     }, undefined, (err) => console.error('[Viewer Error]:', err));
 }
