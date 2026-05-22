@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "22"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "23"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -246,10 +246,9 @@ async function initOpenSCAD() {
             instance.FS.mkdir('/fonts');
         } catch(e) { /* Directory already exists across warm reloads */ }
 
-        // Loop over every font file, download it locally, and mount it to the core engine
+        // Loop over every font file, download it locally, and mount it to the root engine
         for (const fontName of fontFiles) {
             try {
-                // CHANGE: Swapped window.location.origin for a relative path dot (.)
                 const fontUrl = `./fonts/${fontName}`;
                 const response = await fetch(fontUrl);
                 
@@ -261,11 +260,11 @@ async function initOpenSCAD() {
                 const arrayBuffer = await response.arrayBuffer();
                 const fontData = new Uint8Array(arrayBuffer);
                 
-                // Write the font file to the virtual filesystem
-                const virtualPath = `/fonts/${fontName}`;
+                // --- THE FIX: Write directly to the root directory (no /fonts/ prefix) ---
+                const virtualPath = fontName; 
                 instance.FS.writeFile(virtualPath, fontData);
                 
-                // Register it to bypass the missing Fontconfig framework subsystem
+                // Register it to the font subsystem fallback channel
                 if (instance.fonts && typeof instance.fonts.registerFont === 'function') {
                     instance.fonts.registerFont(virtualPath);
                 }
