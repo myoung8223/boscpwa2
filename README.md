@@ -1,6 +1,5 @@
-<img alt="image" src="https://raw.githubusercontent.com/myoung8223/boscpwa/refs/heads/main/icon-192.png" />
 # Basic OpenSCAD PWA
-
+<img alt="image" src="https://raw.githubusercontent.com/myoung8223/boscpwa/refs/heads/main/title.png" />
 A lightweight, browser-optimized Progressive Web App (PWA) that compiles and renders OpenSCAD geometry entirely client-side using WebAssembly (WASM). Write, preview, and iterate on 3D models instantly without local desktop installations.
 
 ## Current Features
