@@ -1,201 +1,194 @@
-// ---- BUILD VERSION CONTROLLER ----
+// ==========================================================================
+// 🚀 BUILD CONTROLLER & GLOBAL APP CONFIG
+// ==========================================================================
 const BUILD_NUMBER = "50"; // <-- Increment this number whenever you commit!
 
-// Dom Elements
-const editor = document.getElementById('editor');
-const consoleBox = document.getElementById('console');
-const btnSave = document.getElementById('btn-save');
-const fileLoad = document.getElementById('file-load');
-const btnPreview = document.getElementById('btn-preview');
-const btnExport = document.getElementById('btn-export');
-const viewer3d = document.getElementById('viewer-3d');
-const btnCameraReset = document.getElementById('btn-camera-reset');
-const placeholderText = document.getElementById('placeholder-text');
-const btnWireframe = document.getElementById('btn-wireframe');
 
-// Dom Elements (Add this near your other constants at the top)
-const projectNameInput = document.getElementById('project-name-input');
+// ==========================================================================
+// 📥 UNIFIED DOM ELEMENT REGISTER
+// ==========================================================================
 
-// ---- PERSISTENT PROJECT NAME INITIALIZATION ----
-// Fallback to "untitled" if no name has ever been cached
+// Core Workspace Blocks
+const editor                 = document.getElementById('editor');
+const consoleBox             = document.getElementById('console');
+const viewer3d               = document.getElementById('viewer-3d');
+const placeholderText        = document.getElementById('placeholder-text');
+
+// Primary App Actions Toolbar
+const fileLoad               = document.getElementById('file-load');
+const btnSave                = document.getElementById('btn-save');
+const btnPreview             = document.getElementById('btn-preview');
+const btnExport              = document.getElementById('btn-export');
+const btnSettings            = document.getElementById('btn-settings');
+
+// Overlay Settings Menu Components
+const settingsOverlay        = document.getElementById('settings-overlay');
+const btnCloseSettings       = document.getElementById('btn-close-settings');
+const projectNameInput       = document.getElementById('project-name-input');
+const editorFontSizeSelect   = document.getElementById('editor-font-size-select');
+const btnWireframe           = document.getElementById('btn-wireframe');
+const btnColorTrigger        = document.getElementById('btn-color-trigger');
+const modelColorInput        = document.getElementById('model-color');
+const btnCameraReset         = document.getElementById('btn-camera-reset');
+
+
+// ==========================================================================
+// 💾 PERSISTENT APPLICATIONS STATE INITIALIZATION
+// ==========================================================================
+
+// 1. Project Naming Pipeline & Title Synchronization
 let activeProjectName = localStorage.getItem('openscad_project_name') || 'untitled';
 
-// Update the settings input box on boot
 if (projectNameInput) {
     projectNameInput.value = activeProjectName;
 }
 
-/**
- * Updates the PWA desktop window title dynamically
- */
 function updateWindowTitle() {
     document.title = `${activeProjectName}.scad`;
 }
-// Run immediately on application startup
-updateWindowTitle();
+updateWindowTitle(); // Execute instantly on boot
 
-// Dom Elements (Add near your other top declarations)
-const editorFontSizeSelect = document.getElementById('editor-font-size-select');
-
-// ---- PERSISTENT FONT SIZE INITIALIZATION ----
-// Fallback to a comfortable 14px default if nothing is currently cached
+// 2. Text Editor Font Scale Engine
 const savedFontSizeStr = localStorage.getItem('openscad_editor_font_size') || '14px';
 
-if (editor && editorFontSizeSelect) {
-    // 1. Instantly scale the text box display size
+if (editor) {
     editor.style.fontSize = savedFontSizeStr;
-    // 2. Sync the settings menu dropdown choice to match
+}
+if (editorFontSizeSelect) {
     editorFontSizeSelect.value = savedFontSizeStr;
 }
 
-const modelColorInput = document.getElementById('model-color');
-const btnColorTrigger = document.getElementById('btn-color-trigger');
-
-// ---- PERSISTENT COLOR PREFERENCE INITIALIZATION ----
+// 3. WebGL Mesh Color Settings
 const savedColorHexStr = localStorage.getItem('openscad_model_color') || '#3b82f6';
 
 if (modelColorInput) {
     modelColorInput.value = savedColorHexStr;
 }
-
-// Force the button's background color to show the selected color on load
 if (btnColorTrigger) {
     btnColorTrigger.style.background = savedColorHexStr;
 }
 
 let activeModelColor = parseInt(savedColorHexStr.replace('#', '0x'), 16);
-// ----------------------------------------------------
 
-// Store the FACTORY engine globally instead of a single-use instance
+
+// ==========================================================================
+// 🌐 GLOBAL ENGINE VARIABLES & STORAGE
+// ==========================================================================
 let openSCADFactory = null;
-let currentStlBlob = null; // Stores the rendered STL for exporting
-const fontCache = {}; // <-- NEW: Global backpack to hold downloaded font bytes
+let currentStlBlob = null; 
+const fontCache = {}; 
 
-/*
-// Helper to log to our UI console
-function logToConsole(message) {
-    consoleBox.textContent += `\n${message}`;
-    consoleBox.scrollTop = consoleBox.scrollHeight; // Auto scroll to bottom
-}
-*/
 
-// Helper to log to our UI console
+// ==========================================================================
+// 🛠️ INTERNAL SYSTEM UTILITIES
+// ==========================================================================
+
+/**
+ * Appends diagnostic warnings and system states into the custom UI consolebox.
+ * Silences redundant localization/font formatting noise thrown out by WASM sandbox environments.
+ * @param {string} message - Raw message string captured out of standard output streams.
+ */
 function logToConsole(message) {
-    // 1. First, strip out the misleading [ERROR]: badges
+    // Strip out misleading error prefix badges
     let cleanMessage = message.replace(/^\[ERROR\]:\s*/gm, '');
 
-    // 2. If the message is exactly one of our two sandbox warnings, silence it completely
+    // Completely silence engine environment warnings
     if (cleanMessage.includes("Could not initialize localization") || 
         cleanMessage.includes("Fontconfig error")) {
-        return; // Exit early without printing anything
+        return; 
     }
 
-    // 3. Append the clean, professional diagnostics to the console
     consoleBox.textContent += `\n${cleanMessage}`;
-    consoleBox.scrollTop = consoleBox.scrollHeight; // Auto scroll to bottom
+    consoleBox.scrollTop = consoleBox.scrollHeight; // Keep scrolling aligned to bottom
 }
 
-// ---- FILE OPERATIONS (.scad) ----
 
-// Save local .scad file
+// ==========================================================================
+// 📁 NATIVE OS FILE OPERATIONS (.scad)
+// ==========================================================================
+
+// Save Local .scad Project Data Asset
 btnSave.addEventListener('click', () => {
     const code = editor.value;
     const blob = new Blob([code], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
     
-    // Clean up filename: strip accidental .scad typing, then add it safely
     let safeFilename = activeProjectName.trim().replace(/\.scad$/i, '');
-    if (!safeFilename) safeFilename = "untitled"; // Sanity fallback
+    if (!safeFilename) safeFilename = "untitled"; 
     
     link.download = `${safeFilename}.scad`;
     link.click();
     logToConsole(`Saved ${safeFilename}.scad successfully.`);
 });
 
-// LocalStorage Continuous Keypress Auto-Save Hook
-editor.addEventListener('input', () => {
-    localStorage.setItem('openscad_editor_cache', editor.value);
-});
-
-// Load local .scad file
+// Import Local .scad Project Data Asset
 fileLoad.addEventListener('change', (event) => {
     const file = event.target.files[0];
     if (!file) return;
     
     const reader = new FileReader();
     reader.onload = (e) => {
-
         editor.value = e.target.result;
         logToConsole(`Loaded file: ${file.name}`);
 
-        // ---- FIX: IMMUTABLY PERSIST THE NEW CODE INTO STORAGE ON LOAD ----
+        // Commit newly pulled code into app drafting memory
         localStorage.setItem('openscad_editor_cache', editor.value);
 
-        // ---- AUTO-CAPTURE PROJECT NAME FROM DISK ----
+        // Auto-extract filename context parameters out of metadata streams
         let nameFromDisk = file.name.replace(/\.scad$/i, '');
         activeProjectName = nameFromDisk;
         localStorage.setItem('openscad_project_name', activeProjectName);
         if (projectNameInput) projectNameInput.value = activeProjectName;
         updateWindowTitle();
 
-        // ---- AUTOMATIC PREVIEW TRIGGER ----
-        // Safety check to ensure the engine is fully initialized before clicking
+        // Run automatic engine compilation sequence if initialized
         if (typeof btnPreview !== 'undefined' && !btnPreview.disabled) {
             logToConsole('Running automatic preview for loaded file...');
             btnPreview.click();
         }
-        // -----------------------------------
     };
     reader.readAsText(file);
 });
 
-// Toggle between Solid and Wireframe viewing modes
+// Direct Keypress Cache Drafting Hooks
+editor.addEventListener('input', () => {
+    localStorage.setItem('openscad_editor_cache', editor.value);
+});
+
+
+// ==========================================================================
+// 🎨 WORKSPACE VISUAL DISPLAY CONTROLLERS
+// ==========================================================================
+
+// Toggle Mesh Rendering Architecture (Solid vs Wireframe modes)
 btnWireframe.addEventListener('click', () => {
-    wireframeMode = !wireframeMode; // true = wireframe, false = solid
+    wireframeMode = !wireframeMode; 
     
-    // Update labels and colors based on active mode state
     if (wireframeMode) {
         btnWireframe.textContent = 'Wireframe';
-        btnWireframe.style.background = '#444';     // Dark gray when in wireframe mode
+        btnWireframe.style.background = '#444';     
     } else {
         btnWireframe.textContent = 'Solid';
-        btnWireframe.style.background = '#007acc';  // High-visibility blue when in solid mode
+        btnWireframe.style.background = '#007acc';  
     }
 
-    // Live update the viewport mesh instantly if a model is currently on screen
     if (currentMesh && currentMesh.material) {
         currentMesh.material.wireframe = wireframeMode;
     }
 });
 
-// Global Application Hotkey Command Mappings
-window.addEventListener('keydown', (event) => {
-    // Check for [Ctrl + Enter] command match execution
-    if (event.ctrlKey && event.key === 'Enter') {
-        event.preventDefault(); // Stop default paragraph breaks or form issues
-        
-        if (!btnPreview.disabled) {
-            logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]');
-            btnPreview.click(); // Programmatically execute compiling sequence safely
-        }
-    }
-});
-
-// Route button clicks directly into the hidden native color input element
+// Route Overlay Panel Clicks straight to Native Color Input Palettes
 btnColorTrigger.addEventListener('click', () => {
     modelColorInput.click();
 });
 
-// Live update the material color and button preview background when the palette value shifts
+// Sync Workspace Geometry Palette values with Stored Preference States
 modelColorInput.addEventListener('input', (event) => {
     const selectedHex = event.target.value;
     
     localStorage.setItem('openscad_model_color', selectedHex);
-
-    // Update the button's background fill to reflect the active color choice instantly
     btnColorTrigger.style.background = selectedHex;
-
     activeModelColor = parseInt(selectedHex.replace('#', '0x'), 16);
     
     if (currentMesh && currentMesh.material) {
@@ -203,40 +196,52 @@ modelColorInput.addEventListener('input', (event) => {
     }
 });
 
-// Smart Symmetrical Indentation Engine: Handles Tab, Shift+Tab, and Multi-line Blocks
+
+// ==========================================================================
+// ⌨️ WORKSPACE HOTKEYS & TEXT INPUT ENGINES
+// ==========================================================================
+
+// Global Application Core Shortcut Hooks
+window.addEventListener('keydown', (event) => {
+    if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault(); 
+        
+        if (!btnPreview.disabled) {
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]');
+            btnPreview.click(); 
+        }
+    }
+});
+
+// Smart Symmetrical Text Indentation Engine (Tabs, Shifts, Block Adjustments)
 editor.addEventListener('keydown', (event) => {
     if (event.key === 'Tab') {
-        event.preventDefault(); // Prevent browser from shifting focus to the console
+        event.preventDefault(); 
 
         const start = editor.selectionStart;
         const end = editor.selectionEnd;
         const value = editor.value;
-        const isShift = event.shiftKey; // Detects if Shift is held down
+        const isShift = event.shiftKey; 
 
-        // CASE 1: No text highlighted (just a single flashing typing cursor)
+        // CASE 1: Inline Cursor Mode (No highlighted blocks)
         if (start === end) {
             if (!isShift) {
-                // Standard Tab: Insert a single true tab character
                 editor.value = value.substring(0, start) + "\t" + value.substring(end);
                 editor.selectionStart = editor.selectionEnd = start + 1;
             } else {
-                // Shift + Tab (Single Line Outdent): Look backward to the start of the current line
                 const lineStartPos = value.lastIndexOf('\n', start - 1) + 1;
                 
                 if (value.startsWith('\t', lineStartPos)) {
-                    // Strip exactly 1 tab character from the beginning of the line
                     editor.value = value.substring(0, lineStartPos) + value.substring(lineStartPos + 1);
                     editor.selectionStart = editor.selectionEnd = Math.max(lineStartPos, start - 1);
                 } else if (value.substring(lineStartPos, lineStartPos + 4) === "    ") {
-                    // Legacy Support: Strip 4 spaces from the beginning of the line if they exist
                     editor.value = value.substring(0, lineStartPos) + value.substring(lineStartPos + 4);
                     editor.selectionStart = editor.selectionEnd = Math.max(lineStartPos, start - 4);
                 }
             }
         } 
-        // CASE 2: Multi-line / Block text is highlighted
+        // CASE 2: Block Mode (Multi-line highlight streams activated)
         else {
-            // Find the perfect structural line boundaries of the selected block
             const selectStartLineStart = value.lastIndexOf('\n', start - 1) + 1;
             const selectEndLineEnd = value.indexOf('\n', end);
             const finalEndPos = selectEndLineEnd === -1 ? value.length : selectEndLineEnd;
@@ -246,34 +251,30 @@ editor.addEventListener('keydown', (event) => {
             let charsChangedCount = 0;
 
             if (!isShift) {
-                // ---- MULTI-LINE INDENT (Add tabs to all lines) ----
                 modifiedBlock = targetBlock.split('\n').map(line => '\t' + line).join('\n');
                 charsChangedCount = modifiedBlock.length - targetBlock.length;
             } else {
-                // ---- MULTI-LINE OUTDENT (Remove tabs/spaces from all lines) ----
                 modifiedBlock = targetBlock.split('\n').map(line => {
                     if (line.startsWith('\t')) {
-                        return line.substring(1); // Remove 1 tab character
+                        return line.substring(1); 
                     } else if (line.startsWith('    ')) {
-                        return line.substring(4); // Remove 4 legacy spaces
+                        return line.substring(4); 
                     }
-                    return line; // Leave unindented base code completely untouched
+                    return line; 
                 }).join('\n');
                 charsChangedCount = modifiedBlock.length - targetBlock.length;
             }
 
-            // Splice the modified block back into the editor stream smoothly
             editor.value = value.substring(0, selectStartLineStart) + modifiedBlock + value.substring(finalEndPos);
-
-            // Re-highlight the relative code block cleanly so the user can keep working with it
             editor.selectionStart = selectStartLineStart;
             editor.selectionEnd = finalEndPos + charsChangedCount;
         }
     }
 });
 
-// ---- OPENSCAD WASM FACTORY PREPARATION ----
-
+// ==================================================================
+// 🛠️ ENGINE CORE INITIALIZATION / OPENSCAD WASM FACTORY PREPARATION
+// ==================================================================
 async function initOpenSCAD() {
     // Clear out the console box completely before writing our clean layout
     //consoleBox.textContent = "";
