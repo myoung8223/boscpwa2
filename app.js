@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "48"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "49"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -29,7 +29,7 @@ if (projectNameInput) {
  * Updates the PWA desktop window title dynamically
  */
 function updateWindowTitle() {
-    document.title = `${activeProjectName}.scad - boscpwa`;
+    document.title = `${activeProjectName}.scad`;
 }
 // Run immediately on application startup
 updateWindowTitle();
