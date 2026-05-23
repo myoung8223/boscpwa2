@@ -921,13 +921,12 @@ if (leftPaneContainer && panelSplitGutter) {
 }
 
 
-    // 2. Click Listener: Flip state when toggled inside the settings modal
-    toggleConsoleBtn.addEventListener('click', () => {
-        applyConsoleLayout(!isConsoleVisible);
-        
-        // Let the user know via a minor log if they turn it back on later
-        if (isConsoleVisible) {
-            logToConsole("🖥️ Console tracking workspace restored.");
-        }
-    });
-}
+// 2. Click Listener: Flip state when toggled inside the settings modal
+toggleConsoleBtn.addEventListener('click', () => {
+    applyConsoleLayout(!isConsoleVisible);
+    
+    // Let the user know via a minor log if they turn it back on later
+    if (isConsoleVisible) {
+        logToConsole("🖥️ Console tracking workspace restored.");
+    }
+});
