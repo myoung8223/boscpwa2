@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "50"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "52"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -299,8 +299,6 @@ async function initOpenSCAD() {
     }
 }
 
-
-// ---- THE PREVIEW TRIGGER (F5 Style) ----
 
 // ---- THE PREVIEW TRIGGER (F5 Style) ----
 
@@ -783,6 +781,18 @@ if (projectNameInput) {
     });
 }
 
+// 🟢 NEW: Live Editor Text Scaling Change Listener
+if (editorFontSizeSelect) {
+    editorFontSizeSelect.addEventListener('change', (event) => {
+        const selectedSize = event.target.value;
+        localStorage.setItem('openscad_editor_font_size', selectedSize);
+        if (editor) {
+            editor.style.fontSize = selectedSize;
+        }
+        logToConsole(`🔎 Editor text scaled to: ${selectedSize}`);
+    });
+}
+
 // 6. Camera Viewport Boundary Reset Engine
 if (btnCameraReset) {
     btnCameraReset.addEventListener('click', () => {
@@ -807,24 +817,6 @@ if (btnCameraReset) {
             
             // Ambient UX: Close the settings overlay panel so they instantly see the view shift
             closeSettingsMenu();
-            
-        } else {
-            logToConsole('⚠️ Cannot reset view: No active 3D geometry loaded on screen.');
         }
-    });
-}
-
-// 7. Live Editor Text Scaling Change Listener
-if (editorFontSizeSelect && editor) {
-    editorFontSizeSelect.addEventListener('change', (event) => {
-        const selectedSize = event.target.value;
-        
-        // 1. Commit layout properties dynamically to browser cache memory
-        localStorage.setItem('openscad_editor_font_size', selectedSize);
-        
-        // 2. Adjust text block rendering instantly on screen
-        editor.style.fontSize = selectedSize;
-        
-        logToConsole(`🔎 Editor text scales reconfigured to: ${selectedSize}`);
     });
 }
