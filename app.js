@@ -677,6 +677,7 @@ function init3DWorkspace() {
     scene.add(dirLight1);
     */
 
+    /*
     // ---- UPGRADED: THREE-POINT STUDIO LIGHTING SYSTEM ----
     // 1. Low Ambient Light: Keeps shadows from being pitch black, but doesn't wash out details
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.25);
@@ -696,6 +697,34 @@ function init3DWorkspace() {
     const topLight = new THREE.DirectionalLight(0xffffff, 0.3);
     topLight.position.set(0, 200, 0);
     scene.add(topLight);
+    */
+
+    // ---- 🖥️ OPENSCAD-OPTIMIZED CAD LIGHTING SYSTEM ----
+
+    // 1. High-Baseline Ambient Light (The Under-Side Lifter)
+    // OpenSCAD keeps its minimum darks very bright so you can always see bottom faces.
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55); // Bumped from 0.25 to 0.55
+    scene.add(ambientLight);
+
+    // 2. Fixed Studio Key Light (The Dimension definer)
+    // Provides crisp orientation shadows from a high front-right angle.
+    const keyLight = new THREE.DirectionalLight(0xffffff, 0.5); 
+    keyLight.position.set(150, 200, 100);
+    scene.add(keyLight);
+
+    // 3. Subdued Top Light (No longer overpowering)
+    // Toned down dramatically so it only subtly catches top-facing planes.
+    const topLight = new THREE.DirectionalLight(0xffffff, 0.15); // Cut from 0.3 to 0.15
+    topLight.position.set(0, 250, 0);
+    scene.add(topLight);
+
+    // 4. The "Headlight" (Crucial OpenSCAD Secret Weapon)
+    // This directional light sits exactly at the camera lens position. 
+    // It must be added to the CAMERA instead of the SCENE so it moves when you orbit!
+    const headlight = new THREE.DirectionalLight(0xffffff, 0.45);
+    headlight.position.set(0, 0, 1); // Relative to the camera's local space, pointing forward
+    camera.add(headlight); 
+    scene.add(camera); // Ensure camera is in scene so its children lights render!
     
     // 6. Robust Animation Loop with Live Layout Boundary Matching
     function animate() {
