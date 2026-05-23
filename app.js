@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "52"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "53"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -818,5 +818,72 @@ if (btnCameraReset) {
             // Ambient UX: Close the settings overlay panel so they instantly see the view shift
             closeSettingsMenu();
         }
+    });
+}
+
+// ==========================================================================
+// 📐 PERSISTENT DRAGGABLE SPLIT-PANE CONTROLLER
+// ==========================================================================
+
+const leftPaneContainer = document.getElementById('left-pane-container');
+const panelSplitGutter = document.getElementById('panel-split-gutter');
+
+if (leftPaneContainer && panelSplitGutter) {
+    // 1. Initial Load: Apply cached split layout percentages from memory (defaults to 50%)
+    const cachedSplitValue = localStorage.getItem('openscad_layout_split') || '50';
+    leftPaneContainer.style.width = `${cachedSplitValue}%`;
+
+    // 2. Wire up the drag mouse capturing trigger
+    panelSplitGutter.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        
+        // Prevent random text selection highlighted layers while dragging across elements
+        document.body.style.cursor = 'col-resize';
+        document.body.style.userSelect = 'none';
+
+        function onMouseMove(moveEvent) {
+            // Translate the raw cursor client pixels into window aspect width percentage metrics
+            let calculatedWidthPercent = (moveEvent.clientX / window.innerWidth) * 100;
+
+            // Safe Limits: Stop code or 3D view screens from crushing down past a 15% footprint
+            if (calculatedWidthPercent < 15) calculatedWidthPercent = 15;
+            if (calculatedWidthPercent > 85) calculatedWidthPercent = 85;
+
+            // Live transform the style properties
+            leftPaneContainer.style.width = `${calculatedWidthPercent}%`;
+            
+            // Lock value directly to background system cache storage
+            localStorage.setItem('openscad_layout_split', Math.round(calculatedWidthPercent).toString());
+            
+            // Core Pipeline Update: Recompute the WebGL dimensions instantly on drag update
+            if (typeof renderer !== 'undefined' && renderer && typeof camera !== 'undefined' && camera) {
+                const container3d = document.getElementById('viewer-3d');
+                if (container3d) {
+                    const currentWidth = container3d.clientWidth;
+                    const currentHeight = container3d.clientHeight;
+                    if (currentWidth > 0 && currentHeight > 0) {
+                        camera.aspect = currentWidth / currentHeight;
+                        camera.updateProjectionMatrix();
+                        renderer.setSize(currentWidth, currentHeight, true);
+                    }
+                }
+            }
+        }
+
+        function onMouseUp() {
+            // Tear down trackers immediately on click-release
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            
+            // Clean cursor layout artifacts
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'text';
+            
+            logToConsole(`📐 Split layout updated and cached to: ${localStorage.getItem('openscad_layout_split')}%`);
+        }
+
+        // Apply global event listeners so cursor remains active if dragged fast outside the line area
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     });
 }
