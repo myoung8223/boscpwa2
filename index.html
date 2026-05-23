@@ -15,10 +15,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Basic OpenSCAD PWA</title>
     
-    <!--script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/loaders/STLLoader.js"></script>
-    <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/js/controls/OrbitControls.js"></script-->
-
     <script src="libs/three.min.js"></script>
     <script src="libs/STLLoader.js"></script>
     <script src="libs/OrbitControls.js"></script>
@@ -29,16 +25,36 @@
         
         /* Two-column layout */
         .app-container { display: flex; height: 100vh; width: 100vw; }
-        .left-panel { width: 50%; display: flex; flex-direction: column; border-right: 2px solid #444; }
+        
+        /* 📐 MODIFIED: Set a base fallback width; JS will handle the persistence on initialization */
+        .left-panel { width: 50%; min-width: 15%; max-width: 85%; display: flex; flex-direction: column; }
 
+        /* 🎛️ NEW: Draggable splitter style rules */
+        .split-gutter {
+            width: 8px;
+            background: #111;
+            cursor: col-resize;
+            position: relative;
+            z-index: 10;
+            flex-shrink: 0;
+            transition: background 0.15s ease;
+            border-left: 1px solid #333;
+            border-right: 1px solid #333;
+        }
+        .split-gutter:hover,
+        .split-gutter:active {
+            background: #007acc; /* Highlights active blue when dragging */
+        }
+
+        /* 📐 MODIFIED: Removed static width and forced panel to fill remaining viewport territory */
         .right-panel { 
-            width: 50%; 
-            height: 100vh; /* THE FIX: Lock panel height to 100% of the viewport vertical height */
+            flex-grow: 1;
+            height: 100vh; 
             display: flex; 
             flex-direction: column; 
             background: #222; 
             position: relative; 
-            overflow: hidden; /* Stops accidental scrollbar leaks */
+            overflow: hidden; 
         }
         
         /* Toolbar */
@@ -61,12 +77,8 @@
             resize: none; 
             outline: none; 
             line-height: 1.5; 
-            
-            /* --- ADD THESE TWO LINES HERE --- */
             tab-size: 4;
-            -moz-tab-size: 4; /* Compatibility for older Firefox versions */
-
-            /* 🚫 NEW: KILL WORD WRAP AND FORCE HORIZONTAL SCROLLING */
+            -moz-tab-size: 4; 
             white-space: pre;
             overflow-x: auto;
         }
@@ -78,16 +90,15 @@
         #viewer-3d { 
             position: absolute;
             top: 0;
-            bottom: 0; /* Anchor tightly to the bottom boundary edge */
+            bottom: 0; 
             left: 0;
-            right: 0;  /* Anchor tightly to the right boundary edge */
+            right: 0;  
             width: 100%; 
             height: 100%; 
             display: block;
             background-color: #222222; 
             z-index: 1;
         }
-        /* THE FIX: Force the inner WebGL canvas to actively match the container dimensions */
         #viewer-3d canvas {
             width: 100% !important;
             height: 100% !important;
@@ -102,14 +113,10 @@
             color: #888; 
             text-align: center; 
             pointer-events: none; 
-            z-index: 10; /* Keeps it layered neatly on top */
+            z-index: 10; 
         }
 
-        /* ==========================================================================
-           🛠️ NEW: SETTINGS OVERLAY LAYOUTS
-           ========================================================================== */
-        
-        /* The fullscreen dimmed background blur */
+        /* Fullscreen dimmed background blur */
         .overlay {
             position: fixed;
             top: 0;
@@ -117,18 +124,18 @@
             width: 100vw;
             height: 100vh;
             background-color: rgba(0, 0, 0, 0.55);
-            backdrop-filter: blur(4px); /* Premium UI glass effect */
+            backdrop-filter: blur(4px); 
             -webkit-backdrop-filter: blur(4px);
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 1000; /* Floating strictly on top of textareas/WebGL canvases */
+            z-index: 1000; 
             transition: opacity 0.15s ease;
         }
 
-        /* The modular settings card interface container */
+        /* Modular settings card interface container */
         .overlay-content {
-            background-color: #1e1e1e; /* Matches your editor background color palette */
+            background-color: #1e1e1e; 
             border: 1px solid #333;
             color: #ffffff;
             padding: 24px;
@@ -138,12 +145,8 @@
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
         }
 
-        /* Utility visibility controller */
-        .hidden {
-            display: none !important;
-        }
+        .hidden { display: none !important; }
 
-        /* Native-feeling floating 'X' shutdown button alignment */
         .close-btn {
             position: absolute;
             top: 12px;
@@ -158,7 +161,6 @@
         }
         .close-btn:hover { color: #fff; }
 
-        /* Row organizer for individual options panels */
         .settings-group {
             margin: 16px 0;
             display: flex;
@@ -170,7 +172,7 @@
 <body>
 
     <div class="app-container">
-        <div class="left-panel">
+        <div class="left-panel" id="left-pane-container">
             <div class="toolbar">
                 <input type="file" id="file-load" style="display:none;" accept=".scad">
                 <button class="file-btn" onclick="document.getElementById('file-load').click()">Load</button>
@@ -193,6 +195,8 @@ union() {
             
             <div class="console-box" id="console">Basic OpenSCAD PWA - By: Mike Young</div>
         </div>
+
+        <div class="split-gutter" id="panel-split-gutter"></div>
 
         <div class="right-panel">
             <div class="viewer-placeholder" id="placeholder-text">
