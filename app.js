@@ -12,8 +12,28 @@ const viewer3d = document.getElementById('viewer-3d');
 const placeholderText = document.getElementById('placeholder-text');
 const btnWireframe = document.getElementById('btn-wireframe');
 
+// Dom Elements (Add this near your other constants at the top)
+const projectNameInput = document.getElementById('project-name-input');
+
+// ---- PERSISTENT PROJECT NAME INITIALIZATION ----
+// Fallback to "untitled" if no name has ever been cached
+let activeProjectName = localStorage.getItem('openscad_project_name') || 'untitled';
+
+// Update the settings input box on boot
+if (projectNameInput) {
+    projectNameInput.value = activeProjectName;
+}
+
+/**
+ * Updates the PWA desktop window title dynamically
+ */
+function updateWindowTitle() {
+    document.title = `${activeProjectName}.scad - boscpwa`;
+}
+// Run immediately on application startup
+updateWindowTitle();
+
 const modelColorInput = document.getElementById('model-color');
-// Grab our new button trigger element reference
 const btnColorTrigger = document.getElementById('btn-color-trigger');
 
 // ---- PERSISTENT COLOR PREFERENCE INITIALIZATION ----
@@ -68,9 +88,14 @@ btnSave.addEventListener('click', () => {
     const blob = new Blob([code], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = 'model.scad';
+    
+    // Clean up filename: strip accidental .scad typing, then add it safely
+    let safeFilename = activeProjectName.trim().replace(/\.scad$/i, '');
+    if (!safeFilename) safeFilename = "untitled"; // Sanity fallback
+    
+    link.download = `${safeFilename}.scad`;
     link.click();
-    logToConsole('Saved model.scad successfully.');
+    logToConsole(`Saved ${safeFilename}.scad successfully.`);
 });
 
 // LocalStorage Continuous Keypress Auto-Save Hook
@@ -85,8 +110,16 @@ fileLoad.addEventListener('change', (event) => {
     
     const reader = new FileReader();
     reader.onload = (e) => {
+
         editor.value = e.target.result;
         logToConsole(`Loaded file: ${file.name}`);
+
+        // ---- AUTO-CAPTURE PROJECT NAME FROM DISK ----
+        let nameFromDisk = file.name.replace(/\.scad$/i, '');
+        activeProjectName = nameFromDisk;
+        localStorage.setItem('openscad_project_name', activeProjectName);
+        if (projectNameInput) projectNameInput.value = activeProjectName;
+        updateWindowTitle();
 
         // ---- AUTOMATIC PREVIEW TRIGGER ----
         // Safety check to ensure the engine is fully initialized before clicking
@@ -761,3 +794,28 @@ window.addEventListener('keydown', (event) => {
         closeSettingsMenu();
     }
 });
+
+// 5. Project Name Change Event Handler
+if (projectNameInput) {
+    projectNameInput.addEventListener('input', (event) => {
+        // Strip any illegal filename path characters while typing
+        let cleanedName = event.target.value.replace(/[/\\?%*:|"<>. ]/g, '_');
+        
+        // Update global variable and local storage cache instantly
+        activeProjectName = cleanedName || 'untitled';
+        localStorage.setItem('openscad_project_name', activeProjectName);
+        
+        // Sync straight to the desktop window top border panel frame
+        updateWindowTitle();
+    });
+    
+    // Optional: when the input field loses focus, reset empty fields to 'untitled'
+    projectNameInput.addEventListener('blur', (event) => {
+        if (!event.target.value.trim()) {
+            event.target.value = 'untitled';
+            activeProjectName = 'untitled';
+            localStorage.setItem('openscad_project_name', 'untitled');
+            updateWindowTitle();
+        }
+    });
+}
