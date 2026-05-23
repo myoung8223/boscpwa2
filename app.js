@@ -20,16 +20,14 @@ const btnColorTrigger = document.getElementById('btn-color-trigger');
 // ==========================================================================
 // 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
 // ==========================================================================
-
-//const consoleBox = document.getElementById('console');
 const toggleConsoleBtn = document.getElementById('btn-toggle-console');
 
 if (consoleBox && toggleConsoleBtn) {
     // 1. Read layout state from cache (default to 'visible' if never configured)
     let isConsoleVisible = localStorage.getItem('openscad_console_visible') !== 'hidden';
 
-    // Function to apply the visibility states instantly across elements
-    function applyConsoleLayout(visible) {
+    // 2. Define the layout application function inside the block
+    const applyConsoleLayout = (visible) => {
         if (visible) {
             consoleBox.style.display = 'block';
             toggleConsoleBtn.textContent = 'Visible';
@@ -43,10 +41,20 @@ if (consoleBox && toggleConsoleBtn) {
             isConsoleVisible = false;
             localStorage.setItem('openscad_console_visible', 'hidden');
         }
-    }
+    };
 
     // Initialize layout immediately on page bootup
     applyConsoleLayout(isConsoleVisible);
+
+    // 3. Click Listener: Put this INSIDE the conditional block!
+    // Now it can perfectly see 'isConsoleVisible' and 'applyConsoleLayout'
+    toggleConsoleBtn.addEventListener('click', () => {
+        applyConsoleLayout(!isConsoleVisible);
+        
+        if (isConsoleVisible && typeof logToConsole === 'function') {
+            logToConsole("🖥️ Console tracking workspace restored.");
+        }
+    });
 }
 
 // ---- PERSISTENT PROJECT NAME INITIALIZATION ----
@@ -919,14 +927,3 @@ if (leftPaneContainer && panelSplitGutter) {
         document.addEventListener('mouseup', onMouseUp);
     });
 }
-
-
-// 2. Click Listener: Flip state when toggled inside the settings modal
-toggleConsoleBtn.addEventListener('click', () => {
-    applyConsoleLayout(!isConsoleVisible);
-    
-    // Let the user know via a minor log if they turn it back on later
-    if (isConsoleVisible) {
-        logToConsole("🖥️ Console tracking workspace restored.");
-    }
-});
