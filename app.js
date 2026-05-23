@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "54"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "55"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -16,6 +16,38 @@ const projectNameInput = document.getElementById('project-name-input');
 const editorFontSizeSelect = document.getElementById('editor-font-size-select');
 const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
+
+// ==========================================================================
+// 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
+// ==========================================================================
+
+const consoleBox = document.getElementById('console');
+const toggleConsoleBtn = document.getElementById('btn-toggle-console');
+
+if (consoleBox && toggleConsoleBtn) {
+    // 1. Read layout state from cache (default to 'visible' if never configured)
+    let isConsoleVisible = localStorage.getItem('openscad_console_visible') !== 'hidden';
+
+    // Function to apply the visibility states instantly across elements
+    function applyConsoleLayout(visible) {
+        if (visible) {
+            consoleBox.style.display = 'block';
+            toggleConsoleBtn.textContent = 'Visible';
+            toggleConsoleBtn.style.backgroundColor = '#28a745'; // Balanced UI Green
+            isConsoleVisible = true;
+            localStorage.setItem('openscad_console_visible', 'visible');
+        } else {
+            consoleBox.style.display = 'none';
+            toggleConsoleBtn.textContent = 'Hidden';
+            toggleConsoleBtn.style.backgroundColor = '#dc3545'; // Attention Red
+            isConsoleVisible = false;
+            localStorage.setItem('openscad_console_visible', 'hidden');
+        }
+    }
+
+    // Initialize layout immediately on page bootup
+    applyConsoleLayout(isConsoleVisible);
+}
 
 // ---- PERSISTENT PROJECT NAME INITIALIZATION ----
 let activeProjectName = localStorage.getItem('openscad_project_name') || 'untitled';
@@ -888,36 +920,6 @@ if (leftPaneContainer && panelSplitGutter) {
     });
 }
 
-// ==========================================================================
-// 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
-// ==========================================================================
-
-const consoleBox = document.getElementById('console');
-const toggleConsoleBtn = document.getElementById('btn-toggle-console');
-
-if (consoleBox && toggleConsoleBtn) {
-    // 1. Read layout state from cache (default to 'visible' if never configured)
-    let isConsoleVisible = localStorage.getItem('openscad_console_visible') !== 'hidden';
-
-    // Function to apply the visibility states instantly across elements
-    function applyConsoleLayout(visible) {
-        if (visible) {
-            consoleBox.style.display = 'block';
-            toggleConsoleBtn.textContent = 'Visible';
-            toggleConsoleBtn.style.backgroundColor = '#28a745'; // Balanced UI Green
-            isConsoleVisible = true;
-            localStorage.setItem('openscad_console_visible', 'visible');
-        } else {
-            consoleBox.style.display = 'none';
-            toggleConsoleBtn.textContent = 'Hidden';
-            toggleConsoleBtn.style.backgroundColor = '#dc3545'; // Attention Red
-            isConsoleVisible = false;
-            localStorage.setItem('openscad_console_visible', 'hidden');
-        }
-    }
-
-    // Initialize layout immediately on page bootup
-    applyConsoleLayout(isConsoleVisible);
 
     // 2. Click Listener: Flip state when toggled inside the settings modal
     toggleConsoleBtn.addEventListener('click', () => {
