@@ -205,14 +205,20 @@ union() {
             <button id="btn-close-settings" class="close-btn">&times;</button>
             <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2rem;">Workspace Settings</h3>
             <hr style="border: 0; border-top: 1px solid #333; margin-bottom: 20px;">
+
+            <div class="settings-group" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+                <label style="font-size: 0.9rem; color: #aaa;">Project Name:</label>
+                <input type="text" id="project-name-input" placeholder="untitled" 
+                    style="width: 100%; background: #2d2d2d; border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 0.9rem; outline: none;">
+            </div>
             
             <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Mesh View:</label>
+                <label style="font-size: 0.9rem; color: #aaa;">Model View:</label>
                 <button id="btn-wireframe" class="file-btn" style="width: 120px;">Solid</button>
             </div>
             
             <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Mesh Color:</label>
+                <label style="font-size: 0.9rem; color: #aaa;">Model Color:</label>
                 <button id="btn-color-trigger" class="file-btn" style="width: 120px; color: #ffffff; text-shadow: 0px 1px 2px rgba(0,0,0,0.6);">Color</button>
             </div>
         </div>
