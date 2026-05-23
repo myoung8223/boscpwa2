@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "49"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "50"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -33,6 +33,20 @@ function updateWindowTitle() {
 }
 // Run immediately on application startup
 updateWindowTitle();
+
+// Dom Elements (Add near your other top declarations)
+const editorFontSizeSelect = document.getElementById('editor-font-size-select');
+
+// ---- PERSISTENT FONT SIZE INITIALIZATION ----
+// Fallback to a comfortable 14px default if nothing is currently cached
+const savedFontSizeStr = localStorage.getItem('openscad_editor_font_size') || '14px';
+
+if (editor && editorFontSizeSelect) {
+    // 1. Instantly scale the text box display size
+    editor.style.fontSize = savedFontSizeStr;
+    // 2. Sync the settings menu dropdown choice to match
+    editorFontSizeSelect.value = savedFontSizeStr;
+}
 
 const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
@@ -852,5 +866,20 @@ if (btnCameraReset) {
         } else {
             logToConsole('⚠️ Cannot reset view: No active 3D geometry loaded on screen.');
         }
+    });
+}
+
+// 7. Live Editor Text Scaling Change Listener
+if (editorFontSizeSelect && editor) {
+    editorFontSizeSelect.addEventListener('change', (event) => {
+        const selectedSize = event.target.value;
+        
+        // 1. Commit layout properties dynamically to browser cache memory
+        localStorage.setItem('openscad_editor_font_size', selectedSize);
+        
+        // 2. Adjust text block rendering instantly on screen
+        editor.style.fontSize = selectedSize;
+        
+        logToConsole(`🔎 Editor text scales reconfigured to: ${selectedSize}`);
     });
 }
