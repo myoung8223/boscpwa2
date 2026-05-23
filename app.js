@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "47"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "48"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -9,6 +9,7 @@ const fileLoad = document.getElementById('file-load');
 const btnPreview = document.getElementById('btn-preview');
 const btnExport = document.getElementById('btn-export');
 const viewer3d = document.getElementById('viewer-3d');
+const btnCameraReset = document.getElementById('btn-camera-reset');
 const placeholderText = document.getElementById('placeholder-text');
 const btnWireframe = document.getElementById('btn-wireframe');
 
@@ -819,6 +820,37 @@ if (projectNameInput) {
             activeProjectName = 'untitled';
             localStorage.setItem('openscad_project_name', 'untitled');
             updateWindowTitle();
+        }
+    });
+}
+
+// 6. Camera Viewport Boundary Reset Engine
+if (btnCameraReset) {
+    btnCameraReset.addEventListener('click', () => {
+        // Safety Check: Verify if a model is actually rendered on screen
+        if (currentMesh && currentMesh.geometry && camera && controls) {
+            
+            const geometry = currentMesh.geometry;
+            
+            // Execute your engine's native bounding box framing math
+            const radius = geometry.boundingSphere.radius;
+            const targetDistance = radius > 0 ? radius * 3.5 : 50;
+            
+            logToConsole('🎥 Resetting camera matrix to factory default frame parameters...');
+            
+            // Match your system's exact starting boot coordinates
+            camera.position.set(targetDistance, targetDistance * 1.2, targetDistance);
+            controls.target.set(0, 0, 0); // Re-clamp rotation pivot back to true center
+            camera.lookAt(0, 0, 0);
+            
+            // Force OrbitControls to synchronize and update its matrices
+            controls.update();
+            
+            // Ambient UX: Close the settings overlay panel so they instantly see the view shift
+            closeSettingsMenu();
+            
+        } else {
+            logToConsole('⚠️ Cannot reset view: No active 3D geometry loaded on screen.');
         }
     });
 }
