@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "46"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "47"; // <-- Increment this number whenever you commit!
 
 // Dom Elements
 const editor = document.getElementById('editor');
@@ -113,6 +113,9 @@ fileLoad.addEventListener('change', (event) => {
 
         editor.value = e.target.result;
         logToConsole(`Loaded file: ${file.name}`);
+
+        // ---- FIX: IMMUTABLY PERSIST THE NEW CODE INTO STORAGE ON LOAD ----
+        localStorage.setItem('openscad_editor_cache', editor.value);
 
         // ---- AUTO-CAPTURE PROJECT NAME FROM DISK ----
         let nameFromDisk = file.name.replace(/\.scad$/i, '');
