@@ -710,3 +710,54 @@ initOpenSCAD();
 init3DWorkspace();
 
 btnWireframe.style.background = '#007acc'; // Vibrant active solid blue
+
+// ==========================================================================
+// ⚙️ SETTINGS OVERLAY CONTROLLER LOGIC
+// ==========================================================================
+
+// 1. Grab the new DOM structural element references
+const btnSettings = document.getElementById('btn-settings');
+const btnCloseSettings = document.getElementById('btn-close-settings');
+const settingsOverlay = document.getElementById('settings-overlay');
+
+/**
+ * Opens the workspace settings modal panel
+ */
+function openSettingsMenu() {
+    if (settingsOverlay) {
+        settingsOverlay.classList.remove('hidden');
+    }
+}
+
+/**
+ * Closes the workspace settings modal panel
+ */
+function closeSettingsMenu() {
+    if (settingsOverlay) {
+        settingsOverlay.classList.add('hidden');
+    }
+}
+
+// 2. Attach clean, dedicated click listeners to open and close the view
+if (btnSettings) {
+    btnSettings.addEventListener('click', openSettingsMenu);
+}
+
+if (btnCloseSettings) {
+    btnCloseSettings.addEventListener('click', closeSettingsMenu);
+}
+
+// 3. Ambient UX: Close the settings card if the user clicks anywhere on the dark blurred background tint
+window.addEventListener('click', (event) => {
+    if (event.target === settingsOverlay) {
+        closeSettingsMenu();
+    }
+});
+
+// 4. Keyboard Accessibility: Close the window instantly if the user presses the Escape key
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && settingsOverlay && !settingsOverlay.classList.contains('hidden')) {
+        logToConsole('⌨️ Hotkey Triggered: [Escape] - Closing Settings');
+        closeSettingsMenu();
+    }
+});
