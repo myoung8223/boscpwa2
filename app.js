@@ -785,12 +785,47 @@ function update3DModelViewer(blobUrl) {
     loader.load(blobUrl, (geometry) => {
         geometry.computeVertexNormals();
         
+        // ==========================================================================
+        // 🎨 PROCEDURAL MATTE NOISE MATERIAL INJECTION
+        // ==========================================================================
         const material = new THREE.MeshStandardMaterial({ 
             color: activeModelColor, 
-            roughness: 0.65,    // Spreads the light out to fake a micro-texture sheen
-            metalness: 0.70,    // High metallic reflection catching environmental light
+            roughness: 0.65,     // Spreads out specular highlights for plastic finish
+            metalness: 0.20,     // Slightly reduced from 0.70 to look like engineering plastic instead of polished steel
             wireframe: wireframeMode 
         });
+
+        // Inject the custom GLSL code right into Three.js's standard shader program
+        material.onBeforeCompile = (shader) => {
+            // High-frequency pseudo-random noise generator function
+            const noiseGLSL = `
+                float hash(vec2 p) {
+                    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+                }
+                float proceduralNoise(vec3 p) {
+                    // Sample 3D world coordinates to create unified structural grit
+                    return hash(p.xy + p.z);
+                }
+            `;
+
+            // Prepend the functions to the top of the fragment shader program
+            shader.fragmentShader = noiseGLSL + shader.fragmentShader;
+
+            // Replace the final color output block with our grit blending
+            shader.fragmentShader = shader.fragmentShader.replace(
+                `#include <opaque_fragment>`,
+                `
+                // 8.0 handles the scale/frequency of the grain. 0.04 scales the color contrast.
+                float noiseGrit = proceduralNoise(vViewPosition * 8.0) * 0.04;
+                
+                // Adjust light output slightly down and up based on the noise map
+                outgoingLight.rgb += vec3(noiseGrit - 0.02);
+                
+                #include <opaque_fragment>
+                `
+            );
+        };
+        // ==========================================================================
         
         currentMesh = new THREE.Mesh(geometry, material);
         
