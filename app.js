@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "63"; // <-- Incremented for IDE-grade block indentation features!
+const BUILD_NUMBER = "64"; // <-- Incremented for Event Capture Phase Interceptor!
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -21,31 +21,16 @@ const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
 
 // 🍯 INITIALIZE CODEJAR INSTANCE
-// Connects the text listener module to global Prism syntax coloring and matches brackets
 const jar = CodeJar(
     editorElement, 
     (el) => {
-        // 1. Run Prism to color the keywords first
-        if (typeof Prism !== 'undefined') {
-            Prism.highlightElement(el);
-        }
-        
-        // 2. Safely run our upgraded native text cursor bracket matching pass
-        try {
-            applyInlineBracketMatching(el);
-        } catch (e) {
-            console.error("Bracket matching engine error:", e);
-        }
+        if (typeof Prism !== 'undefined') Prism.highlightElement(el);
+        try { applyInlineBracketMatching(el); } catch (e) { console.error("Bracket match error:", e); }
     },
-    { 
-        tab: '\t',
-        history: true,
-        indentOn: /^\s*$/,
-        addClosing: false // Restores standard single-line Tab behavior while keeping bracket auto-closing disabled
-    } 
+    { tab: '\t', history: true, indentOn: /^\s*$/, addClosing: false } 
 );
 
-// 🖱️ Passive navigation listeners: Re-scan brackets instantly when clicking or navigating with arrow keys
+// 🖱️ Passive navigation listeners
 if (editorElement) {
     editorElement.addEventListener('click', () => applyInlineBracketMatching(editorElement));
     editorElement.addEventListener('keyup', (e) => {
@@ -56,101 +41,94 @@ if (editorElement) {
 }
 
 // ==========================================================================
-// 📐 SMART MULTI-LINE BLOCK INDENTATION ENGINE (FIX: TAB / SHIFT+TAB REPLACEMENT)
+// 📐 SMART MULTI-LINE BLOCK INDENTATION ENGINE (CAPTURE-PHASE INTERCEPTOR)
 // ==========================================================================
 if (editorElement) {
+    // 🚨 IMPORTANT: 'true' as the 3rd argument runs this listener in the DOM Capture Phase!
+    // This guarantees we process the Tab key BEFORE CodeJar's internal engine even sees it.
     editorElement.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
-            const { start, end } = getSelectionCharacterOffsetWithin(editorElement);
+            
+            // 🛑 Blindfold CodeJar completely for this keystroke
+            event.preventDefault();
+            event.stopImmediatePropagation();
+
+            let { start, end } = getSelectionCharacterOffsetWithin(editorElement);
             const value = jar.toString();
 
-            // Intercept if multiple lines are highlighted OR if performing a Shift+Tab outdent
-            if (start !== end || event.shiftKey) {
-                event.preventDefault();
-                event.stopPropagation();
-
-                const selectStartLineStart = value.lastIndexOf('\n', start - 1) + 1;
-                const selectEndLineEnd = value.indexOf('\n', end);
-                const finalEndPos = selectEndLineEnd === -1 ? value.length : selectEndLineEnd;
-
-                const targetBlock = value.substring(selectStartLineStart, finalEndPos);
-                let modifiedBlock = "";
-
-                if (!event.shiftKey) {
-                    // Uniform Block Indentation: Add a tab character to the beginning of every line in selection
-                    modifiedBlock = targetBlock.split('\n').map(line => '\t' + line).join('\n');
-                } else {
-                    // Uniform Block Outindentation: Remove one tab or 4 spaces from the beginning of every line
-                    modifiedBlock = targetBlock.split('\n').map(line => {
-                        if (line.startsWith('\t')) return line.substring(1);
-                        if (line.startsWith('    ')) return line.substring(4);
-                        return line;
-                    }).join('\n');
-                }
-
-                const newCode = value.substring(0, selectStartLineStart) + modifiedBlock + value.substring(finalEndPos);
-                
-                // Commit changes to CodeJar frame (this auto-triggers Prism highlighting & line-recounts)
+            // SCENARIO 1: Standard single-cursor inline Tab insertion
+            if (start === end && !event.shiftKey) {
+                const newCode = value.substring(0, start) + '\t' + value.substring(end);
                 jar.updateCode(newCode);
-
-                // Precise cursor and highlight selection recalculation tracking
-                let newStart = start;
-                let newEnd = end;
-
-                if (start === end) {
-                    // Handle single cursor line outdenting displacement shift
-                    let reduction = 0;
-                    const fullLineStr = value.substring(selectStartLineStart, finalEndPos).split('\n')[0];
-                    if (fullLineStr.startsWith('\t')) reduction = 1;
-                    else if (fullLineStr.startsWith('    ')) reduction = 4;
-
-                    newStart = Math.max(selectStartLineStart, start - reduction);
-                    newEnd = newStart;
-                } else {
-                    // Handle multi-line bounding block adjustments
-                    if (!event.shiftKey) {
-                        const textBeforeStartInBlock = value.substring(selectStartLineStart, start);
-                        const linesBeforeStart = textBeforeStartInBlock.split('\n').length - 1;
-                        const textBeforeEndInBlock = value.substring(selectStartLineStart, end);
-                        const linesBeforeEnd = textBeforeEndInBlock.split('\n').length - 1;
-
-                        newStart = start + linesBeforeStart + 1;
-                        newEnd = end + linesBeforeEnd + 1;
-                    } else {
-                        const lines = targetBlock.split('\n');
-                        let removedBeforeStart = 0;
-                        let removedBeforeEnd = 0;
-                        let currentPosInBlock = 0;
-
-                        lines.forEach((line) => {
-                            let reduction = 0;
-                            if (line.startsWith('\t')) reduction = 1;
-                            else if (line.startsWith('    ')) reduction = 4;
-
-                            const absoluteLineStart = selectStartLineStart + currentPosInBlock;
-                            
-                            if (start > absoluteLineStart) {
-                                const relativeStartInLine = start - absoluteLineStart;
-                                removedBeforeStart += Math.min(reduction, relativeStartInLine);
-                            }
-                            if (end > absoluteLineStart) {
-                                const relativeEndInLine = end - absoluteLineStart;
-                                removedBeforeEnd += Math.min(reduction, relativeEndInLine);
-                            }
-
-                            currentPosInBlock += line.length + 1;
-                        });
-
-                        newStart = Math.max(selectStartLineStart, start - removedBeforeStart);
-                        newEnd = Math.max(selectStartLineStart, end - removedBeforeEnd);
-                    }
-                }
-
-                // Restore highlighting boundaries back into the UI Viewport
-                setSelectionCharacterOffsetWithin(editorElement, newStart, newEnd);
+                setSelectionCharacterOffsetWithin(editorElement, start + 1, start + 1);
+                return;
             }
+
+            // SCENARIO 2: Multi-line Block Indent OR Shift+Tab Outdent
+            // Edge Case Fix: If highlight perfectly catches the trailing return, don't indent the line beneath it
+            let adjustedEnd = end;
+            if (adjustedEnd > start && value[adjustedEnd - 1] === '\n') {
+                adjustedEnd--;
+            }
+
+            const selectStartLineStart = value.lastIndexOf('\n', start - 1) + 1;
+            const selectEndLineEnd = value.indexOf('\n', adjustedEnd);
+            const finalEndPos = selectEndLineEnd === -1 ? value.length : selectEndLineEnd;
+
+            const targetBlock = value.substring(selectStartLineStart, finalEndPos);
+            let modifiedBlock = "";
+            let newStart = start;
+            let newEnd = end;
+
+            if (!event.shiftKey) {
+                // -> Multi-line Indent: Add \t to the start of every selected line
+                modifiedBlock = targetBlock.split('\n').map(line => '\t' + line).join('\n');
+                
+                const linesBeforeStart = value.substring(selectStartLineStart, start).split('\n').length - 1;
+                const linesBeforeEnd = value.substring(selectStartLineStart, end).split('\n').length - 1;
+                
+                newStart = start + linesBeforeStart + 1;
+                newEnd = end + linesBeforeEnd + 1;
+            } else {
+                // -> Shift+Tab Outdent: Remove leading \t or up to 4 spaces from every selected line
+                let removedBeforeStart = 0;
+                let removedBeforeEnd = 0;
+                
+                const lines = targetBlock.split('\n');
+                let currentPosInBlock = 0;
+                
+                modifiedBlock = lines.map(line => {
+                    let reduction = 0;
+                    let newLine = line;
+                    
+                    if (line.startsWith('\t')) {
+                        reduction = 1;
+                        newLine = line.substring(1);
+                    } else if (line.startsWith('    ')) {
+                        reduction = 4;
+                        newLine = line.substring(4);
+                    }
+                    
+                    const absoluteLineStart = selectStartLineStart + currentPosInBlock;
+                    
+                    if (start > absoluteLineStart) removedBeforeStart += Math.min(reduction, start - absoluteLineStart);
+                    if (end > absoluteLineStart) removedBeforeEnd += Math.min(reduction, end - absoluteLineStart);
+                    
+                    currentPosInBlock += line.length + 1;
+                    return newLine;
+                }).join('\n');
+                
+                newStart = Math.max(selectStartLineStart, start - removedBeforeStart);
+                newEnd = Math.max(selectStartLineStart, end - removedBeforeEnd);
+            }
+
+            const newCode = value.substring(0, selectStartLineStart) + modifiedBlock + value.substring(finalEndPos);
+            
+            // Execute the update
+            jar.updateCode(newCode);
+            setSelectionCharacterOffsetWithin(editorElement, newStart, newEnd);
         }
-    });
+    }, true); // <--- CRITICAL FIX: The 'true' flag establishes DOM dominance!
 }
 
 // Helper to convert complex multi-node DOM selection to clean absolute string indexes
@@ -161,11 +139,17 @@ function getSelectionCharacterOffsetWithin(element) {
         const range = sel.getRangeAt(0);
         const preCaretRange = range.cloneRange();
         preCaretRange.selectNodeContents(element);
-        preCaretRange.setEnd(range.startContainer, range.startOffset);
-        start = preCaretRange.toString().length;
         
-        preCaretRange.setEnd(range.endContainer, range.endOffset);
-        end = preCaretRange.toString().length;
+        if (element.contains(range.startContainer)) {
+            preCaretRange.setEnd(range.startContainer, range.startOffset);
+            start = preCaretRange.toString().length;
+        }
+        if (element.contains(range.endContainer)) {
+            preCaretRange.setEnd(range.endContainer, range.endOffset);
+            end = preCaretRange.toString().length;
+        }
+        
+        if (start > end) { const temp = start; start = end; end = temp; }
     }
     return { start, end };
 }
@@ -204,14 +188,8 @@ function setSelectionCharacterOffsetWithin(element, start, end) {
         currentNode = treeWalker.nextNode();
     }
     
-    if (!startNode) {
-        startNode = element;
-        startOffset = element.childNodes.length;
-    }
-    if (!endNode) {
-        endNode = element;
-        endOffset = element.childNodes.length;
-    }
+    if (!startNode) { startNode = element; startOffset = element.childNodes.length; }
+    if (!endNode) { endNode = element; endOffset = element.childNodes.length; }
     
     try {
         range.setStart(startNode, startOffset);
@@ -222,7 +200,6 @@ function setSelectionCharacterOffsetWithin(element, start, end) {
         console.error("Selection recovery matrix execution failure:", e);
     }
 }
-
 
 // ==========================================================================
 // 💡 BI-DIRECTIONAL CODEJAR BRACKET MATCHING ENGINE
@@ -350,7 +327,6 @@ if (consoleBox && toggleConsoleBtn) {
 
     toggleConsoleBtn.addEventListener('click', () => {
         applyConsoleLayout(!isConsoleVisible);
-        
         if (isConsoleVisible && typeof logToConsole === 'function') {
             logToConsole("🖥️ Console tracking workspace restored.");
         }
@@ -616,9 +592,7 @@ async function initOpenSCAD() {
     }
 }
 
-
 // ---- THE PREVIEW TRIGGER (F5 Style) ----
-
 btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) {
         logToConsole('Error: OpenSCAD engine factory is not loaded yet.');
@@ -715,9 +689,7 @@ btnPreview.addEventListener('click', async () => {
     }
 });
 
-
 // ---- THE EXPORT TRIGGER (Save STL) ----
-
 btnExport.addEventListener('click', () => {
     if (!currentStlBlob) {
         logToConsole('Nothing to export. Run Preview first.');
@@ -731,9 +703,7 @@ btnExport.addEventListener('click', () => {
     logToConsole('Exported openscad_model.stl successfully.');
 });
 
-
 // ---- SERVICE WORKER REGISTRATION ----
-
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
@@ -743,7 +713,6 @@ if ('serviceWorker' in navigator) {
 }
 
 // ---- THE THREE.JS STL WORKSPACE VIEWPORT ENGINE ----
-
 let scene, camera, renderer, controls, currentMesh = null;
 let workspaceInitialized = false;
 
@@ -928,7 +897,6 @@ function update3DModelViewer(blobUrl) {
 }
 
 // ---- BOOTSTRAP APPLICATION ----
-
 btnPreview.disabled = true;
 btnExport.disabled = true;
 
