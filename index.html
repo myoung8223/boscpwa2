@@ -94,7 +94,7 @@
             flex-shrink: 0;            /* Forces line track to maintain shape */
         }
         
-        /* 📐 NEW: CodeJar CSS Overrides replacing the old textarea style element */
+        /* 📐 UPDATED: Clean layout target for the CodeJar wrapper div */
         #editor { 
             flex-grow: 1; 
             height: 100%;             
@@ -103,16 +103,21 @@
             overflow: auto;
         }
 
-        /* Target the internal canvas engine properties built by CodeJar */
-        .codejar-editor {
+        /* 🤖 CRITICAL: Force the text input matrix and Prism tokens to match monospace typography styles */
+        .codejar-editor, 
+        .codejar-editor * {
             font-family: 'Courier New', Courier, monospace !important; 
             font-size: 14px !important; 
             line-height: 1.5 !important;  
             tab-size: 4;
             -moz-tab-size: 4; 
             white-space: pre !important;
+        }
+        
+        /* 🎨 CRITICAL: Standardize the text box container padding parameters so it matches the line-number track */
+        .codejar-editor {
             outline: none;
-            padding: 15px !important; /* Perfect match for layout calculations */
+            padding: 15px !important; 
         }
         
         /* Console Output Box */
