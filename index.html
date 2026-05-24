@@ -24,6 +24,20 @@
     <script type="module" src="app.js"></script>
     
 <style>
+        /* 🔥 Visual markers for the compilation error engine */
+        .editor-error-line-glow {
+            background-color: rgba(220, 53, 69, 0.25) !important; /* Soft transparent error crimson block tint */
+            border-bottom: 1px dashed #ff4444;                     /* Dashed alert trace below error terms */
+        }
+        
+        .gutter-error-flare {
+            background-color: #dc3545 !important;                  /* Bold solid red block in line track */
+            color: #ffffff !important;                             /* Crisp white contrast text */
+            padding: 2px 6px !important;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    
         /* 🎨 Custom CSS rules for native app.js bracket scanner */
         .bracket-match-glow {
             background-color: rgba(0, 122, 204, 0.45) !important; /* Rich neon dark blue backdrop block */
