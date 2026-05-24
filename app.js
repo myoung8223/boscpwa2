@@ -971,7 +971,7 @@ function init3DWorkspace() {
     compassRenderer.setPixelRatio(window.devicePixelRatio);
     compassContainer.appendChild(compassRenderer.domElement);
 
-    const compassAxes = new THREE.AxesHelper(18);
+    const compassAxes = new THREE.AxesHelper(20);
     compassAxes.rotation.x = -Math.PI / 2;
     compassScene.add(compassAxes);
 
