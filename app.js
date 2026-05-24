@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "76"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "77"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -959,7 +959,12 @@ function init3DWorkspace() {
     const zAxisLine = new THREE.Line(zGeometry, new THREE.LineBasicMaterial(overlayConfig(0x007acc)));
     axesGroup.add(zAxisLine);
     
+    // Add the entire group to the scene
     scene.add(axesGroup);
+
+    // 🔒 APPLY SAVED PERSISTENT VISIBILITY STATES TO 3D OBJECTS ON LOAD
+    gridHelper.visible = isGridVisible;
+    axesGroup.visible = isAxesVisible;
     
     const compassContainer = document.createElement('div');
     compassContainer.style.position = 'absolute';
@@ -1227,26 +1232,52 @@ window.addEventListener('keydown', (event) => {
     }
 });
 
-// UI Event logic for toggling the Grid and Axes lines
+// ==========================================================================
+// ⚙️ PERSISTENT GRID & AXES VISIBILITY LOGIC
+// ==========================================================================
+
+// 1. Load persistent states (default to true if no save exists)
+let isGridVisible = localStorage.getItem('openscad_grid_visible') !== 'false';
+let isAxesVisible = localStorage.getItem('openscad_axes_visible') !== 'false';
+
+// 2. State Controller Functions
+const applyGridLayout = (visible) => {
+    isGridVisible = visible;
+    localStorage.setItem('openscad_grid_visible', visible);
+    
+    if (gridHelper) gridHelper.visible = visible;
+    
+    if (btnToggleGrid) {
+        btnToggleGrid.innerText = visible ? 'Visible' : 'Hidden';
+        btnToggleGrid.style.backgroundColor = visible ? '#28a745' : '#dc3545';
+    }
+};
+
+const applyAxesLayout = (visible) => {
+    isAxesVisible = visible;
+    localStorage.setItem('openscad_axes_visible', visible);
+    
+    if (axesGroup) axesGroup.visible = visible;
+    
+    if (btnToggleAxes) {
+        btnToggleAxes.innerText = visible ? 'Visible' : 'Hidden';
+        btnToggleAxes.style.backgroundColor = visible ? '#28a745' : '#dc3545';
+    }
+};
+
+// 3. Apply states to UI on load
+applyGridLayout(isGridVisible);
+applyAxesLayout(isAxesVisible);
+
+// 4. Hook up the UI buttons
 if (btnToggleGrid) {
-    btnToggleGrid.addEventListener('click', () => {
-        if (gridHelper) {
-            gridHelper.visible = !gridHelper.visible;
-            btnToggleGrid.innerText = gridHelper.visible ? 'Visible' : 'Hidden';
-            btnToggleGrid.style.backgroundColor = gridHelper.visible ? '#28a745' : '#dc3545';
-        }
-    });
+    btnToggleGrid.addEventListener('click', () => applyGridLayout(!isGridVisible));
 }
 
 if (btnToggleAxes) {
-    btnToggleAxes.addEventListener('click', () => {
-        if (axesGroup) {
-            axesGroup.visible = !axesGroup.visible;
-            btnToggleAxes.innerText = axesGroup.visible ? 'Visible' : 'Hidden';
-            btnToggleAxes.style.backgroundColor = axesGroup.visible ? '#28a745' : '#dc3545';
-        }
-    });
+    btnToggleAxes.addEventListener('click', () => applyAxesLayout(!isAxesVisible));
 }
+// END OF PERSISTENT GRID & AXES VISIBILITY LOGIC
 
 if (projectNameInput) {
     projectNameInput.addEventListener('input', (event) => {
