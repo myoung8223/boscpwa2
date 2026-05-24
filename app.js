@@ -27,7 +27,7 @@ const jar = CodeJar(
         if (typeof Prism !== 'undefined') Prism.highlightElement(el);
         try { applyInlineBracketMatching(el); } catch (e) { console.error("Bracket match error:", e); }
     },
-    { tab: '\t', history: true, indentOn: /^\s*$/, addClosing: false } 
+    { tab: '\t', history: true, indentOn: /[(\[{]$/, addClosing: false } 
 );
 
 // 🖱️ Passive navigation listeners
