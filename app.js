@@ -945,9 +945,48 @@ function init3DWorkspace() {
     controls.dampingFactor = 0.1;
     controls.target.set(0, 0, 0);
 
+    /*
     const gridHelper = new THREE.GridHelper(400, 40, 0x007acc, 0x444444);
     gridHelper.position.y = -0.05; 
     scene.add(gridHelper);
+    */
+
+
+    // 1. Create a uniform gray grid (both center lines and grid lines match)
+    const gridHelper = new THREE.GridHelper(400, 40, 0x444444, 0x444444);
+    gridHelper.position.y = -0.05;  
+    scene.add(gridHelper);
+
+    // 2. Add custom colored center-lines matching your OpenSCAD style
+    const gridHalfSize = 200; // Half of your 400 unit grid total width
+
+    // --- Red X-Axis Line (Horizontal across floor) ---
+    const xGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-gridHalfSize, -0.04, 0),
+        new THREE.Vector3(gridHalfSize, -0.04, 0)
+    ]);
+    const xMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+    const xAxisLine = new THREE.Line(xGeometry, xMaterial);
+    scene.add(xAxisLine);
+
+    // --- Green Y-Axis Line (Vertical across floor) ---
+    const yGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, -0.04, -gridHalfSize),
+        new THREE.Vector3(0, -0.04, gridHalfSize)
+    ]);
+    const yMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
+    const yAxisLine = new THREE.Line(yGeometry, yMaterial);
+    scene.add(yAxisLine);
+
+    // --- Blue Z-Axis Line (Shooting straight up into the sky) ---
+    const zGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, -0.04, 0),        // Starts at floor center
+        new THREE.Vector3(0, gridHalfSize, 0)  // Extends straight upward
+    ]);
+    const zMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+    const zAxisLine = new THREE.Line(zGeometry, zMaterial);
+    scene.add(zAxisLine);
+    
 
     //const axesHelper = new THREE.AxesHelper(50);
     //axesHelper.rotation.x = -Math.PI / 2;    
