@@ -993,24 +993,29 @@ function init3DWorkspace() {
     compassAxes.rotation.x = -Math.PI / 2;
     compassScene.add(compassAxes);
 
-    // 🏷️ Create 2D HTML overlay labels for uniform sizing
-    const create2DLabel = (text, color) => {
+    // 🏷️ Create 2D HTML overlay labels with strict unique DOM IDs
+    const create2DLabel = (id, text, color) => {
+        // Clear old ones if setup re-runs to avoid stacking duplicates
+        const oldEl = document.getElementById(id);
+        if (oldEl) oldEl.remove();
+
         const el = document.createElement('div');
+        el.id = id;
         el.innerText = text;
         el.style.position = 'absolute';
         el.style.color = color;
         el.style.fontFamily = 'Arial, sans-serif';
         el.style.fontWeight = 'bold';
-        el.style.fontSize = '12px'; // Completely uniform pixel size
+        el.style.fontSize = '12px'; 
         el.style.pointerEvents = 'none';
-        el.style.transform = 'translate(-50%, -50%)'; // Center text exactly on the line tip
+        el.style.transform = 'translate(-50%, -50%)'; // Perfect centering alignment
         compassContainer.appendChild(el);
         return el;
     };
 
-    const xLabel2D = create2DLabel('X', '#ff0000');
-    const yLabel2D = create2DLabel('Y', '#00ff00');
-    const zLabel2D = create2DLabel('Z', '#0000ff');
+    create2DLabel('compass-lbl-x', 'X', '#ff0000');
+    create2DLabel('compass-lbl-y', 'Y', '#00ff00');
+    create2DLabel('compass-lbl-z', 'Z', '#0000ff');
 
     // Define the local 3D endpoints of your 25-unit axes lines
     const endpointX = new THREE.Vector3(25, 0, 0);
@@ -1018,9 +1023,9 @@ function init3DWorkspace() {
     const endpointZ = new THREE.Vector3(0, 0, 25);
 
     // Attach directly to compassAxes so they inherit the OpenSCAD Z-Up rotation!
-    compassAxes.add(xLabel);
-    compassAxes.add(yLabel);
-    compassAxes.add(zLabel);
+    //compassAxes.add(xLabel);
+    //compassAxes.add(yLabel);
+    //compassAxes.add(zLabel);
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.55); 
     scene.add(ambientLight);
@@ -1038,61 +1043,65 @@ function init3DWorkspace() {
     camera.add(headlight); 
     scene.add(camera); 
     
-    function animate() {
-        requestAnimationFrame(animate);
+function animate() {
+    requestAnimationFrame(animate);
+    
+    const cw = container.clientWidth;
+    const ch = container.clientHeight;
+    
+    const currentSize = new THREE.Vector2();
+    renderer.getSize(currentSize);
+    
+    if (cw > 0 && ch > 0 && (currentSize.x !== cw || currentSize.y !== ch)) {
+        camera.aspect = cw / ch;
+        camera.updateProjectionMatrix();
+        renderer.setSize(cw, ch, true);
+    }
+
+    controls.update();
+    renderer.render(scene, camera);
+
+    if (compassCamera && compassRenderer) {
+        compassCamera.position.copy(camera.position);
+        compassCamera.position.sub(controls.target); 
+        compassCamera.position.setLength(60); 
+        compassCamera.lookAt(0, 0, 0);
         
-        const cw = container.clientWidth;
-        const ch = container.clientHeight;
-        
-        const currentSize = new THREE.Vector2();
-        renderer.getSize(currentSize);
-        
-        if (cw > 0 && ch > 0 && (currentSize.x !== cw || currentSize.y !== ch)) {
-            camera.aspect = cw / ch;
-            camera.updateProjectionMatrix();
-            renderer.setSize(cw, ch, true);
-        }
-    
-        controls.update();
-        renderer.render(scene, camera);
-    
-        if (compassCamera && compassRenderer) {
-            compassCamera.position.copy(camera.position);
-            compassCamera.position.sub(controls.target); 
-            compassCamera.position.setLength(60); 
-            compassCamera.lookAt(0, 0, 0);
-            
-            compassRenderer.render(compassScene, compassCamera);
-    
-            // 🔄 Update 2D Overlay HTML Label Screen Positions
-            // Check if labels are initialized yet (prevents race-condition crashes on load)
-            if (typeof xLabel2D !== 'undefined' && compassAxes) {
-                const width = 80;
-                const height = 80;
-                const tempV = new THREE.Vector3();
-    
-                // Ensure world matrix structures are calculated up to this frame
-                compassScene.updateMatrixWorld(true);
-    
-                const updateLabelPosition = (element, localEndpoint) => {
-                    // 1. Convert local helper endpoint to world space
-                    tempV.copy(localEndpoint).applyMatrix4(compassAxes.matrixWorld);
-                    // 2. Project world space coords directly into NDC clip space (-1 to +1)
-                    tempV.project(compassCamera);
-                    // 3. Map NDC coordinates into 80x80px bounding DIV pixels
-                    const x = (tempV.x * 0.5 + 0.5) * width;
-                    const y = (-tempV.y * 0.5 + 0.5) * height;
-                    
-                    element.style.left = `${x}px`;
-                    element.style.top = `${y}px`;
-                };
-    
-                updateLabelPosition(xLabel2D, endpointX);
-                updateLabelPosition(yLabel2D, endpointY);
-                updateLabelPosition(zLabel2D, endpointZ);
-            }
+        compassRenderer.render(compassScene, compassCamera);
+
+        // 🔄 Safe, isolated 2D Label Updates
+        // By checking if the actual DOM element exists, your engine will never crash.
+        const xEl = document.getElementById('compass-lbl-x');
+        const yEl = document.getElementById('compass-lbl-y');
+        const zEl = document.getElementById('compass-lbl-z');
+
+        if (xEl && yEl && zEl && compassAxes) {
+            const width = 80;
+            const height = 80;
+            const tempV = new THREE.Vector3();
+
+            compassScene.updateMatrixWorld(true);
+
+            const updateLabelPosition = (element, x3d, y3d, z3d) => {
+                // Set coordinate, apply world transform, project to screen
+                tempV.set(x3d, y3d, z3d).applyMatrix4(compassAxes.matrixWorld);
+                tempV.project(compassCamera);
+                
+                // Map to 80x80px bounding DIV pixels
+                const pixelX = (tempV.x * 0.5 + 0.5) * width;
+                const pixelY = (-tempV.y * 0.5 + 0.5) * height;
+                
+                element.style.left = `${pixelX}px`;
+                element.style.top = `${pixelY}px`;
+            };
+
+            // Calculate endpoints natively on the fly
+            updateLabelPosition(xEl, 25, 0, 0);
+            updateLabelPosition(yEl, 0, 25, 0);
+            updateLabelPosition(zEl, 0, 0, 25);
         }
     }
+}
     animate();
 }
 
