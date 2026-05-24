@@ -952,7 +952,7 @@ function init3DWorkspace() {
     */
 
 
-// 1. Setup the main grid helper with a small polygon offset to prevent z-fighting
+    // 1. Setup the main grid helper with a small polygon offset to prevent z-fighting
     const gridHelper = new THREE.GridHelper(400, 40, 0x444444, 0x444444);
     gridHelper.position.y = 0;  
     gridHelper.material.polygonOffset = true;
@@ -962,15 +962,14 @@ function init3DWorkspace() {
 
     const gridHalfSize = 200;
 
-    // 2. Updated configuration: Turn depthTest BACK ON, but give lines a slightly 
-    // better offset priority than the grid helper so they render crisply on top of it.
+    // 2. Fixed configuration function using proper JavaScript object colons (:)
     const overlayConfig = (colorHex) => ({
         color: colorHex,
-        depthTest: true,           // 👈 Crucial: Re-enable so models block the lines!
+        depthTest: true,           // Models safely block the lines
         transparent: true,
         polygonOffset: true,
-        polygonOffsetFactor = 0.5, // 👈 Sits slightly "in front" of the grid helper's 1.0
-        polygonOffsetUnits = 0.5
+        polygonOffsetFactor: 0.5,  // Sits cleanly in front of the grid helper
+        polygonOffsetUnits: 0.5
     });
 
     // --- Red X-Axis Line ---
