@@ -100,7 +100,7 @@
             color: #5a5a5a;
             text-align: right;
             padding: 15px 8px 15px 0; 
-            font-family: 'Courier New', Courier, monospace; 
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace; 
             font-size: 14px;           
             line-height: 1.5;          
             user-select: none;         /* Disables highlighting numbers while selecting code */
@@ -109,30 +109,30 @@
             flex-shrink: 0;            /* Forces line track to maintain shape */
         }
         
-        /* 📐 UPDATED: Clean layout target for the CodeJar wrapper div */
+        /* 📐 FIXED: Hardened parent typography matrix configuration */
         #editor { 
             flex-grow: 1; 
             height: 100%;             
             background: #1e1e1e; 
             position: relative;
             overflow: auto;
-        }
+            outline: none;
+            padding: 15px !important;
 
-        /* 🤖 CRITICAL: Force the text input matrix and Prism tokens to match monospace typography styles */
-        .codejar-editor, 
-        .codejar-editor * {
-            font-family: 'Courier New', Courier, monospace !important; 
-            font-size: 14px !important; 
-            line-height: 1.5 !important;  
+            /* Core structural layout properties assigned here safely */
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace !important;
+            line-height: 1.5;
             tab-size: 4;
             -moz-tab-size: 4; 
-            white-space: pre !important;
+            white-space: pre;
         }
-        
-        /* 🎨 CRITICAL: Standardize the text box container padding parameters so it matches the line-number track */
-        .codejar-editor {
-            outline: none;
-            padding: 15px !important; 
+
+        /* 🤖 FIXED: Cleaned child-combinator rules to preserve full JS settings compatibility */
+        #editor *,
+        .codejar-editor, 
+        .codejar-editor * {
+            font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace !important; 
+            /* Font-size !important was removed here so your active UI settings scaling menu can work! */
         }
         
         /* Console Output Box */
