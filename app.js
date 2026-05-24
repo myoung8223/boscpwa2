@@ -20,6 +20,7 @@ const editorFontSizeSelect = document.getElementById('editor-font-size-select');
 const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
 
+/*
 // 🍯 INITIALIZE CODEJAR INSTANCE
 // Connects the text listener module to global Prism syntax coloring
 const jar = CodeJar(editorElement, (el) => {
@@ -28,6 +29,132 @@ const jar = CodeJar(editorElement, (el) => {
         Prism.highlightElement(el);
     }
 });
+*/
+
+// 🍯 INITIALIZE CODEJAR INSTANCE
+// Connects the text listener module to global Prism syntax coloring and matches brackets
+const jar = CodeJar(editorElement, (el) => {
+    // 1. Run Prism to color the keywords first
+    if (typeof Prism !== 'undefined') {
+        Prism.highlightElement(el);
+    }
+    
+    // 2. Safely run our native text cursor bracket matching pass
+    try {
+        applyInlineBracketMatching(el);
+    } catch (e) {
+        console.error("Bracket matching engine error:", e);
+    }
+});
+
+// ==========================================================================
+// 💡 NATIVE CODEJAR BRACKET MATCHING ENGINE
+// ==========================================================================
+function applyInlineBracketMatching(editorDiv) {
+    // Clear any previous bracket highlights from the last keystroke
+    const oldHighlights = editorDiv.querySelectorAll('.bracket-match-glow, .bracket-mismatch-glow');
+    oldHighlights.forEach(span => {
+        span.classList.remove('bracket-match-glow', 'bracket-mismatch-glow');
+    });
+
+    // Capture the current cursor position index from the browser selection engine
+    const selection = window.getSelection();
+    if (!selection.rangeCount) return;
+    
+    const range = selection.getRangeAt(0);
+    const textContent = editorDiv.textContent;
+    
+    // Calculate exactly how many characters deep the cursor is within the editor text matrix
+    let cursorIndex = 0;
+    const treeWalker = document.createTreeWalker(editorDiv, NodeFilter.SHOW_TEXT);
+    let currentNode = treeWalker.nextNode();
+    
+    while (currentNode) {
+        if (currentNode === range.startContainer) {
+            cursorIndex += range.startOffset;
+            break;
+        }
+        cursorIndex += currentNode.textContent.length;
+        currentNode = treeWalker.nextNode();
+    }
+
+    // Maps for open and closing partners
+    const partners = { '{': '}', '}': '{', '[': ']', ']': '[', '(': ')', ')': '(' };
+    
+    // Check the character immediately to the left of the cursor, or to the right
+    let targetIndex = cursorIndex - 1;
+    let charToMatch = textContent[targetIndex];
+    
+    if (!partners[charToMatch]) {
+        targetIndex = cursorIndex;
+        charToMatch = textContent[targetIndex];
+    }
+    
+    // If the character isn't a bracket type, abort immediately
+    if (!partners[charToMatch]) return;
+    
+    const partnerChar = partners[charToMatch];
+    const isForwardScan = ['{', '[', '('].includes(charToMatch);
+    
+    let matchIndex = -1;
+    let balanceCounter = 0;
+
+    // Scan through the code array structure to locate the perfect partner balance tree
+    if (isForwardScan) {
+        for (let i = targetIndex; i < textContent.length; i++) {
+            if (textContent[i] === charToMatch) balanceCounter++;
+            if (textContent[i] === partnerChar) balanceCounter--;
+            if (balanceCounter === 0) {
+                matchIndex = i;
+                break;
+            }
+        }
+    } else {
+        for (let i = targetIndex; i >= 0; i--) {
+            if (textContent[i] === charToMatch) balanceCounter++;
+            if (textContent[i] === partnerChar) balanceCounter--;
+            if (balanceCounter === 0) {
+                matchIndex = i;
+                break;
+            }
+        }
+    }
+
+    // Now, find the actual underlying text nodes inside the browser's view DOM to paint
+    let absoluteOffset = 0;
+    let targetSpanNode = null;
+    let matchSpanNode = null;
+
+    const walker = document.createTreeWalker(editorDiv, NodeFilter.SHOW_TEXT);
+    let textNode = walker.nextNode();
+
+    while (textNode) {
+        const nodeLength = textNode.textContent.length;
+        
+        // Did we hit the anchor target bracket node?
+        if (targetIndex >= absoluteOffset && targetIndex < absoluteOffset + nodeLength) {
+            targetSpanNode = textNode.parentNode;
+        }
+        // Did we hit its remote partner node?
+        if (matchIndex !== -1 && matchIndex >= absoluteOffset && matchIndex < absoluteOffset + nodeLength) {
+            matchSpanNode = textNode.parentNode;
+        }
+        
+        absoluteOffset += nodeLength;
+        textNode = walker.nextNode();
+    }
+
+    // Paint the nodes depending on whether a true match was successfully calculated
+    if (targetSpanNode) {
+        if (matchIndex !== -1 && matchSpanNode) {
+            targetSpanNode.classList.add('bracket-match-glow');
+            matchSpanNode.classList.add('bracket-match-glow');
+        } else {
+            targetSpanNode.classList.add('bracket-mismatch-glow'); // Rogue orphaned bracket alert
+        }
+    }
+}
+
 
 // ==========================================================================
 // 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
