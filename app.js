@@ -1,6 +1,9 @@
 // ---- BUILD VERSION CONTROLLER ----
 const BUILD_NUMBER = "58"; // <-- Increment this number whenever you commit!
 
+// 🍯 Import standalone, offline-ready CodeJar framework
+import { CodeJar } from './libs/codejar.js';
+
 // Dom Elements
 const editor = document.getElementById('editor');
 const consoleBox = document.getElementById('console');
