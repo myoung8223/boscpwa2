@@ -202,7 +202,7 @@ function setSelectionCharacterOffsetWithin(element, start, end) {
 }
 
 // ==========================================================================
-// 💡 BI-DIRECTIONAL CODEJAR BRACKET MATCHING ENGINE
+// 💡 BI-DIRECTIONAL CODEJAR BRACKET MATCHING ENGINE (LEXICAL-AWARE)
 // ==========================================================================
 function applyInlineBracketMatching(editorDiv) {
     const oldHighlights = editorDiv.querySelectorAll('.bracket-match-glow, .bracket-mismatch-glow');
@@ -240,6 +240,54 @@ function applyInlineBracketMatching(editorDiv) {
     }
     
     if (!partners[charToMatch]) return;
+
+    // 🕵️‍♂️ LEXICAL STATE SCANNER: Pre-calculate non-code blind spots
+    const ignoredMap = new Array(textContent.length).fill(false);
+    let inSingleComment = false;
+    let inMultiComment = false;
+    let inString = false;
+
+    for (let i = 0; i < textContent.length; i++) {
+        if (inSingleComment) {
+            ignoredMap[i] = true;
+            if (textContent[i] === '\n') inSingleComment = false;
+        } else if (inMultiComment) {
+            ignoredMap[i] = true;
+            if (textContent[i] === '*' && textContent[i + 1] === '/') {
+                ignoredMap[i + 1] = true;
+                i++; // Advance past the closing '/'
+                inMultiComment = false;
+            }
+        } else if (inString) {
+            ignoredMap[i] = true;
+            // Handle escaped double quotes inside strings: \"
+            if (textContent[i] === '\\' && textContent[i + 1] === '"') {
+                ignoredMap[i + 1] = true;
+                i++;
+            } else if (textContent[i] === '"') {
+                inString = false;
+            }
+        } else {
+            // Check for entry boundaries
+            if (textContent[i] === '/' && textContent[i + 1] === '/') {
+                ignoredMap[i] = true;
+                ignoredMap[i + 1] = true;
+                i++;
+                inSingleComment = true;
+            } else if (textContent[i] === '/' && textContent[i + 1] === '*') {
+                ignoredMap[i] = true;
+                ignoredMap[i + 1] = true;
+                i++;
+                inMultiComment = true;
+            } else if (textContent[i] === '"') {
+                ignoredMap[i] = true;
+                inString = true;
+            }
+        }
+    }
+
+    // Safety abort: If the cursor itself is on a bracket inside a comment or string, ignore it!
+    if (ignoredMap[targetIndex]) return;
     
     const partnerChar = partners[charToMatch];
     const isForwardScan = ['{', '[', '('].includes(charToMatch);
@@ -249,6 +297,8 @@ function applyInlineBracketMatching(editorDiv) {
 
     if (isForwardScan) {
         for (let i = targetIndex; i < textContent.length; i++) {
+            if (ignoredMap[i]) continue; // 🛑 Skip checking dead zones
+            
             if (textContent[i] === charToMatch) balanceCounter++;
             if (textContent[i] === partnerChar) balanceCounter--;
             if (balanceCounter === 0) {
@@ -258,6 +308,8 @@ function applyInlineBracketMatching(editorDiv) {
         }
     } else {
         for (let i = targetIndex; i >= 0; i--) {
+            if (ignoredMap[i]) continue; // 🛑 Skip checking dead zones
+            
             if (textContent[i] === charToMatch) balanceCounter++;
             if (textContent[i] === partnerChar) balanceCounter--;
             if (balanceCounter === 0) {
