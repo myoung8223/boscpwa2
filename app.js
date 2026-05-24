@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "61"; // <-- Incremented this number for your new build!
+const BUILD_NUMBER = "62"; // <-- Incremented for block-indentation and listener fixes!
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -41,11 +41,11 @@ const jar = CodeJar(
         tab: '\t',
         history: true,
         indentOn: /^\s*$/,
-        addClosing: false // 🛑 THE OFFICIAL KILL SWITCH: Disables CodeJar's auto-bracket closing natively!
+        addClosing: false // 🛑 THE OFFICIAL KILL SWITCH: Restores native multi-line Tab/Shift+Tab while keeping bracket auto-closing disabled!
     } 
 );
 
-// 🖱️ Re-scan brackets instantly when clicking or navigating with arrow keys
+// 🖱️ Passive navigation listeners: Re-scan brackets instantly when clicking or navigating with arrow keys
 if (editorElement) {
     editorElement.addEventListener('click', () => applyInlineBracketMatching(editorElement));
     editorElement.addEventListener('keyup', (e) => {
@@ -56,7 +56,7 @@ if (editorElement) {
 }
 
 // ==========================================================================
-// 💡 UPGRADED: BI-DIRECTIONAL CODEJAR BRACKET MATCHING ENGINE 
+// 💡 UPGRADED: BI-DIRECTIONAL CODEJAR BRACKET MATCHING ENGINE
 // ==========================================================================
 function applyInlineBracketMatching(editorDiv) {
     // Clear any previous bracket highlights from the last keystroke
@@ -158,6 +158,7 @@ function applyInlineBracketMatching(editorDiv) {
         }
     }
 }
+
 
 // ==========================================================================
 // 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
@@ -319,7 +320,7 @@ function logToConsole(message) {
 
 // Save local .scad file
 btnSave.addEventListener('click', () => {
-    const code = jar.toString(); // 🍯 UPGRADED: Pull code string directly from CodeJar
+    const code = jar.toString(); // 🍯 Pull code string directly from CodeJar
     const blob = new Blob([code], { type: 'text/plain' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
@@ -339,7 +340,7 @@ fileLoad.addEventListener('change', (event) => {
     
     const reader = new FileReader();
     reader.onload = (e) => {
-        jar.updateCode(e.target.result); // 🍯 UPGRADED: Seed loaded text into CodeJar frame
+        jar.updateCode(e.target.result); // 🍯 Seed loaded text into CodeJar frame
         logToConsole(`Loaded file: ${file.name}`);
 
         localStorage.setItem('openscad_editor_cache', e.target.result);
@@ -359,6 +360,7 @@ fileLoad.addEventListener('change', (event) => {
 });
 
 // Toggle between Solid and Wireframe viewing modes
+let wireframeMode = false;
 btnWireframe.addEventListener('click', () => {
     wireframeMode = !wireframeMode; 
     
@@ -406,17 +408,17 @@ modelColorInput.addEventListener('input', (event) => {
 });
 
 async function initOpenSCAD() {
-    logToConsole(`Build ${BUILD_NUMBER} - May 22, 2026`);
+    logToConsole(`Build ${BUILD_NUMBER} - May 23, 2026`);
     logToConsole('System ready. Instantiating WASM...');
     
     // Restore persistent code cache
     const savedCode = localStorage.getItem('openscad_editor_cache');
     if (savedCode && savedCode.trim() !== "") {
-        jar.updateCode(savedCode); // 🍯 UPGRADED
+        jar.updateCode(savedCode); 
         logToConsole('Restored draft layout from your last active session.');
     } else {
         const defaultCode = `linear_extrude(height = 4) {\n\ttext(\n\t\ttext = "Hello, world!", \n\t\tsize = 14, \n\t\tfont = "Liberation Sans:style=Bold", \n\t\thalign = "center", \n\t\tvalign = "center"\n\t);\n}`;
-        jar.updateCode(defaultCode); // 🍯 UPGRADED
+        jar.updateCode(defaultCode); 
         logToConsole('Seeded editor workspace with default starter geometry.');
     }
 
@@ -490,7 +492,7 @@ btnPreview.addEventListener('click', async () => {
     }
 
     logToConsole('--- Generating Preview ---');
-    const scriptCode = jar.toString(); // 🍯 UPGRADED: Pull raw string snapshot from CodeJar
+    const scriptCode = jar.toString(); // 🍯 Pull raw string snapshot from CodeJar
     const errorLogs = [];
 
     try {
@@ -571,7 +573,6 @@ btnPreview.addEventListener('click', async () => {
                 }
             }
 
-            // 🍯 Note: Highlight line feature skipped for editable inputs to preserve focus states safely
             if (detectedErrorLine) {
                 logToConsole(`👉 Suspected syntax break near Line ${detectedErrorLine}.`);
             }
@@ -614,10 +615,9 @@ if ('serviceWorker' in navigator) {
 
 let scene, camera, renderer, controls, currentMesh = null;
 let workspaceInitialized = false;
-let wireframeMode = false;
 
 function init3DWorkspace() {
-    if (workspaceInitialized) return; // Prevent double-booting
+    if (workspaceInitialized) return; 
     workspaceInitialized = true;
 
     const container = document.getElementById('viewer-3d');
@@ -630,14 +630,14 @@ function init3DWorkspace() {
     scene = new THREE.Scene();
     scene.background = new THREE.Color(0x222222);
 
-    // 2. Camera Viewport Calculation (Protected against Infinity)
+    // 2. Camera Viewport Calculation
     camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 10000);
     camera.position.set(40, 40, 40);
 
     // 3. WebGL Canvas Core Renderer Mounting
     renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(w, h);
-    renderer.setPixelRatio(window.devicePixelRatio); // Forces crisp rendering on high-res displays
+    renderer.setPixelRatio(window.devicePixelRatio); 
     container.appendChild(renderer.domElement);
 
     // 4. Mouse Orbit Controls Integration
