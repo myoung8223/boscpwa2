@@ -675,7 +675,7 @@ modelColorInput.addEventListener('input', (event) => {
 });
 
 async function initOpenSCAD() {
-    logToConsole(`Build ${BUILD_NUMBER} - May 23, 2026`);
+    logToConsole(`Build ${BUILD_NUMBER} - May 24, 2026`);
     logToConsole('System ready. Instantiating WASM...');
     
     const savedCode = localStorage.getItem('openscad_editor_cache');
