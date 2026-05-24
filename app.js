@@ -971,24 +971,6 @@ function init3DWorkspace() {
     compassRenderer.setPixelRatio(window.devicePixelRatio);
     compassContainer.appendChild(compassRenderer.domElement);
 
-    /*
-    const compassAxes = new THREE.AxesHelper(18);   // was 25, was 20
-    compassAxes.rotation.x = -Math.PI / 2;
-    compassScene.add(compassAxes);
-
-    // 🏷️ ADD COMPASS AXES LABELS (X, Y, Z)
-    const mid = 22; // Exactly half of your 25-unit length, was 12.5, was 23
-
-    const xLabel = createCompassLabel('X', '#ff0000'); // Red
-    const yLabel = createCompassLabel('Y', '#00ff00'); // Green
-    const zLabel = createCompassLabel('Z', '#0000ff'); // Blue
-
-    // Position labels along the local axes of the helper
-    xLabel.position.set(mid, 0, 0);
-    yLabel.position.set(0, mid, 0);
-    zLabel.position.set(0, 0, mid);
-    */
-
     const compassAxes = new THREE.AxesHelper(18);
     compassAxes.rotation.x = -Math.PI / 2;
     compassScene.add(compassAxes);
@@ -1018,9 +1000,9 @@ function init3DWorkspace() {
     create2DLabel('compass-lbl-z', 'Z', '#888888');
 
     // Define the local 3D endpoints of your 25-unit axes lines
-    const endpointX = new THREE.Vector3(18, 0, 0);   // was 25
-    const endpointY = new THREE.Vector3(0, 18, 0);   // was 25
-    const endpointZ = new THREE.Vector3(0, 0, 18);   // was 25
+    const endpointX = new THREE.Vector3(15, 0, 0);   // was 25
+    const endpointY = new THREE.Vector3(0, 15, 0);   // was 25
+    const endpointZ = new THREE.Vector3(0, 0, 15);   // was 25
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.55); 
     scene.add(ambientLight);
