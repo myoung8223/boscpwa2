@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "70"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "71"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -676,6 +676,7 @@ btnWireframe.addEventListener('click', () => {
     }
 });
 
+/*
 window.addEventListener('keydown', (event) => {
     if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault(); 
@@ -686,6 +687,24 @@ window.addEventListener('keydown', (event) => {
         }
     }
 });
+*/
+
+// ==========================================================================
+// ⌨️ GLOBAL APPLICATION HOTKEY COMMAND MAPPINGS
+// ==========================================================================
+window.addEventListener('keydown', (event) => {
+    if (event.ctrlKey && event.key === 'Enter') {
+        
+        // 🛑 Intercept the keystroke so CodeJar doesn't inject a random newline!
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        
+        if (!btnPreview.disabled) {
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]');
+            btnPreview.click(); 
+        }
+    }
+}, true); // <--- CRITICAL FIX: 'true' executes this in the DOM Capture Phase!
 
 btnColorTrigger.addEventListener('click', () => {
     modelColorInput.click();
