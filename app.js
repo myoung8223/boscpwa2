@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "71"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "72"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -949,10 +949,32 @@ function init3DWorkspace() {
     gridHelper.position.y = -0.05; 
     scene.add(gridHelper);
 
-    const axesHelper = new THREE.AxesHelper(50);
-    axesHelper.rotation.x = -Math.PI / 2;    
-    scene.add(axesHelper);
+    //const axesHelper = new THREE.AxesHelper(50);
+    //axesHelper.rotation.x = -Math.PI / 2;    
+    //scene.add(axesHelper);
 
+    // 📐 Initialize the native axes helper
+    const axesHelper = new THREE.AxesHelper(50);
+    axesHelper.rotation.x = -Math.PI / 2; // Aligns Three.js with OpenSCAD Z-Up
+    scene.add(axesHelper);
+    
+    // 🏷️ MIDPOINT AXES LABELS
+    const midpoint = 25; // 50 units / 2
+    
+    const xLabel = createAxisLabel('X', '#ff0000'); // Red
+    const yLabel = createAxisLabel('Y', '#00ff00'); // Green
+    const zLabel = createAxisLabel('Z', '#0000ff'); // Blue
+    
+    // Position them along the helper's local coordinates
+    xLabel.position.set(midpoint, 0, 0);
+    yLabel.position.set(0, midpoint, 0);
+    zLabel.position.set(0, 0, midpoint);
+    
+    // CRITICAL: Add them to the axesHelper so they inherit the -Math.PI/2 rotation!
+    axesHelper.add(xLabel);
+    axesHelper.add(yLabel);
+    axesHelper.add(zLabel);
+    
     const compassContainer = document.createElement('div');
     compassContainer.style.position = 'absolute';
     compassContainer.style.top = '10px';
@@ -1248,4 +1270,19 @@ if (leftPaneContainer && panelSplitGutter) {
         document.addEventListener('mousemove', onMouseMove);
         document.addEventListener('mouseup', onMouseUp);
     });
+}
+
+function createAxisLabel(text, color) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64;
+    const ctx = canvas.getContext('2d');
+    ctx.font = 'Bold 48px Arial, sans-serif';
+    ctx.fillStyle = color; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, 32, 32);
+
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture, transparent: true, depthTest: false });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(6, 6, 1); 
+    return sprite;
 }
