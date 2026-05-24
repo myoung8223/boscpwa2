@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "69"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "70"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
