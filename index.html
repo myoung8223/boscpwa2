@@ -24,19 +24,19 @@
     <script type="module" src="app.js"></script>
     
 <style>
-        /* 💡 NEW: High-visibility formatting rules for matching brackets */
-        .token.punctuation.bracket-match {
-            background-color: rgba(0, 122, 204, 0.4) !important; /* Soft blue block glow */
-            color: #00ffffff !important;                         /* Electric cyan text override */
+        /* 🎨 Custom CSS rules for native app.js bracket scanner */
+        .bracket-match-glow {
+            background-color: rgba(0, 122, 204, 0.45) !important; /* Rich neon dark blue backdrop block */
+            color: #00ffffff !important;                          /* Neon Cyan Text Override */
             font-weight: bold !important;
-            border-bottom: 2px solid #00bcff;
+            border-bottom: 2px solid #00c3ff;                     /* Clean underline accent rule */
         }
 
-        /* If a user has a rogue trailing bracket with no partner, make it pop out in red */
-        .token.punctuation.bracket-mismatch {
-            background-color: rgba(220, 53, 69, 0.4) !important; /* Soft red block warning glow */
-            color: #ff8888 !important;
+        .bracket-mismatch-glow {
+            background-color: rgba(220, 53, 69, 0.4) !important;  /* Warning blood red backdrop */
+            color: #ff8888 !important;                            /* Soft red code text */
             font-weight: bold !important;
+            border-bottom: 2px solid #ff3344;
         }
     
         * { box-sizing: border-box; }
