@@ -952,39 +952,45 @@ function init3DWorkspace() {
     */
 
 
-    // 1. Create a uniform gray grid (both center lines and grid lines match)
+    // 1. Uniform gray grid sitting squarely at 0
     const gridHelper = new THREE.GridHelper(400, 40, 0x444444, 0x444444);
-    gridHelper.position.y = -0.05;  
+    gridHelper.position.y = 0;  
     scene.add(gridHelper);
 
-    // 2. Add custom colored center-lines matching your OpenSCAD style
-    const gridHalfSize = 200; // Half of your 400 unit grid total width
+    const gridHalfSize = 200;
 
-    // --- Red X-Axis Line (Horizontal across floor) ---
+    // A shared configuration that forces lines to stay crisp and overlay the grid
+    const overlayConfig = (colorHex) => ({
+        color: colorHex,
+        depthTest: false, // Prevents lines from cutting into the grid structure
+        transparent: true // Required in Three.js for depthTest overrides to cooperate cleanly
+    });
+
+    // --- Red X-Axis Line ---
     const xGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-gridHalfSize, -0.04, 0),
-        new THREE.Vector3(gridHalfSize, -0.04, 0)
+        new THREE.Vector3(-gridHalfSize, 0, 0),
+        new THREE.Vector3(gridHalfSize, 0, 0)
     ]);
-    const xMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
-    const xAxisLine = new THREE.Line(xGeometry, xMaterial);
+    const xAxisLine = new THREE.Line(xGeometry, new THREE.LineBasicMaterial(overlayConfig(0xcc5252)));
+    xAxisLine.renderOrder = 1; // Higher renderOrder draws it AFTER the grid helper
     scene.add(xAxisLine);
 
-    // --- Green Y-Axis Line (Vertical across floor) ---
+    // --- Green Y-Axis Line ---
     const yGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, -0.04, -gridHalfSize),
-        new THREE.Vector3(0, -0.04, gridHalfSize)
+        new THREE.Vector3(0, 0, -gridHalfSize),
+        new THREE.Vector3(0, 0, gridHalfSize)
     ]);
-    const yMaterial = new THREE.LineBasicMaterial({ color: 0x00ff00 });
-    const yAxisLine = new THREE.Line(yGeometry, yMaterial);
+    const yAxisLine = new THREE.Line(yGeometry, new THREE.LineBasicMaterial(overlayConfig(0x52cc7a)));
+    yAxisLine.renderOrder = 1;
     scene.add(yAxisLine);
 
-    // --- Blue Z-Axis Line (Shooting straight up into the sky) ---
+    // --- Blue Z-Axis Line ---
     const zGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, -0.04, 0),        // Starts at floor center
-        new THREE.Vector3(0, gridHalfSize, 0)  // Extends straight upward
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, gridHalfSize, 0)
     ]);
-    const zMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
-    const zAxisLine = new THREE.Line(zGeometry, zMaterial);
+    const zAxisLine = new THREE.Line(zGeometry, new THREE.LineBasicMaterial(overlayConfig(0x007acc)));
+    zAxisLine.renderOrder = 1;
     scene.add(zAxisLine);
     
 
