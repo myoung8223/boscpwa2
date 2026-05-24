@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "59"; // <-- Increment this number whenever you commit!
+const BUILD_NUMBER = "60"; // <-- Increment this number whenever you commit!
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
