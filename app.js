@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "66"; // <-- Incremented for Line Number Font Sync
+const BUILD_NUMBER = "67"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -345,9 +345,87 @@ function applyInlineBracketMatching(editorDiv) {
 }
 
 // ==========================================================================
+// 🛠️ COMPILER COMPILATION ERROR LINE HIGHLIGHTING ENGINE
+// ==========================================================================
+function highlightErrorLine(lineNumber) {
+    // 1. Wipe out any existing error highlights from the gutter and editor viewport
+    clearErrorHighlights();
+
+    if (!lineNumber || lineNumber < 1) return;
+
+    // 2. Add an indicator flare to the matching index item inside the line gutter panel
+    const lineGutter = document.getElementById('line-numbers');
+    if (lineGutter) {
+        // Line tokens are separated by <br>, split them and overlay the warning class
+        const lines = lineGutter.innerHTML.split('<br>');
+        if (lineNumber <= lines.length) {
+            lines[lineNumber - 1] = `<span class="gutter-error-flare">${lineNumber}</span>`;
+            lineGutter.innerHTML = lines.join('<br>');
+        }
+    }
+
+    // 3. Track character offsets to find the start and end indices of the physical line text string
+    const codeText = jar.toString();
+    const textLines = codeText.split('\n');
+    
+    if (lineNumber > textLines.length) return;
+
+    let targetStartCharIndex = 0;
+    for (let i = 0; i < lineNumber - 1; i++) {
+        targetStartCharIndex += textLines[i].length + 1; // +1 includes the hidden newline character sequence
+    }
+    let targetEndCharIndex = targetStartCharIndex + textLines[lineNumber - 1].length;
+
+    // Handle empty code strings or edge selections elegantly
+    if (targetStartCharIndex === targetEndCharIndex) {
+        targetEndCharIndex++;
+    }
+
+    // 4. Trace the DOM structural elements inside the contenteditable element to map visual spans
+    let currentAbsoluteOffset = 0;
+    const walker = document.createTreeWalker(editorElement, NodeFilter.SHOW_TEXT);
+    let currentNode = walker.nextNode();
+
+    while (currentNode) {
+        const nodeLength = currentNode.textContent.length;
+        const startOfThisNode = currentAbsoluteOffset;
+        const endOfThisNode = currentAbsoluteOffset + nodeLength;
+
+        // Determine if this text node overlaps with our target line parameter
+        if (endOfThisNode > targetStartCharIndex && startOfThisNode < targetEndCharIndex) {
+            let parentElement = currentNode.parentNode;
+            
+            // If the text is nested or naked inside the root div container, step carefully
+            if (parentElement === editorElement) {
+                // Wrap raw text node elements safely inside a temporary markup span block
+                const spanWrap = document.createElement('span');
+                parentElement.insertBefore(spanWrap, currentNode);
+                spanWrap.appendChild(currentNode);
+                parentElement = spanWrap;
+            }
+            
+            parentElement.classList.add('editor-error-line-glow');
+        }
+
+        currentAbsoluteOffset += nodeLength;
+        currentNode = walker.nextNode();
+    }
+}
+
+function clearErrorHighlights() {
+    // Sweep the editor text element nodes and clean off compilation error layout modifications
+    const activeLineGlows = editorElement.querySelectorAll('.editor-error-line-glow');
+    activeLineGlows.forEach(el => el.classList.remove('editor-error-line-glow'));
+
+    // Re-render standard line numbers to instantly reset highlighted sidebar markers
+    if (typeof triggerLineUpdate === 'function') {
+        triggerLineUpdate();
+    }
+}
+
+// ==========================================================================
 // 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
 // ==========================================================================
-//const consoleBox = document.getElementById('console');
 const toggleConsoleBtn = document.getElementById('btn-toggle-console');
 
 if (consoleBox && toggleConsoleBtn) {
@@ -398,6 +476,17 @@ if (editorElement && lineNumbersDiv && toggleLinesBtn) {
     triggerLineUpdate = updateLineNumbers;
 
     jar.onUpdate((code) => {
+        // 🔥 WIPE ERROR FLARES INSTANTLY AS SOON AS THE USER RESUMES WORK/TYPING!
+        const errorLineActive = editorElement.querySelectorAll('.editor-error-line-glow').length > 0;
+        if (errorLineActive) {
+            const currentGutterHtml = lineNumbersDiv.innerHTML;
+            if (currentGutterHtml.includes('gutter-error-flare')) {
+                // If text bounds change, wash all active background classes away safely
+                const activeLineGlows = editorElement.querySelectorAll('.editor-error-line-glow');
+                activeLineGlows.forEach(el => el.classList.remove('editor-error-line-glow'));
+            }
+        }
+
         updateLineNumbers(code);
         localStorage.setItem('openscad_editor_cache', code);
     });
@@ -451,7 +540,7 @@ const savedFontSizeStr = localStorage.getItem('openscad_editor_font_size') || '1
 
 if (editorElement && editorFontSizeSelect) {
     editorElement.style.fontSize = savedFontSizeStr;
-    if (lineNumbersDiv) lineNumbersDiv.style.fontSize = savedFontSizeStr; // 🔄 Sync line numbers on init!
+    if (lineNumbersDiv) lineNumbersDiv.style.fontSize = savedFontSizeStr; 
     editorFontSizeSelect.value = savedFontSizeStr;
 }
 
@@ -645,6 +734,9 @@ btnPreview.addEventListener('click', async () => {
         return;
     }
 
+    // 🔄 Clean off old visual error banners before running a fresh test build
+    clearErrorHighlights();
+
     logToConsole('--- Generating Preview ---');
     const scriptCode = jar.toString(); 
     const errorLogs = [];
@@ -726,6 +818,8 @@ btnPreview.addEventListener('click', async () => {
 
             if (detectedErrorLine) {
                 logToConsole(`👉 Suspected syntax break near Line ${detectedErrorLine}.`);
+                // 🔥 TRIGGER HIGHLIGHT HOOK ON CRASH MATCH!
+                highlightErrorLine(detectedErrorLine);
             }
         }
 
@@ -1011,7 +1105,7 @@ if (editorFontSizeSelect) {
         const selectedSize = event.target.value;
         localStorage.setItem('openscad_editor_font_size', selectedSize);
         if (editorElement) editorElement.style.fontSize = selectedSize;
-        if (lineNumbersDiv) lineNumbersDiv.style.fontSize = selectedSize; // 🔄 Sync line numbers on change!
+        if (lineNumbersDiv) lineNumbersDiv.style.fontSize = selectedSize; 
         logToConsole(`🔎 Editor text scaled to: ${selectedSize}`);
     });
 }
