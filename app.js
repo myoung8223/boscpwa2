@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "74"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "75"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -988,10 +988,10 @@ function init3DWorkspace() {
     const yAxisLine = new THREE.Line(yGeometry, new THREE.LineBasicMaterial(overlayConfig(0x52cc7a)));
     scene.add(yAxisLine);
 
-    // --- Blue Z-Axis Line ---
+    // --- Blue Z-Axis Line (Extending into both positive and negative Z space) ---
     const zGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, gridHalfSize, 0)
+        new THREE.Vector3(0, -gridHalfSize, 0), // Starts deep in the negative vertical space
+        new THREE.Vector3(0, gridHalfSize, 0)   // Extends straight upward into positive space
     ]);
     const zAxisLine = new THREE.Line(zGeometry, new THREE.LineBasicMaterial(overlayConfig(0x007acc)));
     scene.add(zAxisLine);
