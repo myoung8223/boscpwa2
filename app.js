@@ -1013,14 +1013,14 @@ function init3DWorkspace() {
         return el;
     };
 
-    create2DLabel('compass-lbl-x', 'X', '#444444');
-    create2DLabel('compass-lbl-y', 'Y', '#444444');
-    create2DLabel('compass-lbl-z', 'Z', '#444444');
+    create2DLabel('compass-lbl-x', 'X', '#888888');
+    create2DLabel('compass-lbl-y', 'Y', '#888888');
+    create2DLabel('compass-lbl-z', 'Z', '#888888');
 
     // Define the local 3D endpoints of your 25-unit axes lines
-    const endpointX = new THREE.Vector3(20, 0, 0);   // was 25
-    const endpointY = new THREE.Vector3(0, 20, 0);   // was 25
-    const endpointZ = new THREE.Vector3(0, 0, 20);   // was 25
+    const endpointX = new THREE.Vector3(18, 0, 0);   // was 25
+    const endpointY = new THREE.Vector3(0, 18, 0);   // was 25
+    const endpointZ = new THREE.Vector3(0, 0, 18);   // was 25
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.55); 
     scene.add(ambientLight);
