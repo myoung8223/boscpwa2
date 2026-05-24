@@ -989,7 +989,7 @@ function init3DWorkspace() {
     zLabel.position.set(0, 0, mid);
     */
 
-    const compassAxes = new THREE.AxesHelper(25);
+    const compassAxes = new THREE.AxesHelper(18);
     compassAxes.rotation.x = -Math.PI / 2;
     compassScene.add(compassAxes);
 
@@ -1013,19 +1013,14 @@ function init3DWorkspace() {
         return el;
     };
 
-    create2DLabel('compass-lbl-x', 'X', '#ff0000');
-    create2DLabel('compass-lbl-y', 'Y', '#00ff00');
-    create2DLabel('compass-lbl-z', 'Z', '#0000ff');
+    create2DLabel('compass-lbl-x', 'X', '#aaaaaa');
+    create2DLabel('compass-lbl-y', 'Y', '#bbbbbb');
+    create2DLabel('compass-lbl-z', 'Z', '#cccccc');
 
     // Define the local 3D endpoints of your 25-unit axes lines
-    const endpointX = new THREE.Vector3(25, 0, 0);
-    const endpointY = new THREE.Vector3(0, 25, 0);
-    const endpointZ = new THREE.Vector3(0, 0, 25);
-
-    // Attach directly to compassAxes so they inherit the OpenSCAD Z-Up rotation!
-    //compassAxes.add(xLabel);
-    //compassAxes.add(yLabel);
-    //compassAxes.add(zLabel);
+    const endpointX = new THREE.Vector3(23, 0, 0);   // was 25
+    const endpointY = new THREE.Vector3(0, 23, 0);   // was 25
+    const endpointZ = new THREE.Vector3(0, 0, 23);   // was 25
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.55); 
     scene.add(ambientLight);
