@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "73"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "74"; // <-- Incremented for Compiler Error Line Highlighting Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -949,9 +949,9 @@ function init3DWorkspace() {
     gridHelper.position.y = -0.05; 
     scene.add(gridHelper);
 
-    const axesHelper = new THREE.AxesHelper(50);
-    axesHelper.rotation.x = -Math.PI / 2;    
-    scene.add(axesHelper);
+    //const axesHelper = new THREE.AxesHelper(50);
+    //axesHelper.rotation.x = -Math.PI / 2;    
+    //scene.add(axesHelper);
     
     const compassContainer = document.createElement('div');
     compassContainer.style.position = 'absolute';
