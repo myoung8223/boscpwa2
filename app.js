@@ -48,7 +48,17 @@ const jar = CodeJar(
             console.error("Bracket matching engine error:", e);
         }
     },
-    { tab: '\t' } // 🛑 FIX ISSUE 1: Passing just tab options turns off CodeJar's default bracket autocomplete!
+    { 
+        tab: '\t',
+        history: true,
+        indentOn: /^\s*$/,
+        // 🛑 THE ULTIMATE AUTOCOMPLETE KILL SWITCH:
+        // By passing a RegExp that can never logically match anything, 
+        // CodeJar will never auto-close another bracket or parenthesis!
+        open: /$^/,
+        close: /$^/,
+        moveTo: /$^/
+    } 
 );
 
 // ==========================================================================
