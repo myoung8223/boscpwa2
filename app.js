@@ -20,6 +20,7 @@ const editorFontSizeSelect = document.getElementById('editor-font-size-select');
 const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
 
+/*
 // 🍯 INITIALIZE CODEJAR INSTANCE
 const jar = CodeJar(
     editorElement, 
@@ -27,6 +28,34 @@ const jar = CodeJar(
         if (typeof Prism !== 'undefined') Prism.highlightElement(el);
         try { applyInlineBracketMatching(el); } catch (e) { console.error("Bracket match error:", e); }
     },
+    { tab: '\t', history: true, indentOn: /[(\[{]$/, addClosing: false } 
+);
+*/
+
+// 🍯 INITIALIZE CODEJAR INSTANCE
+const jar = CodeJar(
+    editorElement, 
+    (el) => {
+        // 1. MANUAL PRISM INVOCATION: Bypasses Prism's auto-trimming bug!
+        if (typeof Prism !== 'undefined') {
+            const code = el.textContent;
+            
+            // Dynamically grab the best available language grammar for OpenSCAD
+            const grammar = Prism.languages.openscad || Prism.languages.clike || Prism.languages.javascript;
+            const langName = Prism.languages.openscad ? 'openscad' : (Prism.languages.clike ? 'clike' : 'javascript');
+            
+            if (grammar) {
+                // Highlight without trimming newlines, then inject safely
+                el.innerHTML = Prism.highlight(code, grammar, langName);
+            } else {
+                Prism.highlightElement(el); // Fallback if grammars fail to load
+            }
+        }
+        
+        // 2. Run Bracket Matcher
+        try { applyInlineBracketMatching(el); } catch (e) { console.error("Bracket match error:", e); }
+    },
+    // 🔥 Preserve the indent regex fix!
     { tab: '\t', history: true, indentOn: /[(\[{]$/, addClosing: false } 
 );
 
