@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "65"; // <-- Incremented for OpenSCAD Tab Replacement Logic
+const BUILD_NUMBER = "66"; // <-- Incremented for Line Number Font Sync
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -44,24 +44,19 @@ if (editorElement) {
 // 📐 SMART MULTI-LINE BLOCK INDENTATION ENGINE (CAPTURE-PHASE INTERCEPTOR)
 // ==========================================================================
 if (editorElement) {
-    // 🚨 IMPORTANT: 'true' as the 3rd argument runs this listener in the DOM Capture Phase!
-    // This guarantees we process the Tab key BEFORE CodeJar's internal engine even sees it.
     editorElement.addEventListener('keydown', (event) => {
         if (event.key === 'Tab') {
             
-            // 🛑 Blindfold CodeJar completely for this keystroke
             event.preventDefault();
             event.stopImmediatePropagation();
 
             let { start, end } = getSelectionCharacterOffsetWithin(editorElement);
             const value = jar.toString();
             
-            // 🔍 Check if the current selection spans across multiple lines
             const selectedText = value.substring(start, end);
             const isMultiLineSelection = selectedText.includes('\n');
 
             // SCENARIO 1: Single-Line Tab Replacement
-            // If we are NOT holding Shift, and the selection DOES NOT cross a line break, replace it with a Tab
             if (!isMultiLineSelection && !event.shiftKey) {
                 const newCode = value.substring(0, start) + '\t' + value.substring(end);
                 jar.updateCode(newCode);
@@ -70,7 +65,6 @@ if (editorElement) {
             }
 
             // SCENARIO 2: Multi-line Block Indent OR Shift+Tab Outdent
-            // Edge Case Fix: If highlight perfectly catches the trailing return, don't indent the line beneath it
             let adjustedEnd = end;
             if (adjustedEnd > start && value[adjustedEnd - 1] === '\n') {
                 adjustedEnd--;
@@ -86,7 +80,6 @@ if (editorElement) {
             let newEnd = end;
 
             if (!event.shiftKey) {
-                // -> Multi-line Indent: Add \t to the start of every selected line
                 modifiedBlock = targetBlock.split('\n').map(line => '\t' + line).join('\n');
                 
                 const linesBeforeStart = value.substring(selectStartLineStart, start).split('\n').length - 1;
@@ -95,7 +88,6 @@ if (editorElement) {
                 newStart = start + linesBeforeStart + 1;
                 newEnd = end + linesBeforeEnd + 1;
             } else {
-                // -> Shift+Tab Outdent: Remove leading \t or up to 4 spaces from every selected line
                 let removedBeforeStart = 0;
                 let removedBeforeEnd = 0;
                 
@@ -133,14 +125,12 @@ if (editorElement) {
 
             const newCode = value.substring(0, selectStartLineStart) + modifiedBlock + value.substring(finalEndPos);
             
-            // Execute the update
             jar.updateCode(newCode);
             setSelectionCharacterOffsetWithin(editorElement, newStart, newEnd);
         }
-    }, true); // <--- CRITICAL FIX: The 'true' flag establishes DOM dominance!
+    }, true);
 }
 
-// Helper to convert complex multi-node DOM selection to clean absolute string indexes
 function getSelectionCharacterOffsetWithin(element) {
     let start = 0, end = 0;
     const sel = window.getSelection();
@@ -163,7 +153,6 @@ function getSelectionCharacterOffsetWithin(element) {
     return { start, end };
 }
 
-// Helper to map absolute text positions back to granular text container DOM nodes
 function setSelectionCharacterOffsetWithin(element, start, end) {
     if (start < 0) start = 0;
     if (end < 0) end = 0;
@@ -250,7 +239,6 @@ function applyInlineBracketMatching(editorDiv) {
     
     if (!partners[charToMatch]) return;
 
-    // 🕵️‍♂️ LEXICAL STATE SCANNER: Pre-calculate non-code blind spots
     const ignoredMap = new Array(textContent.length).fill(false);
     let inSingleComment = false;
     let inMultiComment = false;
@@ -264,12 +252,11 @@ function applyInlineBracketMatching(editorDiv) {
             ignoredMap[i] = true;
             if (textContent[i] === '*' && textContent[i + 1] === '/') {
                 ignoredMap[i + 1] = true;
-                i++; // Advance past the closing '/'
+                i++; 
                 inMultiComment = false;
             }
         } else if (inString) {
             ignoredMap[i] = true;
-            // Handle escaped double quotes inside strings: \"
             if (textContent[i] === '\\' && textContent[i + 1] === '"') {
                 ignoredMap[i + 1] = true;
                 i++;
@@ -277,7 +264,6 @@ function applyInlineBracketMatching(editorDiv) {
                 inString = false;
             }
         } else {
-            // Check for entry boundaries
             if (textContent[i] === '/' && textContent[i + 1] === '/') {
                 ignoredMap[i] = true;
                 ignoredMap[i + 1] = true;
@@ -295,7 +281,6 @@ function applyInlineBracketMatching(editorDiv) {
         }
     }
 
-    // Safety abort: If the cursor itself is on a bracket inside a comment or string, ignore it!
     if (ignoredMap[targetIndex]) return;
     
     const partnerChar = partners[charToMatch];
@@ -306,7 +291,7 @@ function applyInlineBracketMatching(editorDiv) {
 
     if (isForwardScan) {
         for (let i = targetIndex; i < textContent.length; i++) {
-            if (ignoredMap[i]) continue; // 🛑 Skip checking dead zones
+            if (ignoredMap[i]) continue; 
             
             if (textContent[i] === charToMatch) balanceCounter++;
             if (textContent[i] === partnerChar) balanceCounter--;
@@ -317,7 +302,7 @@ function applyInlineBracketMatching(editorDiv) {
         }
     } else {
         for (let i = targetIndex; i >= 0; i--) {
-            if (ignoredMap[i]) continue; // 🛑 Skip checking dead zones
+            if (ignoredMap[i]) continue; 
             
             if (textContent[i] === charToMatch) balanceCounter++;
             if (textContent[i] === partnerChar) balanceCounter--;
@@ -359,10 +344,10 @@ function applyInlineBracketMatching(editorDiv) {
     }
 }
 
-
 // ==========================================================================
 // 🖥️ PERSISTENT CONSOLE VISIBILITY TOGGLE
 // ==========================================================================
+const consoleBox = document.getElementById('console');
 const toggleConsoleBtn = document.getElementById('btn-toggle-console');
 
 if (consoleBox && toggleConsoleBtn) {
@@ -466,6 +451,7 @@ const savedFontSizeStr = localStorage.getItem('openscad_editor_font_size') || '1
 
 if (editorElement && editorFontSizeSelect) {
     editorElement.style.fontSize = savedFontSizeStr;
+    if (lineNumbersDiv) lineNumbersDiv.style.fontSize = savedFontSizeStr; // 🔄 Sync line numbers on init!
     editorFontSizeSelect.value = savedFontSizeStr;
 }
 
@@ -498,7 +484,6 @@ function logToConsole(message) {
 }
 
 // ---- FILE OPERATIONS (.scad) ----
-
 btnSave.addEventListener('click', () => {
     const code = jar.toString(); 
     const blob = new Blob([code], { type: 'text/plain' });
@@ -750,7 +735,6 @@ btnPreview.addEventListener('click', async () => {
     }
 });
 
-// ---- THE EXPORT TRIGGER (Save STL) ----
 btnExport.addEventListener('click', () => {
     if (!currentStlBlob) {
         logToConsole('Nothing to export. Run Preview first.');
@@ -764,7 +748,6 @@ btnExport.addEventListener('click', () => {
     logToConsole('Exported openscad_model.stl successfully.');
 });
 
-// ---- SERVICE WORKER REGISTRATION ----
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
@@ -773,7 +756,6 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-// ---- THE THREE.JS STL WORKSPACE VIEWPORT ENGINE ----
 let scene, camera, renderer, controls, currentMesh = null;
 let workspaceInitialized = false;
 
@@ -969,7 +951,6 @@ btnWireframe.style.background = '#007acc';
 // ==========================================================================
 // ⚙️ SETTINGS OVERLAY CONTROLLER LOGIC
 // ==========================================================================
-
 const btnSettings = document.getElementById('btn-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
 const settingsOverlay = document.getElementById('settings-overlay');
@@ -1029,9 +1010,8 @@ if (editorFontSizeSelect) {
     editorFontSizeSelect.addEventListener('change', (event) => {
         const selectedSize = event.target.value;
         localStorage.setItem('openscad_editor_font_size', selectedSize);
-        if (editorElement) {
-            editorElement.style.fontSize = selectedSize;
-        }
+        if (editorElement) editorElement.style.fontSize = selectedSize;
+        if (lineNumbersDiv) lineNumbersDiv.style.fontSize = selectedSize; // 🔄 Sync line numbers on change!
         logToConsole(`🔎 Editor text scaled to: ${selectedSize}`);
     });
 }
@@ -1058,7 +1038,6 @@ if (btnCameraReset) {
 // ==========================================================================
 // 📐 PERSISTENT DRAGGABLE SPLIT-PANE CONTROLLER
 // ==========================================================================
-
 const leftPaneContainer = document.getElementById('left-pane-container');
 const panelSplitGutter = document.getElementById('panel-split-gutter');
 
