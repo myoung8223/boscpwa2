@@ -26,13 +26,13 @@
 <style>
         /* 🔥 Visual markers for the compilation error engine */
         .editor-error-line-glow {
-            background-color: rgba(220, 53, 69, 0.25) !important; /* Soft transparent error crimson block tint */
-            border-bottom: 1px dashed #ff4444;                     /* Dashed alert trace below error terms */
+            background-color: rgba(220, 53, 69, 0.25) !important;
+            border-bottom: 1px dashed #ff4444;                     
         }
         
         .gutter-error-flare {
-            background-color: #dc3545 !important;                  /* Bold solid red block in line track */
-            color: #ffffff !important;                             /* Crisp white contrast text */
+            background-color: #dc3545 !important;                  
+            color: #ffffff !important;                             
             padding: 2px 6px !important;
             border-radius: 3px;
             font-weight: bold;
@@ -40,15 +40,15 @@
     
         /* 🎨 Custom CSS rules for native app.js bracket scanner */
         .bracket-match-glow {
-            background-color: rgba(0, 122, 204, 0.45) !important; /* Rich neon dark blue backdrop block */
-            color: #00ffffff !important;                          /* Neon Cyan Text Override */
+            background-color: rgba(0, 122, 204, 0.45) !important; 
+            color: #00ffffff !important;                          
             font-weight: bold !important;
-            border-bottom: 2px solid #00c3ff;                     /* Clean underline accent rule */
+            border-bottom: 2px solid #00c3ff;                     
         }
 
         .bracket-mismatch-glow {
-            background-color: rgba(220, 53, 69, 0.4) !important;  /* Warning blood red backdrop */
-            color: #ff8888 !important;                            /* Soft red code text */
+            background-color: rgba(220, 53, 69, 0.4) !important;  
+            color: #ff8888 !important;                            
             font-weight: bold !important;
             border-bottom: 2px solid #ff3344;
         }
@@ -76,7 +76,7 @@
         }
         .split-gutter:hover,
         .split-gutter:active {
-            background: #007acc; /* Highlights active blue when dragging */
+            background: #007acc; 
         }
 
         /* 📐 Removed static width and forced panel to fill remaining viewport territory */
@@ -100,10 +100,10 @@
         
         /* 🔣 Line number parent container wrapper */
         .editor-wrapper {
-            flex-grow: 1;      /* Replaces the old textarea flex-grow to stretch down to the console */
+            flex-grow: 1;      
             display: flex;
             background: #1e1e1e;
-            overflow: hidden;  /* Keeps things neat */
+            overflow: hidden;  
             position: relative;
         }
 
@@ -117,10 +117,10 @@
             font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace; 
             font-size: 14px;           
             line-height: 1.5;          
-            user-select: none;         /* Disables highlighting numbers while selecting code */
-            overflow: hidden;          /* Disables double scroll bars */
+            user-select: none;         
+            overflow: hidden;          
             border-right: 1px solid #2d2d2d;
-            flex-shrink: 0;            /* Forces line track to maintain shape */
+            flex-shrink: 0;            
         }
         
         /* 📐 FIXED: Hardened parent typography matrix configuration */
@@ -133,25 +133,21 @@
             outline: none;
             padding: 15px !important;
 
-            /* Core structural layout properties assigned here safely */
             font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace !important;
             line-height: 1.5;
             tab-size: 4;
             -moz-tab-size: 4; 
             
-            /* 🔥 FIXED: Forcefully overrides CodeJar's internal inline 'pre-wrap' style injection! */
             white-space: pre !important;
             word-break: normal !important;
             overflow-wrap: normal !important;
         }
 
-        /* 🤖 FIXED: Cleaned child-combinator rules to preserve full JS settings compatibility */
         #editor *,
         .codejar-editor, 
         .codejar-editor * {
             font-family: 'Consolas', 'Monaco', 'Courier New', Courier, monospace !important; 
-            line-height: 1.5 !important; /* 🔥 ARMORED: Prevents Prism spans from shifting lines vertically */
-            /* Font-size !important was removed here so your active UI settings scaling menu can work! */
+            line-height: 1.5 !important; 
         }
         
         /* Console Output Box */
@@ -264,7 +260,7 @@
             </div>
             
             <div class="console-box" id="console">Basic OpenSCAD PWA - By: Mike Young
-Built with Extensive AI Assistance from Google Gemini</div>
+with Extensive AI Assistance from Google Gemini</div>
         </div>
 
         <div class="split-gutter" id="panel-split-gutter"></div>
@@ -336,7 +332,30 @@ Built with Extensive AI Assistance from Google Gemini</div>
             <div class="settings-group">
                 <label style="font-size: 0.9rem; color: #aaa;">Axis Lines:</label>
                 <button id="btn-toggle-axes" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
-            </div>             
+            </div> 
+
+            <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
+            <div class="settings-group">
+                <label style="font-size: 0.9rem; color: #aaa; font-weight: bold;">Custom Fonts:</label>
+                <button id="btn-open-fonts-menu" class="file-btn" style="width: 120px; background: #007acc;">Manage</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="fonts-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <button id="btn-close-fonts" class="close-btn" style="font-size: 16px; font-weight: bold; padding: 4px;">&#8592; Back</button>
+            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2rem;">Typography Manager</h3>
+            <hr style="border: 0; border-top: 1px solid #333; margin-bottom: 20px;">
+
+            <div class="settings-group" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 0;">
+                <input type="file" id="font-upload" accept=".ttf,.otf" style="display:none;">
+                <button type="button" class="file-btn" onclick="document.getElementById('font-upload').click()" 
+                    style="width: 100%; background: #007acc; margin-bottom: 8px;">＋ Install Font File (.ttf / .otf)</button>
+
+                <div id="custom-fonts-manager-list" style="width: 100%; height: 210px; overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px;">
+                    </div>
+            </div>
         </div>
     </div>
 
