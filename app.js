@@ -663,9 +663,16 @@ btnPreview.addEventListener('click', async () => {
         }
         if (instance.ENV) instance.ENV.OPENSCAD_FONTDIR = '/fonts';
 
-        // 📁 NEW: Inject STLs into the WASM Root directory for import() resolving!
+        // 📁 INJECT STLS INTO WASM ROOT WITH VERIFICATION
         for (const [stlName, stlData] of Object.entries(stlCache)) {
-            instance.FS.writeFile(`/${stlName}`, stlData);
+            try {
+                instance.FS.writeFile(`/${stlName}`, stlData);
+                // 🛡️ Verify the file actually wrote to the virtual system successfully
+                const stat = instance.FS.stat(`/${stlName}`);
+                logToConsole(`✔ WASM FS Mapped: /${stlName} (${stat.size} bytes)`);
+            } catch (fsErr) {
+                logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`);
+            }
         }
 
         instance.FS.writeFile('/input.scad', scriptCode);
@@ -685,7 +692,17 @@ btnPreview.addEventListener('click', async () => {
             }
             if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
-    } catch (error) { logToConsole(`Execution error: ${error.message || error}`); }
+    } catch (error) { 
+        // 🛡️ C++ EXCEPTION DECODER
+        let errorMsg = error.message || error;
+        if (typeof error === 'number') {
+            errorMsg = `[C++ Exception Pointer: ${error}] The WASM engine hard-crashed.`;
+            if (typeof instance !== 'undefined' && instance.getExceptionMessage) {
+                try { errorMsg += `\nDetailed Trace: ${instance.getExceptionMessage(error)}`; } catch(e){}
+            }
+        }
+        logToConsole(`Execution error: ${errorMsg}`); 
+    }
 });
 
 btnExport.addEventListener('click', () => {
@@ -940,7 +957,7 @@ async function renderCustomStlManagerList() {
         });
         topRow.appendChild(nameLabel); topRow.appendChild(delBtn);
 
-        const syntaxBox = document.createElement('div'); syntaxBox.textContent = `import("/${stl.filename}");`; syntaxBox.style.fontSize = '0.75rem'; syntaxBox.style.color = '#00c3ff'; syntaxBox.style.background = '#1a1a1a'; syntaxBox.style.padding = '5px 8px'; syntaxBox.style.borderRadius = '4px'; syntaxBox.style.fontFamily = 'monospace'; syntaxBox.style.cursor = 'text'; syntaxBox.style.userSelect = 'all'; syntaxBox.style.webkitUserSelect = 'all';
+        const syntaxBox = document.createElement('div'); syntaxBox.textContent = `import("${stl.filename}");`; syntaxBox.style.fontSize = '0.75rem'; syntaxBox.style.color = '#00c3ff'; syntaxBox.style.background = '#1a1a1a'; syntaxBox.style.padding = '5px 8px'; syntaxBox.style.borderRadius = '4px'; syntaxBox.style.fontFamily = 'monospace'; syntaxBox.style.cursor = 'text'; syntaxBox.style.userSelect = 'all'; syntaxBox.style.webkitUserSelect = 'all';
         rowWrap.appendChild(topRow); rowWrap.appendChild(syntaxBox); listContainer.appendChild(rowWrap);
     });
 }
@@ -991,14 +1008,23 @@ if (fontUploadInput) {
 if (stlUploadInput) {
     stlUploadInput.addEventListener('change', (event) => {
         const file = event.target.files[0]; if (!file) return;
+        
+        // 🛡️ AGGRESSIVE SANITIZATION: Force lowercase, replace spaces/specials with underscores
+        let safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-]/g, '_');
+        
         const reader = new FileReader();
         reader.onload = async (e) => {
             const stlData = new Uint8Array(e.target.result);
-            stlCache[file.name] = stlData; await savePersistentStl(file.name, stlData);
-            logToConsole(`📁 STL "${file.name}" saved for import.`); renderCustomStlManagerList();
+            stlCache[safeName] = stlData; 
+            await savePersistentStl(safeName, stlData);
+            
+            logToConsole(`📁 STL "${safeName}" saved to PWA memory (${stlData.byteLength} bytes).`); 
+            renderCustomStlManagerList();
+            
             if (openSCADFactory && !btnPreview.disabled) btnPreview.click();
         };
-        reader.readAsArrayBuffer(file); event.target.value = '';
+        reader.readAsArrayBuffer(file); 
+        event.target.value = '';
     });
 }
 
