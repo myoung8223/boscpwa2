@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "78"; // <-- Incremented for Compiler Error Line Highlighting Engine
+const BUILD_NUMBER = "79"; // <-- Incremented for Font Manager Menu Engine
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -19,6 +19,85 @@ const projectNameInput = document.getElementById('project-name-input');
 const editorFontSizeSelect = document.getElementById('editor-font-size-select');
 const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
+
+// 🌐 THREE.JS SCOPE VARIABLES
+let scene, camera, renderer, controls, currentMesh = null;
+let workspaceInitialized = false;
+let gridHelper = null;
+let axesGroup = null;
+
+// 🔒 PERSISTENT GRID & AXES VISIBILITY TRACKERS
+let isGridVisible = localStorage.getItem('openscad_grid_visible') !== 'false';
+let isAxesVisible = localStorage.getItem('openscad_axes_visible') !== 'false';
+
+let openSCADFactory = null;
+let currentStlBlob = null; 
+const fontCache = {}; 
+
+// ==========================================================================
+// 🗄️ INDEXEDDB PERSISTENT STORAGE LAYER FOR CUSTOM FONTS
+// ==========================================================================
+function openFontsDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('OpenSCADCustomFontsDB', 1);
+        request.onupgradeneeded = (e) => {
+            e.target.result.createObjectStore('fonts');
+        };
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+
+async function getPersistentFonts() {
+    try {
+        const db = await openFontsDB();
+        return new Promise((resolve) => {
+            const transaction = db.transaction('fonts', 'readonly');
+            const store = transaction.objectStore('fonts');
+            
+            const fonts = [];
+            store.openCursor().onsuccess = (event) => {
+                const cursor = event.target.result;
+                if (cursor) {
+                    fonts.push({ filename: cursor.key, binary: cursor.value });
+                    cursor.continue();
+                } else {
+                    resolve(fonts);
+                }
+            };
+        });
+    } catch (err) {
+        console.error("🔴 IndexedDB read execution failure:", err);
+        return [];
+    }
+}
+
+async function savePersistentFont(filename, uint8Array) {
+    try {
+        const db = await openFontsDB();
+        const transaction = db.transaction('fonts', 'readwrite');
+        const store = transaction.objectStore('fonts');
+        store.put(uint8Array, filename);
+    } catch (err) {
+        console.error("🔴 IndexedDB write execution failure:", err);
+    }
+}
+
+async function deletePersistentFont(filename) {
+    try {
+        const db = await openFontsDB();
+        const transaction = db.transaction('fonts', 'readwrite');
+        const store = transaction.objectStore('fonts');
+        
+        return new Promise((resolve, reject) => {
+            const request = store.delete(filename);
+            request.onsuccess = () => resolve();
+            request.onerror = () => reject(request.error);
+        });
+    } catch (err) {
+        console.error("🔴 IndexedDB deletion transaction failure:", err);
+    }
+}
 
 // 🍯 INITIALIZE CODEJAR INSTANCE
 const jar = CodeJar(
@@ -49,25 +128,20 @@ const jar = CodeJar(
 
 // 🖱️ Passive navigation & keyboard shortcut listeners
 if (editorElement) {
-    // 1. Bracket updates on mouse clicks
     editorElement.addEventListener('click', () => applyInlineBracketMatching(editorElement));
     
-    // 2. Bracket updates on arrow key movements
     editorElement.addEventListener('keyup', (e) => {
         if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End', 'PageUp', 'PageDown'].includes(e.key)) {
             applyInlineBracketMatching(editorElement);
         }
     });
 
-    // 3. ⌨️ WINDOWS REDO SHORTCUT MAPPER (Ctrl + Y -> Ctrl + Shift + Z)
+    // ⌨️ WINDOWS REDO SHORTCUT MAPPER (Ctrl + Y -> Ctrl + Shift + Z)
     editorElement.addEventListener('keydown', (event) => {
-        // Detect Ctrl + Y (or Cmd + Y)
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') {
-            // Stop the browser from attempting a native redo
             event.preventDefault();
             event.stopImmediatePropagation();
 
-            // Fire a synthetic Ctrl+Shift+Z key event that CodeJar recognizes perfectly
             const fakeRedoEvent = new KeyboardEvent('keydown', {
                 key: 'Z',
                 code: 'KeyZ',
@@ -76,7 +150,6 @@ if (editorElement) {
                 bubbles: true,
                 cancelable: true
             });
-
             editorElement.dispatchEvent(fakeRedoEvent);
         }
     });
@@ -391,15 +464,12 @@ function applyInlineBracketMatching(editorDiv) {
 // 🛠️ COMPILER COMPILATION ERROR LINE HIGHLIGHTING ENGINE
 // ==========================================================================
 function highlightErrorLine(lineNumber) {
-    // 1. Wipe out any existing error highlights from the gutter and editor viewport
     clearErrorHighlights();
 
     if (!lineNumber || lineNumber < 1) return;
 
-    // 2. Add an indicator flare to the matching index item inside the line gutter panel
     const lineGutter = document.getElementById('line-numbers');
     if (lineGutter) {
-        // Line tokens are separated by <br>, split them and overlay the warning class
         const lines = lineGutter.innerHTML.split('<br>');
         if (lineNumber <= lines.length) {
             lines[lineNumber - 1] = `<span class="gutter-error-flare">${lineNumber}</span>`;
@@ -407,7 +477,6 @@ function highlightErrorLine(lineNumber) {
         }
     }
 
-    // 3. Track character offsets to find the start and end indices of the physical line text string
     const codeText = jar.toString();
     const textLines = codeText.split('\n');
     
@@ -415,16 +484,14 @@ function highlightErrorLine(lineNumber) {
 
     let targetStartCharIndex = 0;
     for (let i = 0; i < lineNumber - 1; i++) {
-        targetStartCharIndex += textLines[i].length + 1; // +1 includes the hidden newline character sequence
+        targetStartCharIndex += textLines[i].length + 1; 
     }
     let targetEndCharIndex = targetStartCharIndex + textLines[lineNumber - 1].length;
 
-    // Handle empty code strings or edge selections elegantly
     if (targetStartCharIndex === targetEndCharIndex) {
         targetEndCharIndex++;
     }
 
-    // 4. Trace the DOM structural elements inside the contenteditable element to map visual spans
     let currentAbsoluteOffset = 0;
     const walker = document.createTreeWalker(editorElement, NodeFilter.SHOW_TEXT);
     let currentNode = walker.nextNode();
@@ -434,13 +501,10 @@ function highlightErrorLine(lineNumber) {
         const startOfThisNode = currentAbsoluteOffset;
         const endOfThisNode = currentAbsoluteOffset + nodeLength;
 
-        // Determine if this text node overlaps with our target line parameter
         if (endOfThisNode > targetStartCharIndex && startOfThisNode < targetEndCharIndex) {
             let parentElement = currentNode.parentNode;
             
-            // If the text is nested or naked inside the root div container, step carefully
             if (parentElement === editorElement) {
-                // Wrap raw text node elements safely inside a temporary markup span block
                 const spanWrap = document.createElement('span');
                 parentElement.insertBefore(spanWrap, currentNode);
                 spanWrap.appendChild(currentNode);
@@ -456,11 +520,9 @@ function highlightErrorLine(lineNumber) {
 }
 
 function clearErrorHighlights() {
-    // Sweep the editor text element nodes and clean off compilation error layout modifications
     const activeLineGlows = editorElement.querySelectorAll('.editor-error-line-glow');
     activeLineGlows.forEach(el => el.classList.remove('editor-error-line-glow'));
 
-    // Re-render standard line numbers to instantly reset highlighted sidebar markers
     if (typeof triggerLineUpdate === 'function') {
         triggerLineUpdate();
     }
@@ -513,8 +575,6 @@ if (editorElement && lineNumbersDiv && toggleLinesBtn) {
     const updateLineNumbers = (codeText) => {
         let currentCode = (typeof codeText === 'string') ? codeText : jar.toString();
         
-        // 🔥 FIXED: If the code ends with a single trailing newline, strip it out 
-        // so `.split('\n')` doesn't generate a phantom empty line at the end.
         if (currentCode.endsWith('\n')) {
             currentCode = currentCode.slice(0, -1);
         }
@@ -527,12 +587,10 @@ if (editorElement && lineNumbersDiv && toggleLinesBtn) {
     triggerLineUpdate = updateLineNumbers;
 
     jar.onUpdate((code) => {
-        // 🔥 WIPE ERROR FLARES INSTANTLY AS SOON AS THE USER RESUMES WORK/TYPING!
         const errorLineActive = editorElement.querySelectorAll('.editor-error-line-glow').length > 0;
         if (errorLineActive) {
             const currentGutterHtml = lineNumbersDiv.innerHTML;
             if (currentGutterHtml.includes('gutter-error-flare')) {
-                // If text bounds change, wash all active background classes away safely
                 const activeLineGlows = editorElement.querySelectorAll('.editor-error-line-glow');
                 activeLineGlows.forEach(el => el.classList.remove('editor-error-line-glow'));
             }
@@ -606,20 +664,6 @@ if (btnColorTrigger) {
 }
 
 let activeModelColor = parseInt(savedColorHexStr.replace('#', '0x'), 16);
-
-// 🌐 THREE.JS SCOPE VARIABLES
-let scene, camera, renderer, controls, currentMesh = null;
-let workspaceInitialized = false;
-let gridHelper = null;
-let axesGroup = null;
-
-// 🔒 PERSISTENT GRID & AXES VISIBILITY TRACKERS (Initialized first!)
-let isGridVisible = localStorage.getItem('openscad_grid_visible') !== 'false';
-let isAxesVisible = localStorage.getItem('openscad_axes_visible') !== 'false';
-
-let openSCADFactory = null;
-let currentStlBlob = null; 
-const fontCache = {}; 
 
 function logToConsole(message) {
     let cleanMessage = message.replace(/^\[ERROR\]:\s*/gm, '');
@@ -695,8 +739,6 @@ btnWireframe.addEventListener('click', () => {
 // ==========================================================================
 window.addEventListener('keydown', (event) => {
     if (event.ctrlKey && event.key === 'Enter') {
-        
-        // 🛑 Intercept the keystroke so CodeJar doesn't inject a random newline!
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
         
@@ -705,7 +747,7 @@ window.addEventListener('keydown', (event) => {
             btnPreview.click(); 
         }
     }
-}, true); // <--- CRITICAL FIX: 'true' executes this in the DOM Capture Phase!
+}, true); 
 
 btnColorTrigger.addEventListener('click', () => {
     modelColorInput.click();
@@ -724,7 +766,7 @@ modelColorInput.addEventListener('input', (event) => {
 });
 
 async function initOpenSCAD() {
-    logToConsole(`Build ${BUILD_NUMBER} - May 24, 2026`);
+    logToConsole(`Build ${BUILD_NUMBER} - OpenSCAD PWA Environment`);
     logToConsole('System ready. Instantiating WASM...');
     
     const savedCode = localStorage.getItem('openscad_editor_cache');
@@ -780,6 +822,19 @@ async function initOpenSCAD() {
             }
         }
         
+        // 💾 RESTORE USER-UPLOADED TYPOGRAPHY FROM INDEXEDDB
+        try {
+            logToConsole('Checking local storage database for custom user fonts...');
+            const customFonts = await getPersistentFonts();
+            
+            for (const font of customFonts) {
+                fontCache[font.filename] = font.binary;
+                logToConsole(`✔ Restored custom font: ${font.filename} (${font.binary.byteLength} bytes)`);
+            }
+        } catch (dbErr) {
+            console.error("Error restoring local custom typography:", dbErr);
+        }
+
         logToConsole('✅ Typography suite successfully cached in global memory!');
         logToConsole('OpenSCAD Engine ready! Alter code and click Preview freely.');
 
@@ -801,7 +856,6 @@ btnPreview.addEventListener('click', async () => {
         return;
     }
 
-    // 🔄 Clean off old visual error banners before running a fresh test build
     clearErrorHighlights();
 
     logToConsole('--- Generating Preview ---');
@@ -885,7 +939,6 @@ btnPreview.addEventListener('click', async () => {
 
             if (detectedErrorLine) {
                 logToConsole(`👉 Suspected syntax break near Line ${detectedErrorLine}.`);
-                // 🔥 TRIGGER HIGHLIGHT HOOK ON CRASH MATCH!
                 highlightErrorLine(detectedErrorLine);
             }
         }
@@ -943,7 +996,6 @@ function init3DWorkspace() {
     controls.dampingFactor = 0.1;
     controls.target.set(0, 0, 0);
 
-    // 1. Setup the main grid helper with a small polygon offset to prevent z-fighting
     gridHelper = new THREE.GridHelper(400, 40, 0x444444, 0x444444);
     gridHelper.position.y = 0;  
     gridHelper.material.polygonOffset = true;
@@ -951,457 +1003,7 @@ function init3DWorkspace() {
     gridHelper.material.polygonOffsetUnits = 1;
     scene.add(gridHelper);
 
-    // 2. Setup the group structure for independent line rendering and toggling
     axesGroup = new THREE.Group();
     const gridHalfSize = 200;
 
-    const overlayConfig = (colorHex) => ({
-        color: colorHex,
-        depthTest: true,           // Models safely block the lines
-        transparent: true,
-        polygonOffset: true,
-        polygonOffsetFactor: 0.5,  // Sits cleanly in front of the grid helper
-        polygonOffsetUnits: 0.5
-    });
-
-    // --- Red X-Axis Line ---
-    const xGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(-gridHalfSize, 0, 0),
-        new THREE.Vector3(gridHalfSize, 0, 0)
-    ]);
-    const xAxisLine = new THREE.Line(xGeometry, new THREE.LineBasicMaterial(overlayConfig(0xcc5252)));
-    axesGroup.add(xAxisLine);
-
-    // --- Green Y-Axis Line ---
-    const yGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, -gridHalfSize),
-        new THREE.Vector3(0, 0, gridHalfSize)
-    ]);
-    const yAxisLine = new THREE.Line(yGeometry, new THREE.LineBasicMaterial(overlayConfig(0x52cc7a)));
-    axesGroup.add(yAxisLine);
-
-    // --- Blue Z-Axis Line (Extending into both positive and negative Z space) ---
-    const zGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, -gridHalfSize, 0), 
-        new THREE.Vector3(0, gridHalfSize, 0)   
-    ]);
-    const zAxisLine = new THREE.Line(zGeometry, new THREE.LineBasicMaterial(overlayConfig(0x007acc)));
-    axesGroup.add(zAxisLine);
-    
-    // Add the entire group to the scene
-    scene.add(axesGroup);
-
-    // 🔒 APPLY SAVED PERSISTENT VISIBILITY STATES TO 3D OBJECTS ON LOAD
-    gridHelper.visible = isGridVisible;
-    axesGroup.visible = isAxesVisible;
-    
-    const compassContainer = document.createElement('div');
-    compassContainer.style.position = 'absolute';
-    compassContainer.style.top = '10px';
-    compassContainer.style.right = '10px';
-    compassContainer.style.width = '80px';
-    compassContainer.style.height = '80px';
-    compassContainer.style.zIndex = '100';
-    compassContainer.style.pointerEvents = 'none'; 
-    container.appendChild(compassContainer);
-
-    const compassScene = new THREE.Scene();
-    const compassCamera = new THREE.PerspectiveCamera(50, 1, 1, 100);
-    
-    const compassRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true }); 
-    compassRenderer.setSize(80, 80);
-    compassRenderer.setPixelRatio(window.devicePixelRatio);
-    compassContainer.appendChild(compassRenderer.domElement);
-
-    const compassAxes = new THREE.AxesHelper(20);
-    compassAxes.rotation.x = -Math.PI / 2;
-
-    // 🎨 OVERRIDE COMPASS LINE COLORS
-    const colors = compassAxes.geometry.attributes.color;
-    
-    // Line 1 (X-Axis): Muted Red
-    colors.setXYZ(0, 0.8, 0.32, 0.32); 
-    colors.setXYZ(1, 0.8, 0.32, 0.32); 
-
-    // Line 2 (Y-Axis): Muted Green
-    colors.setXYZ(2, 0.32, 0.8, 0.48); 
-    colors.setXYZ(3, 0.32, 0.8, 0.48); 
-
-    // Line 3 (Z-Axis): Muted Slate Blue
-    colors.setXYZ(4, 0.0, 0.48, 0.8);  
-    colors.setXYZ(5, 0.0, 0.48, 0.8);  
-
-    colors.needsUpdate = true; 
-
-    compassScene.add(compassAxes);
-
-    // 🏷️ Create 2D HTML overlay labels with strict unique DOM IDs
-    const create2DLabel = (id, text, color) => {
-        const oldEl = document.getElementById(id);
-        if (oldEl) oldEl.remove();
-
-        const el = document.createElement('div');
-        el.id = id;
-        el.innerText = text;
-        el.style.position = 'absolute';
-        el.style.color = color;
-        el.style.fontFamily = 'Arial, sans-serif';
-        el.style.fontWeight = 'bold';
-        el.style.fontSize = '10px'; 
-        el.style.pointerEvents = 'none';
-        el.style.transform = 'translate(-50%, -50%)';
-        compassContainer.appendChild(el);
-        return el;
-    };
-
-    create2DLabel('compass-lbl-x', 'X', '#888888');
-    create2DLabel('compass-lbl-y', 'Y', '#888888');
-    create2DLabel('compass-lbl-z', 'Z', '#888888');
-
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.55); 
-    scene.add(ambientLight);
-
-    const keyLight = new THREE.DirectionalLight(0xffffff, 0.5); 
-    keyLight.position.set(150, 200, 100);
-    scene.add(keyLight);
-
-    const topLight = new THREE.DirectionalLight(0xffffff, 0.15); 
-    topLight.position.set(0, 250, 0);
-    scene.add(topLight);
-
-    const headlight = new THREE.DirectionalLight(0xffffff, 0.45);
-    headlight.position.set(0, 0, 1); 
-    camera.add(headlight); 
-    scene.add(camera); 
-    
-    function animate() {
-        requestAnimationFrame(animate);
-        
-        const cw = container.clientWidth;
-        const ch = container.clientHeight;
-        
-        const currentSize = new THREE.Vector2();
-        renderer.getSize(currentSize);
-        
-        if (cw > 0 && ch > 0 && (currentSize.x !== cw || currentSize.y !== ch)) {
-            camera.aspect = cw / ch;
-            camera.updateProjectionMatrix();
-            renderer.setSize(cw, ch, true);
-        }
-
-        controls.update();
-        renderer.render(scene, camera);
-
-        if (compassCamera && compassRenderer) {
-            compassCamera.position.copy(camera.position);
-            compassCamera.position.sub(controls.target); 
-            compassCamera.position.setLength(60); 
-            compassCamera.lookAt(0, 0, 0);
-            
-            compassRenderer.render(compassScene, compassCamera);
-
-            // 🔄 Safe, isolated 2D Label Updates
-            const xEl = document.getElementById('compass-lbl-x');
-            const yEl = document.getElementById('compass-lbl-y');
-            const zEl = document.getElementById('compass-lbl-z');
-
-            if (xEl && yEl && zEl && compassAxes) {
-                const width = 80;
-                const height = 80;
-                const tempV = new THREE.Vector3();
-
-                compassScene.updateMatrixWorld(true);
-
-                const updateLabelPosition = (element, x3d, y3d, z3d) => {
-                    tempV.set(x3d, y3d, z3d).applyMatrix4(compassAxes.matrixWorld);
-                    tempV.project(compassCamera);
-                    
-                    const pixelX = (tempV.x * 0.5 + 0.5) * width;
-                    const pixelY = (-tempV.y * 0.5 + 0.5) * height;
-                    
-                    element.style.left = `${pixelX}px`;
-                    element.style.top = `${pixelY}px`;
-                };
-
-                updateLabelPosition(xEl, 25, 0, 0);
-                updateLabelPosition(yEl, 0, 25, 0);
-                updateLabelPosition(zEl, 0, 0, 25);
-            }
-        }
-    }
-    animate();
-}
-
-function update3DModelViewer(blobUrl) {
-    if (!workspaceInitialized) init3DWorkspace(); 
-
-    let savedPosition = null;
-    let savedTarget = null;
-    
-    if (currentMesh && camera && controls) {
-        savedPosition = camera.position.clone();
-        savedTarget = controls.target.clone();
-    }
-
-    if (currentMesh) {
-        scene.remove(currentMesh);
-        currentMesh.geometry.dispose();
-        currentMesh.material.dispose();
-        currentMesh = null;
-    }
-
-    const loader = new THREE.STLLoader();
-    loader.load(blobUrl, (geometry) => {
-        geometry.computeVertexNormals();
-        
-        const material = new THREE.MeshStandardMaterial({ 
-            color: activeModelColor, 
-            roughness: 0.85,     
-            metalness: 0.05,     
-            wireframe: wireframeMode 
-        });
-
-        material.onBeforeCompile = (shader) => {
-            const noiseGLSL = `
-                float hash(vec2 p) {
-                    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
-                }
-                float proceduralNoise(vec3 p) {
-                    return hash(p.xy + p.z);
-                }
-            `;
-
-            shader.fragmentShader = noiseGLSL + shader.fragmentShader;
-
-            shader.fragmentShader = shader.fragmentShader.replace(
-                `#include <opaque_fragment>`,
-                `
-                float noiseGrit = proceduralNoise(vViewPosition * 4.0) * 0.12;
-                outgoingLight.rgb += vec3(noiseGrit - 0.06);
-                #include <opaque_fragment>
-                `
-            );
-        };
-        
-        currentMesh = new THREE.Mesh(geometry, material);
-        
-        currentMesh.position.set(0, 0, 0);
-        currentMesh.rotation.x = -Math.PI / 2;
-
-        scene.add(currentMesh);
-        
-        geometry.computeBoundingBox();
-        geometry.computeBoundingSphere();
-        
-        if (savedPosition && savedTarget) {
-            camera.position.copy(savedPosition);
-            controls.target.copy(savedTarget);
-        } else {
-            const radius = geometry.boundingSphere.radius;
-            const targetDistance = radius > 0 ? radius * 3.5 : 50; 
-
-            camera.position.set(targetDistance, targetDistance * 1.2, targetDistance);
-            controls.target.set(0, 0, 0); 
-            camera.lookAt(0, 0, 0);
-        }
-        
-        controls.update();
-        
-    }, undefined, (err) => console.error('[Viewer Error]:', err));
-}
-
-// ---- BOOTSTRAP APPLICATION ----
-btnPreview.disabled = true;
-btnExport.disabled = true;
-
-initOpenSCAD();
-init3DWorkspace();
-
-btnWireframe.style.background = '#007acc'; 
-
-// ==========================================================================
-// ⚙️ SETTINGS OVERLAY CONTROLLER LOGIC
-// ==========================================================================
-const btnSettings = document.getElementById('btn-settings');
-const btnCloseSettings = document.getElementById('btn-close-settings');
-const settingsOverlay = document.getElementById('settings-overlay');
-const btnToggleGrid = document.getElementById('btn-toggle-grid');
-const btnToggleAxes = document.getElementById('btn-toggle-axes');
-
-function openSettingsMenu() {
-    if (settingsOverlay) {
-        settingsOverlay.classList.remove('hidden');
-    }
-}
-
-function closeSettingsMenu() {
-    if (settingsOverlay) {
-        settingsOverlay.classList.add('hidden');
-    }
-}
-
-if (btnSettings) {
-    btnSettings.addEventListener('click', openSettingsMenu);
-}
-
-if (btnCloseSettings) {
-    btnCloseSettings.addEventListener('click', closeSettingsMenu);
-}
-
-window.addEventListener('click', (event) => {
-    if (event.target === settingsOverlay) {
-        closeSettingsMenu();
-    }
-});
-
-window.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && settingsOverlay && !settingsOverlay.classList.contains('hidden')) {
-        logToConsole('⌨️ Hotkey Triggered: [Escape] - Closing Settings');
-        closeSettingsMenu();
-    }
-});
-
-// ==========================================================================
-// ⚙️ PERSISTENT GRID & AXES VISIBILITY LOGIC
-// ==========================================================================
-
-// 1. State Controller Functions
-const applyGridLayout = (visible) => {
-    isGridVisible = visible;
-    localStorage.setItem('openscad_grid_visible', visible);
-    
-    if (gridHelper) gridHelper.visible = visible;
-    
-    if (btnToggleGrid) {
-        btnToggleGrid.innerText = visible ? 'Visible' : 'Hidden';
-        btnToggleGrid.style.backgroundColor = visible ? '#28a745' : '#dc3545';
-    }
-};
-
-const applyAxesLayout = (visible) => {
-    isAxesVisible = visible;
-    localStorage.setItem('openscad_axes_visible', visible);
-    
-    if (axesGroup) axesGroup.visible = visible;
-    
-    if (btnToggleAxes) {
-        btnToggleAxes.innerText = visible ? 'Visible' : 'Hidden';
-        btnToggleAxes.style.backgroundColor = visible ? '#28a745' : '#dc3545';
-    }
-};
-
-// 2. Apply states to UI on load (Reads from global trackers initialized at the top)
-applyGridLayout(isGridVisible);
-applyAxesLayout(isAxesVisible);
-
-// 3. Hook up the UI buttons
-if (btnToggleGrid) {
-    btnToggleGrid.addEventListener('click', () => applyGridLayout(!isGridVisible));
-}
-
-if (btnToggleAxes) {
-    btnToggleAxes.addEventListener('click', () => applyAxesLayout(!isAxesVisible));
-}
-// END OF PERSISTENT GRID & AXES VISIBILITY LOGIC
-
-if (projectNameInput) {
-    projectNameInput.addEventListener('input', (event) => {
-        let cleanedName = event.target.value.replace(/[/\\?%*:|"<>. ]/g, '_');
-        activeProjectName = cleanedName || 'untitled';
-        localStorage.setItem('openscad_project_name', activeProjectName);
-        updateWindowTitle();
-    });
-    
-    projectNameInput.addEventListener('blur', (event) => {
-        if (!event.target.value.trim()) {
-            event.target.value = 'untitled';
-            activeProjectName = 'untitled';
-            localStorage.setItem('openscad_project_name', 'untitled');
-            updateWindowTitle();
-        }
-    });
-}
-
-if (editorFontSizeSelect) {
-    editorFontSizeSelect.addEventListener('change', (event) => {
-        const selectedSize = event.target.value;
-        localStorage.setItem('openscad_editor_font_size', selectedSize);
-        if (editorElement) editorElement.style.fontSize = selectedSize;
-        if (lineNumbersDiv) lineNumbersDiv.style.fontSize = selectedSize; 
-        logToConsole(`🔎 Editor text scaled to: ${selectedSize}`);
-    });
-}
-
-if (btnCameraReset) {
-    btnCameraReset.addEventListener('click', () => {
-        if (currentMesh && currentMesh.geometry && camera && controls) {
-            const geometry = currentMesh.geometry;
-            const radius = geometry.boundingSphere.radius;
-            const targetDistance = radius > 0 ? radius * 3.5 : 50;
-            
-            logToConsole('🎥 Resetting camera matrix to factory default frame parameters...');
-            
-            camera.position.set(targetDistance, targetDistance * 1.2, targetDistance);
-            controls.target.set(0, 0, 0); 
-            camera.lookAt(0, 0, 0);
-            
-            controls.update();
-            closeSettingsMenu();
-        }
-    });
-}
-
-// ==========================================================================
-// 📐 PERSISTENT DRAGGABLE SPLIT-PANE CONTROLLER
-// ==========================================================================
-const leftPaneContainer = document.getElementById('left-pane-container');
-const panelSplitGutter = document.getElementById('panel-split-gutter');
-
-if (leftPaneContainer && panelSplitGutter) {
-    const cachedSplitValue = localStorage.getItem('openscad_layout_split') || '50';
-    leftPaneContainer.style.width = `${cachedSplitValue}%`;
-
-    panelSplitGutter.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-
-        function onMouseMove(moveEvent) {
-            let calculatedWidthPercent = (moveEvent.clientX / window.innerWidth) * 100;
-
-            if (calculatedWidthPercent < 15) calculatedWidthPercent = 15;
-            if (calculatedWidthPercent > 85) calculatedWidthPercent = 85;
-
-            leftPaneContainer.style.width = `${calculatedWidthPercent}%`;
-            
-            localStorage.setItem('openscad_layout_split', Math.round(calculatedWidthPercent).toString());
-            
-            if (typeof renderer !== 'undefined' && renderer && typeof camera !== 'undefined' && camera) {
-                const container3d = document.getElementById('viewer-3d');
-                if (container3d) {
-                    const currentWidth = container3d.clientWidth;
-                    const currentHeight = container3d.clientHeight;
-                    if (currentWidth > 0 && currentHeight > 0) {
-                        camera.aspect = currentWidth / currentHeight;
-                        camera.updateProjectionMatrix();
-                        renderer.setSize(currentWidth, currentHeight, true);
-                    }
-                }
-            }
-        }
-
-        function onMouseUp() {
-            document.removeEventListener('mousemove', onMouseMove);
-            document.removeEventListener('mouseup', onMouseUp);
-            
-            document.body.style.cursor = 'default';
-            document.body.style.userSelect = 'text';
-            
-            logToConsole(`📐 Split layout updated and cached to: ${localStorage.getItem('openscad_layout_split')}%`);
-        }
-
-        document.addEventListener('mousemove', onMouseMove);
-        document.addEventListener('mouseup', onMouseUp);
-    });
-}
+    const overlayConfig = (colorHex
