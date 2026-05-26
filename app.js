@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "79"; // <-- Incremented for Font Manager Menu Engine
+const BUILD_NUMBER = "80"; // <-- Incremented for Font Metadata Parser
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1310,6 +1310,71 @@ window.addEventListener('keydown', (event) => {
     }
 });
 
+// 🔍 NATIVE TTF/OTF BINARY METADATA PARSER
+function extractFontMetadata(uint8Array) {
+    try {
+        const data = new DataView(uint8Array.buffer, uint8Array.byteOffset, uint8Array.byteLength);
+        
+        // Validate TTF/OTF Magic Numbers
+        const signature = data.getUint32(0, false);
+        if (signature !== 0x00010000 && signature !== 0x4F54544F && signature !== 0x74727565) return null;
+
+        const numTables = data.getUint16(4, false);
+        let nameTableOffset = -1;
+
+        // Locate the 'name' table offset
+        for (let i = 0; i < numTables; i++) {
+            const offset = 12 + i * 16;
+            const tag = String.fromCharCode(
+                data.getUint8(offset), data.getUint8(offset+1), 
+                data.getUint8(offset+2), data.getUint8(offset+3)
+            );
+            if (tag === 'name') {
+                nameTableOffset = data.getUint32(offset + 8, false);
+                break;
+            }
+        }
+
+        if (nameTableOffset === -1) return null;
+
+        const count = data.getUint16(nameTableOffset + 2, false);
+        const stringOffset = data.getUint16(nameTableOffset + 4, false);
+
+        let family = "Unknown", style = "Unknown";
+
+        // Loop through internal naming records
+        for (let i = 0; i < count; i++) {
+            const recordOffset = nameTableOffset + 6 + i * 12;
+            const platformID = data.getUint16(recordOffset, false);
+            const nameID = data.getUint16(recordOffset + 6, false);
+            const length = data.getUint16(recordOffset + 8, false);
+            const offset = data.getUint16(recordOffset + 10, false);
+
+            // We only care about ID 1 (Font Family) and ID 2 (Font Subfamily/Style)
+            if (nameID === 1 || nameID === 2) {
+                const strOffset = nameTableOffset + stringOffset + offset;
+                let str = "";
+                
+                if (platformID === 1) { // Mac ASCII Encoding
+                    for (let j = 0; j < length; j++) str += String.fromCharCode(data.getUint8(strOffset + j));
+                } else if (platformID === 3) { // Windows UTF-16BE Encoding
+                    for (let j = 0; j < length; j += 2) str += String.fromCharCode(data.getUint16(strOffset + j, false));
+                }
+
+                if (str && str.trim().length > 0) {
+                    const cleanStr = str.replace(/\0/g, ''); // Strip null terminators
+                    if (nameID === 1) family = cleanStr;
+                    if (nameID === 2) style = cleanStr;
+                }
+            }
+        }
+        return { family, style };
+    } catch (e) {
+        console.error("Binary Font parsing error:", e);
+        return null;
+    }
+}
+
 // 🎨 DYNAMIC DOM UI RENDERER FOR INSTALLED CUSTOM FONTS
 async function renderCustomFontManagerList() {
     const listContainer = document.getElementById('custom-fonts-manager-list');
@@ -1326,22 +1391,43 @@ async function renderCustomFontManagerList() {
     listContainer.innerHTML = ''; 
     
     customFonts.forEach(font => {
-        const row = document.createElement('div');
-        row.style.display = 'flex';
-        row.style.justifyContent = 'space-between';
-        row.style.alignItems = 'center';
-        row.style.padding = '8px 10px';
-        row.style.borderBottom = '1px solid #222';
-        row.style.fontSize = '0.85rem';
+        // 🔍 Decode the exact OpenSCAD identifiers from the binary blob
+        let meta = { family: 'Unknown', style: 'Unknown' };
+        if (font.binary) {
+            meta = extractFontMetadata(font.binary) || meta;
+        }
         
+        // 🔒 Escape hyphens to prevent Fontconfig from parsing them as size delimiters!
+        const safeFamily = meta.family.replace(/-/g, '\\-');
+        
+        let openScadSyntax = `font = "${safeFamily}"`;
+        if (meta.style !== 'Unknown' && meta.style !== 'Regular') {
+            openScadSyntax = `font = "${safeFamily}:style=${meta.style}"`;
+        }
+
+        // Wrapper for the entire layout row
+        const rowWrap = document.createElement('div');
+        rowWrap.style.display = 'flex';
+        rowWrap.style.flexDirection = 'column';
+        rowWrap.style.padding = '8px 10px';
+        rowWrap.style.borderBottom = '1px solid #222';
+        rowWrap.style.gap = '6px';
+        
+        // Top section: Name and Delete Button
+        const topRow = document.createElement('div');
+        topRow.style.display = 'flex';
+        topRow.style.justifyContent = 'space-between';
+        topRow.style.alignItems = 'center';
+
         const nameLabel = document.createElement('span');
         nameLabel.textContent = font.filename;
         nameLabel.style.overflow = 'hidden';
         nameLabel.style.textOverflow = 'ellipsis';
         nameLabel.style.whiteSpace = 'nowrap';
-        nameLabel.style.maxWidth = '190px';
+        nameLabel.style.maxWidth = '210px';
         nameLabel.style.color = '#ddd';
-        
+        nameLabel.style.fontWeight = 'bold';
+
         const delBtn = document.createElement('button');
         delBtn.textContent = '✕';
         delBtn.style.background = '#dc3545';
@@ -1360,15 +1446,32 @@ async function renderCustomFontManagerList() {
                 logToConsole(`🗑️ Custom typography uninstalled: ${font.filename}`);
                 renderCustomFontManagerList();
                 
-                if (openSCADFactory && !btnPreview.disabled) { 
-                    btnPreview.click(); 
-                }
+                if (openSCADFactory && !btnPreview.disabled) btnPreview.click(); 
             }
         });
         
-        row.appendChild(nameLabel);
-        row.appendChild(delBtn);
-        listContainer.appendChild(row);
+        topRow.appendChild(nameLabel);
+        topRow.appendChild(delBtn);
+
+        // Bottom Section: Copy/Paste OpenSCAD Syntax box
+        const syntaxBox = document.createElement('div');
+        syntaxBox.textContent = openScadSyntax;
+        syntaxBox.style.fontSize = '0.75rem';
+        syntaxBox.style.color = '#00c3ff';
+        syntaxBox.style.background = '#1a1a1a';
+        syntaxBox.style.padding = '5px 8px';
+        syntaxBox.style.borderRadius = '4px';
+        syntaxBox.style.fontFamily = 'monospace';
+        syntaxBox.style.cursor = 'text';
+        
+        // 🔥 This CSS trick auto-selects the entire string instantly when the user clicks it!
+        syntaxBox.style.userSelect = 'all'; 
+        syntaxBox.style.webkitUserSelect = 'all';
+
+        rowWrap.appendChild(topRow);
+        rowWrap.appendChild(syntaxBox);
+        
+        listContainer.appendChild(rowWrap);
     });
 }
 
