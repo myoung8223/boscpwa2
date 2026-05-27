@@ -57,6 +57,42 @@
         .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: #888; font-size: 22px; cursor: pointer; padding: 0; line-height: 1; }
         .close-btn:hover { color: #fff; }
         .settings-group { margin: 16px 0; display: flex; justify-content: space-between; align-items: center; }
+
+/* 📊 Two Column Settings Layout */
+.settings-columns-wrapper {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 15px;
+}
+
+/* Fallback/Stacking on narrow viewports */
+@media (max-width: 600px) {
+    .settings-columns-wrapper {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+}
+
+/* SVG Syntax Codebox specific hover helper */
+.svg-syntax-copy-box {
+    background: #111;
+    border: 1px dashed #444;
+    color: #00ff66;
+    padding: 6px;
+    font-family: monospace;
+    font-size: 0.8rem;
+    border-radius: 3px;
+    cursor: pointer;
+    text-align: center;
+    margin-top: 5px;
+    transition: background 0.2s;
+}
+.svg-syntax-copy-box:hover {
+    background: #222;
+    border-color: #00ff66;
+}
+
 </style>
 </head>
 <body>
@@ -95,74 +131,68 @@ with Extensive AI Assistance from Google Gemini</div>
         </div>
     </div>
 
-    <div id="settings-overlay" class="overlay hidden">
-        <div class="overlay-content">
-            <button id="btn-close-settings" class="close-btn">&times;</button>
-            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2rem;">Workspace Settings</h3>
-            <hr style="border: 0; border-top: 1px solid #333; margin-bottom: 20px;">
+<div id="settings-overlay" class="overlay hidden">
+        <div class="overlay-content" style="max-width: 650px;">
+            <button id="btn-close-settings" class="close-btn" style="font-size: 16px; font-weight: bold; padding: 4px;">&#8592; Back</button>
+            <h3 style="margin-top: 0; margin-bottom: 5px; font-size: 1.2rem;">Application Preferences</h3>
+            <hr style="border: 0; border-top: 1px solid #333; margin-bottom: 10px;">
 
-            <div class="settings-group" style="flex-direction: column; align-items: flex-start; gap: 6px;">
-                <label style="font-size: 0.9rem; color: #aaa;">Project Name:</label>
-                <input type="text" id="project-name-input" placeholder="untitled" 
-                    style="width: 100%; background: #2d2d2d; border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 0.9rem; outline: none;">
-            </div>
+            <div class="settings-columns-wrapper">
+                
+                <div class="settings-column">
+                    <div class="settings-group">
+                        <label for="editor-font-size-select" style="font-size: 0.9rem; color: #aaa;">Editor Text Size:</label>
+                        <select id="editor-font-size-select" class="settings-select">
+                            <option value="12px">12px</option>
+                            <option value="14px" selected>14px</option>
+                            <option value="16px">16px</option>
+                            <option value="18px">18px</option>
+                            <option value="20px">20px</option>
+                        </select>
+                    </div>
 
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Editor Font Size:</label>
-                <select id="editor-font-size-select" style="background: #2d2d2d; border: 1px solid #444; color: #fff; padding: 6px 10px; border-radius: 4px; font-size: 0.9rem; outline: none; cursor: pointer;">
-                    <option value="12px">12px</option>
-                    <option value="14px">14px</option>
-                    <option value="16px">16px</option>
-                    <option value="18px">18px</option>
-                    <option value="20px">20px</option>
-                    <option value="22px">22px</option>
-                </select>
-            </div>
-            
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Model View:</label>
-                <button id="btn-wireframe" class="file-btn" style="width: 120px;">Solid</button>
-            </div>
-            
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Model Color:</label>
-                <button id="btn-color-trigger" class="file-btn" style="width: 120px; color: #ffffff; text-shadow: 0px 1px 2px rgba(0,0,0,0.6);">Color</button>
-            </div>
+                    <div class="settings-group">
+                        <label style="font-size: 0.9rem; color: #aaa;">Line Numbers:</label>
+                        <button id="btn-toggle-lines" class="file-btn" style="width: 120px; background: #28a745;">Enabled</button>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label style="font-size: 0.9rem; color: #aaa;">Show Console:</label>
+                        <button id="btn-toggle-console" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
+                    </div>
 
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Camera View:</label>
-                <button id="btn-camera-reset" class="file-btn" style="width: 120px; background: #6c757d;">Reset View</button>
-            </div>
+                    <div class="settings-group">
+                        <label style="font-size: 0.9rem; color: #aaa;">Grid Layout:</label>
+                        <button id="btn-toggle-grid" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label style="font-size: 0.9rem; color: #aaa;">Axis Lines:</label>
+                        <button id="btn-toggle-axes" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
+                    </div>
+                </div>
 
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Line Numbers:</label>
-                <button id="btn-toggle-lines" class="file-btn" style="width: 120px; background: #28a745;">Enabled</button>
-            </div>
-            
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Show Console:</label>
-                <button id="btn-toggle-console" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
-            </div>
+                <div class="settings-column">
+                    <div class="settings-group">
+                        <label for="model-color" style="font-size: 0.9rem; color: #aaa;">Render Mesh Color:</label>
+                        <div style="display: flex; gap: 6px; align-items: center; width: 120px;">
+                            <input type="color" id="model-color" value="#e67e22" style="opacity:0; width:0; height:0; position:absolute;">
+                            <button id="btn-color-trigger" class="file-btn" style="width:100%; background:#e67e22; border:1px solid #555; text-shadow:1px 1px 2px #000;">#e67e22</button>
+                        </div>
+                    </div>
 
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Grid Layout:</label>
-                <button id="btn-toggle-grid" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
-            </div>
-            
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa;">Axis Lines:</label>
-                <button id="btn-toggle-axes" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
-            </div> 
+                    <div class="settings-group">
+                        <label style="font-size: 0.9rem; color: #aaa;">Camera View:</label>
+                        <button id="btn-camera-reset" class="file-btn" style="width: 120px; background: #6c757d;">Reset View</button>
+                    </div>
 
-            <hr style="border: 0; border-top: 1px solid #333; margin: 20px 0;">
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa; font-weight: bold;">Custom Fonts:</label>
-                <button id="btn-open-fonts-menu" class="file-btn" style="width: 120px; background: #007acc;">Manage</button>
-            </div>
+                    <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px;">
+                        <button id="btn-fonts-manager" class="file-btn" style="width: 100%; background: #28a745;">🔤 Open Font Manager</button>
+                        <button id="btn-stls-manager" class="file-btn" style="width: 100%; background: #007acc;">📐 Open STL Manager</button>
+                        <button id="btn-svgs-manager" class="file-btn" style="width: 100%; background: #b339a2;">📊 Open SVG Manager</button>
+                    </div>
+                </div>
 
-            <div class="settings-group">
-                <label style="font-size: 0.9rem; color: #aaa; font-weight: bold;">STL Imports:</label>
-                <button id="btn-open-stls-menu" class="file-btn" style="width: 120px; background: #007acc;">Manage</button>
             </div>
         </div>
     </div>
@@ -201,6 +231,23 @@ with Extensive AI Assistance from Google Gemini</div>
         </div>
     </div>
 
+    <div id="svgs-overlay" class="overlay hidden">
+        <div class="overlay-content">
+            <button id="btn-close-svgs" class="close-btn" style="font-size: 16px; font-weight: bold; padding: 4px;">&#8592; Back</button>
+            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2rem;">SVG Vector Import Manager</h3>
+            <hr style="border: 0; border-top: 1px solid #333; margin-bottom: 20px;">
+
+            <div class="settings-group" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 0;">
+                <input type="file" id="svg-upload" accept=".svg" style="display:none;">
+                <button type="button" class="file-btn" onclick="document.getElementById('svg-upload').click()" 
+                    style="width: 100%; background: #b339a2; margin-bottom: 8px;">＋ Install SVG Vector File (.svg)</button>
+
+                <div id="custom-svgs-manager-list" style="width: 100%; height: 210px; overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px;">
+                    </div>
+            </div>
+        </div>
+    </div>
+    
     <script src="libs/prism.min.js"></script>
 </body>
 </html>
