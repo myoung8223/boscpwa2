@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "81"; // <-- Incremented for STL Import Database
+const BUILD_NUMBER = "82"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -32,7 +32,8 @@ let isAxesVisible = localStorage.getItem('openscad_axes_visible') !== 'false';
 let openSCADFactory = null;
 let currentStlBlob = null; 
 const fontCache = {}; 
-const stlCache = {}; // 📁 NEW: Caches STL file binaries in memory for WASM injection
+const stlCache = {}; 
+const svgCache = {}; // 📁 NEW: Caches SVG files in memory
 
 // ==========================================================================
 // 🗄️ INDEXEDDB PERSISTENT STORAGE LAYERS
@@ -80,7 +81,7 @@ async function deletePersistentFont(filename) {
     } catch (err) { console.error(err); }
 }
 
-// --- NEW: STL IMPORTS DB ---
+// --- STL IMPORTS DB ---
 function openStlsDB() {
     return new Promise((resolve, reject) => {
         const request = indexedDB.open('OpenSCAD_STL_DB', 1);
@@ -122,6 +123,47 @@ async function deletePersistentStl(filename) {
     } catch (err) { console.error(err); }
 }
 
+// --- SVG IMPORTS DB ---
+function openSvgsDB() {
+    return new Promise((resolve, reject) => {
+        const request = indexedDB.open('OpenSCAD_SVG_DB', 1);
+        request.onupgradeneeded = (e) => e.target.result.createObjectStore('svgs');
+        request.onsuccess = (e) => resolve(e.target.result);
+        request.onerror = (e) => reject(e.target.error);
+    });
+}
+async function getPersistentSvgs() {
+    try {
+        const db = await openSvgsDB();
+        return new Promise((resolve) => {
+            const tx = db.transaction('svgs', 'readonly');
+            const store = tx.objectStore('svgs');
+            const svgs = [];
+            store.openCursor().onsuccess = (e) => {
+                const cursor = e.target.result;
+                if (cursor) {
+                    svgs.push({ filename: cursor.key, binary: cursor.value });
+                    cursor.continue();
+                } else resolve(svgs);
+            };
+        });
+    } catch (err) { return []; }
+}
+async function savePersistentSvg(filename, uint8Array) {
+    try {
+        const db = await openSvgsDB();
+        db.transaction('svgs', 'readwrite').objectStore('svgs').put(uint8Array, filename);
+    } catch (err) { console.error(err); }
+}
+async function deletePersistentSvg(filename) {
+    try {
+        const db = await openSvgsDB();
+        return new Promise((resolve, reject) => {
+            const req = db.transaction('svgs', 'readwrite').objectStore('svgs').delete(filename);
+            req.onsuccess = resolve; req.onerror = () => reject(req.error);
+        });
+    } catch (err) { console.error(err); }
+}
 
 // 🍯 INITIALIZE CODEJAR INSTANCE
 const jar = CodeJar(
@@ -616,11 +658,18 @@ async function initOpenSCAD() {
             if (customFonts.length > 0) logToConsole(`✔ Restored ${customFonts.length} custom fonts from local DB.`);
         } catch (err) { console.error(err); }
 
-        // 📁 NEW: Restore Custom STL files
+        // Restore Custom STL files
         try {
             const customStls = await getPersistentStls();
             for (const stl of customStls) stlCache[stl.filename] = stl.binary;
             if (customStls.length > 0) logToConsole(`✔ Restored ${customStls.length} custom STLs from local DB.`);
+        } catch (err) { console.error(err); }
+
+        // Restore Custom SVG files
+        try {
+            const customSvgs = await getPersistentSvgs();
+            for (const svg of customSvgs) svgCache[svg.filename] = svg.binary;
+            if (customSvgs.length > 0) logToConsole(`✔ Restored ${customSvgs.length} custom SVGs from local DB.`);
         } catch (err) { console.error(err); }
 
         logToConsole('✅ Engine ready! Alter code and click Preview freely.');
@@ -663,15 +712,25 @@ btnPreview.addEventListener('click', async () => {
         }
         if (instance.ENV) instance.ENV.OPENSCAD_FONTDIR = '/fonts';
 
-        // 📁 INJECT STLS INTO WASM ROOT WITH VERIFICATION
+        // 📁 INJECT STLS INTO WASM ROOT
         for (const [stlName, stlData] of Object.entries(stlCache)) {
             try {
                 instance.FS.writeFile(`/${stlName}`, stlData);
-                // 🛡️ Verify the file actually wrote to the virtual system successfully
                 const stat = instance.FS.stat(`/${stlName}`);
                 logToConsole(`✔ WASM FS Mapped: /${stlName} (${stat.size} bytes)`);
             } catch (fsErr) {
                 logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`);
+            }
+        }
+
+        // 📁 INJECT SVGS INTO WASM ROOT
+        for (const [svgName, svgData] of Object.entries(svgCache)) {
+            try {
+                instance.FS.writeFile(`/${svgName}`, svgData);
+                const stat = instance.FS.stat(`/${svgName}`);
+                logToConsole(`✔ WASM FS Mapped: /${svgName} (${stat.size} bytes)`);
+            } catch (fsErr) {
+                logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`);
             }
         }
 
@@ -693,7 +752,6 @@ btnPreview.addEventListener('click', async () => {
             if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
     } catch (error) { 
-        // 🛡️ C++ EXCEPTION DECODER
         let errorMsg = error.message || error;
         if (typeof error === 'number') {
             errorMsg = `[C++ Exception Pointer: ${error}] The WASM engine hard-crashed.`;
@@ -848,22 +906,29 @@ const stlsOverlay = document.getElementById('stls-overlay');
 const btnCloseStls = document.getElementById('btn-close-stls');
 const stlUploadInput = document.getElementById('stl-upload');
 
+// SVG DOM
+const btnOpenSvgsMenu = document.getElementById('btn-open-svgs-menu');
+const svgsOverlay = document.getElementById('svgs-overlay');
+const btnCloseSvgs = document.getElementById('btn-close-svgs');
+const svgUploadInput = document.getElementById('svg-upload');
+
 function closeAllMenus() {
     if (settingsOverlay) settingsOverlay.classList.add('hidden');
     if (fontsOverlay) fontsOverlay.classList.add('hidden');
     if (stlsOverlay) stlsOverlay.classList.add('hidden');
+    if (svgsOverlay) svgsOverlay.classList.add('hidden');
 }
 
 if (btnSettings) btnSettings.addEventListener('click', () => settingsOverlay.classList.remove('hidden'));
 if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeAllMenus);
 
 window.addEventListener('click', (event) => {
-    if (event.target === settingsOverlay || event.target === fontsOverlay || event.target === stlsOverlay) closeAllMenus();
+    if (event.target === settingsOverlay || event.target === fontsOverlay || event.target === stlsOverlay || event.target === svgsOverlay) closeAllMenus();
 });
 
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
-        const isAnyOpen = [settingsOverlay, fontsOverlay, stlsOverlay].some(el => el && !el.classList.contains('hidden'));
+        const isAnyOpen = [settingsOverlay, fontsOverlay, stlsOverlay, svgsOverlay].some(el => el && !el.classList.contains('hidden'));
         if (isAnyOpen) { logToConsole('⌨️ Hotkey Triggered: [Escape] - Closing Overlays'); closeAllMenus(); }
     }
 });
@@ -962,6 +1027,34 @@ async function renderCustomStlManagerList() {
     });
 }
 
+// 📊 SVG RENDERER
+async function renderCustomSvgManagerList() {
+    const listContainer = document.getElementById('custom-svgs-manager-list');
+    if (!listContainer) return;
+    const customSvgs = await getPersistentSvgs();
+    if (customSvgs.length === 0) { listContainer.innerHTML = `<div style="font-size: 0.8rem; color: #555; text-align: center; padding: 12px; font-style: italic;">No custom SVGs imported</div>`; return; }
+    listContainer.innerHTML = ''; 
+    customSvgs.forEach(svg => {
+        const rowWrap = document.createElement('div'); rowWrap.style.display = 'flex'; rowWrap.style.flexDirection = 'column'; rowWrap.style.padding = '8px 10px'; rowWrap.style.borderBottom = '1px solid #222'; rowWrap.style.gap = '6px';
+        const topRow = document.createElement('div'); topRow.style.display = 'flex'; topRow.style.justifyContent = 'space-between'; topRow.style.alignItems = 'center';
+        
+        const nameLabel = document.createElement('span'); nameLabel.textContent = svg.filename; nameLabel.style.overflow = 'hidden'; nameLabel.style.textOverflow = 'ellipsis'; nameLabel.style.whiteSpace = 'nowrap'; nameLabel.style.maxWidth = '210px'; nameLabel.style.color = '#ddd'; nameLabel.style.fontWeight = 'bold';
+        
+        const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.style.background = '#dc3545'; delBtn.style.color = '#fff'; delBtn.style.padding = '2px 7px'; delBtn.style.fontSize = '0.75rem'; delBtn.style.borderRadius = '3px'; delBtn.style.cursor = 'pointer'; delBtn.style.fontWeight = 'bold';
+        delBtn.addEventListener('click', async () => {
+            if (confirm(`Remove SVG "${svg.filename}"?`)) {
+                await deletePersistentSvg(svg.filename); delete svgCache[svg.filename]; 
+                logToConsole(`🗑️ SVG removed: ${svg.filename}`); renderCustomSvgManagerList();
+                if (openSCADFactory && !btnPreview.disabled) btnPreview.click(); 
+            }
+        });
+        topRow.appendChild(nameLabel); topRow.appendChild(delBtn);
+
+        const syntaxBox = document.createElement('div'); syntaxBox.textContent = `import("${svg.filename}");`; syntaxBox.style.fontSize = '0.75rem'; syntaxBox.style.color = '#00c3ff'; syntaxBox.style.background = '#1a1a1a'; syntaxBox.style.padding = '5px 8px'; syntaxBox.style.borderRadius = '4px'; syntaxBox.style.fontFamily = 'monospace'; syntaxBox.style.cursor = 'text'; syntaxBox.style.userSelect = 'all'; syntaxBox.style.webkitUserSelect = 'all';
+        rowWrap.appendChild(topRow); rowWrap.appendChild(syntaxBox); listContainer.appendChild(rowWrap);
+    });
+}
+
 // ---- BRIDGES ----
 if (btnOpenFontsMenu) {
     btnOpenFontsMenu.addEventListener('click', () => {
@@ -989,7 +1082,20 @@ if (btnCloseStls) {
     });
 }
 
-// ---- FONT UPLOAD ----
+if (btnOpenSvgsMenu) {
+    btnOpenSvgsMenu.addEventListener('click', () => {
+        if (settingsOverlay) settingsOverlay.classList.add('hidden');
+        if (svgsOverlay) { svgsOverlay.classList.remove('hidden'); renderCustomSvgManagerList(); }
+    });
+}
+if (btnCloseSvgs) {
+    btnCloseSvgs.addEventListener('click', () => {
+        if (svgsOverlay) svgsOverlay.classList.add('hidden');
+        if (settingsOverlay) settingsOverlay.classList.remove('hidden'); 
+    });
+}
+
+// ---- UPLOAD HANDLERS ----
 if (fontUploadInput) {
     fontUploadInput.addEventListener('change', (event) => {
         const file = event.target.files[0]; if (!file) return;
@@ -1004,27 +1110,33 @@ if (fontUploadInput) {
     });
 }
 
-// ---- STL UPLOAD ----
 if (stlUploadInput) {
     stlUploadInput.addEventListener('change', (event) => {
         const file = event.target.files[0]; if (!file) return;
-        
-        // 🛡️ AGGRESSIVE SANITIZATION: Force lowercase, replace spaces/specials with underscores
         let safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-]/g, '_');
-        
         const reader = new FileReader();
         reader.onload = async (e) => {
             const stlData = new Uint8Array(e.target.result);
-            stlCache[safeName] = stlData; 
-            await savePersistentStl(safeName, stlData);
-            
-            logToConsole(`📁 STL "${safeName}" saved to PWA memory (${stlData.byteLength} bytes).`); 
-            renderCustomStlManagerList();
-            
+            stlCache[safeName] = stlData; await savePersistentStl(safeName, stlData);
+            logToConsole(`📁 STL "${safeName}" saved for import.`); renderCustomStlManagerList();
             if (openSCADFactory && !btnPreview.disabled) btnPreview.click();
         };
-        reader.readAsArrayBuffer(file); 
-        event.target.value = '';
+        reader.readAsArrayBuffer(file); event.target.value = '';
+    });
+}
+
+if (svgUploadInput) {
+    svgUploadInput.addEventListener('change', (event) => {
+        const file = event.target.files[0]; if (!file) return;
+        let safeName = file.name.toLowerCase().replace(/[^a-z0-9.\-]/g, '_');
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const svgData = new Uint8Array(e.target.result);
+            svgCache[safeName] = svgData; await savePersistentSvg(safeName, svgData);
+            logToConsole(`📁 SVG "${safeName}" saved for import.`); renderCustomSvgManagerList();
+            if (openSCADFactory && !btnPreview.disabled) btnPreview.click();
+        };
+        reader.readAsArrayBuffer(file); event.target.value = '';
     });
 }
 
