@@ -879,7 +879,7 @@ function init3DWorkspace() {
                     tempV.set(x3d, y3d, z3d).applyMatrix4(compassAxes.matrixWorld); tempV.project(compassCamera);
                     element.style.left = `${(tempV.x * 0.5 + 0.5) * 80}px`; element.style.top = `${(-tempV.y * 0.5 + 0.5) * 80}px`;
                 };
-                updateLabelPosition(xEl, 15, 0, 0); updateLabelPosition(yEl, 0, 15, 0); updateLabelPosition(zEl, 0, 0, 15);
+                updateLabelPosition(xEl, 25, 0, 0); updateLabelPosition(yEl, 0, 25, 0); updateLabelPosition(zEl, 0, 0, 25);   // position axes labels past compass line segment endpoints
             }
         }
     }
