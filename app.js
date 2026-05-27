@@ -1016,11 +1016,11 @@ async function renderCustomFontManagerList() {
         
         const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.style.background = '#dc3545'; delBtn.style.color = '#fff'; delBtn.style.padding = '2px 7px'; delBtn.style.fontSize = '0.75rem'; delBtn.style.borderRadius = '3px'; delBtn.style.cursor = 'pointer'; delBtn.style.fontWeight = 'bold';
         delBtn.addEventListener('click', async () => {
-            if (confirm(`Uninstall "${font.filename}"?`)) {
+            //if (confirm(`Uninstall "${font.filename}"?`)) {   // remove confirmation
                 await deletePersistentFont(font.filename); delete fontCache[font.filename]; 
                 logToConsole(`🗑️ Font uninstalled: ${font.filename}`); renderCustomFontManagerList();
                 if (openSCADFactory && !btnPreview.disabled) btnPreview.click(); 
-            }
+            //}
         });
         topRow.appendChild(nameLabel); topRow.appendChild(delBtn);
 
@@ -1044,11 +1044,11 @@ async function renderCustomStlManagerList() {
         
         const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.style.background = '#dc3545'; delBtn.style.color = '#fff'; delBtn.style.padding = '2px 7px'; delBtn.style.fontSize = '0.75rem'; delBtn.style.borderRadius = '3px'; delBtn.style.cursor = 'pointer'; delBtn.style.fontWeight = 'bold';
         delBtn.addEventListener('click', async () => {
-            if (confirm(`Remove STL "${stl.filename}"?`)) {
+            //if (confirm(`Remove STL "${stl.filename}"?`)) {   remove confirmation
                 await deletePersistentStl(stl.filename); delete stlCache[stl.filename]; 
                 logToConsole(`🗑️ STL removed: ${stl.filename}`); renderCustomStlManagerList();
                 if (openSCADFactory && !btnPreview.disabled) btnPreview.click(); 
-            }
+            //}
         });
         topRow.appendChild(nameLabel); topRow.appendChild(delBtn);
 
@@ -1072,11 +1072,11 @@ async function renderCustomSvgManagerList() {
         
         const delBtn = document.createElement('button'); delBtn.textContent = '✕'; delBtn.style.background = '#dc3545'; delBtn.style.color = '#fff'; delBtn.style.padding = '2px 7px'; delBtn.style.fontSize = '0.75rem'; delBtn.style.borderRadius = '3px'; delBtn.style.cursor = 'pointer'; delBtn.style.fontWeight = 'bold';
         delBtn.addEventListener('click', async () => {
-            if (confirm(`Remove SVG "${svg.filename}"?`)) {
+            //if (confirm(`Remove SVG "${svg.filename}"?`)) {   // remove confirmation
                 await deletePersistentSvg(svg.filename); delete svgCache[svg.filename]; 
                 logToConsole(`🗑️ SVG removed: ${svg.filename}`); renderCustomSvgManagerList();
                 if (openSCADFactory && !btnPreview.disabled) btnPreview.click(); 
-            }
+            //}
         });
         topRow.appendChild(nameLabel); topRow.appendChild(delBtn);
 
