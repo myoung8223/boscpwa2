@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "82"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "83"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -547,8 +547,24 @@ if (editorElement && lineNumbersDiv && toggleLinesBtn) {
 }
 
 let activeProjectName = localStorage.getItem('openscad_project_name') || 'untitled';
-if (projectNameInput) projectNameInput.value = activeProjectName;
-function updateWindowTitle() { document.title = `${activeProjectName}.scad`; }
+
+function updateWindowTitle() { 
+    // Fallback to 'untitled' if the user clears the input field entirely
+    const displayTitle = activeProjectName.trim() || 'untitled';
+    document.title = `${displayTitle}.scad`; 
+}
+
+if (projectNameInput) {
+    projectNameInput.value = activeProjectName;
+    
+    // 🔌 ADDED: Listen for live updates when the user renames the project
+    projectNameInput.addEventListener('input', (event) => {
+        activeProjectName = event.target.value; 
+        localStorage.setItem('openscad_project_name', activeProjectName);
+        updateWindowTitle();
+    });
+}
+
 updateWindowTitle();
 
 // ---- PERSISTENT FONT SIZE INITIALIZATION & LISTENER ----
