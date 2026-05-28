@@ -25,7 +25,7 @@ The core purpose of this project is to make OpenSCAD design fully accessible on 
 ## Improvements and Features to Add
 
 - [x] **STL Importing:** Allow users to import STL files into the PWA and then import them into projects.
-- [ ] **SVG Importing:** Allow users to import SVG files into the PWA and then import them into projects.
+- [x] **SVG Importing:** Allow users to import SVG files into the PWA and then import them into projects.
 - [x] **Custom Fonts:** Allow users to import TTF files into the PWA and then use them into projects.
 - [x] **Adjustable Axes and Grid:** Additional controls for the axes and grid would be handy, possibly even tick marks and numerical labels.
 - [x] **Replace textarea with CodeJar:** Replace textarea with CodeJar for syntax highlighting and block character matching.
