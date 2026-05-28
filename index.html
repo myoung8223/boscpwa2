@@ -175,7 +175,8 @@ with Extensive AI Assistance from Google Gemini</div>
                     <div class="settings-group">
                         <label style="font-size: 0.9rem; color: #aaa;">Axis Lines:</label>
                         <button id="btn-toggle-axes" class="file-btn" style="width: 120px; background: #28a745;">Visible</button>
-                    </div> 
+                    </div>
+                    
                 </div>
 
                 <div class="settings-column">
@@ -200,6 +201,7 @@ with Extensive AI Assistance from Google Gemini</div>
                         <button id="btn-open-fonts-menu" class="file-btn" style="width: 100%; background: #007acc;">🔤 Manage Custom Fonts</button>
                         <button id="btn-open-stls-menu" class="file-btn" style="width: 100%; background: #007acc;">🌐 Manage STL Imports</button>
                         <button id="btn-open-svgs-menu" class="file-btn" style="width: 100%; background: #007acc;">📐 Manage SVG Imports</button>
+                        <button id="btn-open-licenses-menu" class="file-btn" style="width: 100%; background: #d97706;">📜 Credits & Licenses</button>
                     </div>
                 </div>
             </div>
@@ -253,6 +255,18 @@ with Extensive AI Assistance from Google Gemini</div>
 
                 <div id="custom-svgs-manager-list" style="width: 100%; height: 210px; overflow-y: auto; background: #111; border: 1px solid #333; border-radius: 4px; padding: 2px;">
                     </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="licenses-overlay" class="overlay hidden">
+        <div class="overlay-content" style="width: 650px; max-width: 95vw;">
+            <button id="btn-close-licenses" class="close-btn" style="font-size: 16px; font-weight: bold; padding: 4px;">&#8592; Back</button>
+            <h3 style="margin-top: 0; margin-bottom: 15px; font-size: 1.2rem;">Credits & Open Source Licenses</h3>
+            <hr style="border: 0; border-top: 1px solid #333; margin-bottom: 20px;">
+
+            <div class="settings-group" style="flex-direction: column; align-items: flex-start; margin-top: 0;">
+                <pre id="licenses-text-container" style="width: 100%; box-sizing: border-box; background: #111; color: #aaa; font-family: monospace; font-size: 0.8rem; padding: 12px; border-radius: 4px; height: 320px; overflow-y: auto; white-space: pre-wrap; text-align: left; border: 1px solid #333; margin: 0;"></pre>
             </div>
         </div>
     </div>
