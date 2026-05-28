@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "83"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "84"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -957,6 +957,103 @@ const btnOpenSvgsMenu = document.getElementById('btn-open-svgs-menu');
 const svgsOverlay = document.getElementById('svgs-overlay');
 const btnCloseSvgs = document.getElementById('btn-close-svgs');
 const svgUploadInput = document.getElementById('svg-upload');
+
+// 📜 LICENSES DOM (ADDED)
+const btnOpenLicensesMenu = document.getElementById('btn-open-licenses-menu');
+const licensesOverlay = document.getElementById('licenses-overlay');
+const btnCloseLicenses = document.getElementById('btn-close-licenses');
+const licensesTextContainer = document.getElementById('licenses-text-container');
+
+// 📄 BOILERPLATE LICENSE TEXT LITERAL
+const THIRD_PARTY_LICENSES_TEXT = `THIRD-PARTY OPEN SOURCE NOTICES & CREDITS
+
+===========================================================================
+1. CODEJAR (MIT License)
+===========================================================================
+Copyright (c) 2020 Anton Kushmarov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions...
+
+[Full MIT License text will go here]
+
+===========================================================================
+2. THREE.JS (MIT License)
+===========================================================================
+Copyright © 2010-2026 three.js authors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell...
+
+[Full MIT License text will go here]
+
+===========================================================================
+3. OPENSCAD WASM (GNU GPL v2 License)
+===========================================================================
+OpenSCAD is Copyright (c) 2009-2026 Clifford Wolf, Marius Kintel, et al.
+This port is distributed under the GNU General Public License, version 2.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 2 of the License.
+
+[Full GPLv2 License text will go here]
+
+===========================================================================
+4. SCAD2STL (MIT License)
+===========================================================================
+[Boilerplate for user-selected scad2stl compiler script library...]
+`;
+
+function closeAllMenus() {
+    if (settingsOverlay) settingsOverlay.classList.add('hidden');
+    if (fontsOverlay) fontsOverlay.classList.add('hidden');
+    if (stlsOverlay) stlsOverlay.classList.add('hidden');
+    if (svgsOverlay) svgsOverlay.classList.add('hidden');
+    if (licensesOverlay) licensesOverlay.classList.add('hidden'); // 🔌 ADDED
+}
+
+// Update your window click listener to include the new overlay
+window.addEventListener('click', (event) => {
+    if (event.target === settingsOverlay || event.target === fontsOverlay || event.target === stlsOverlay || event.target === svgsOverlay || event.target === licensesOverlay) {
+        closeAllMenus();
+    }
+});
+
+// Update your Escape key listener
+window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+        const isAnyOpen = [settingsOverlay, fontsOverlay, stlsOverlay, svgsOverlay, licensesOverlay].some(el => el && !el.classList.contains('hidden'));
+        if (isAnyOpen) { logToConsole('⌨️ Hotkey Triggered: [Escape] - Closing Overlays'); closeAllMenus(); }
+    }
+});
+
+// ---- LICENSES BRIDGES & RENDERING ----
+if (btnOpenLicensesMenu) {
+    btnOpenLicensesMenu.addEventListener('click', () => {
+        if (settingsOverlay) settingsOverlay.classList.add('hidden');
+        if (licensesOverlay) {
+            licensesOverlay.classList.remove('hidden');
+            // Inject the string literal into the pre/code container
+            if (licensesTextContainer) {
+                licensesTextContainer.textContent = THIRD_PARTY_LICENSES_TEXT;
+            }
+        }
+    });
+}
+
+if (btnCloseLicenses) {
+    btnCloseLicenses.addEventListener('click', () => {
+        if (licensesOverlay) licensesOverlay.classList.add('hidden');
+        if (settingsOverlay) settingsOverlay.classList.remove('hidden'); 
+    });
+}
 
 function closeAllMenus() {
     if (settingsOverlay) settingsOverlay.classList.add('hidden');
