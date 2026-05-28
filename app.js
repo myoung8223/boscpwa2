@@ -978,7 +978,7 @@ extensive behavioral testing, and orchestrating the integration of the
 third-party libraries listed below.
 
 ===========================================================================
-1. Basic OpenSCAD PWA (GNU GPL v2 License)
+                  Basic OpenSCAD PWA (GNU GPL v2 License)
 ===========================================================================
 <a href="https://github.com/myoung8223/boscpwa" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/myoung8223/boscpwa</a>
 
@@ -992,27 +992,7 @@ Please see the "GNU GENERAL PUBLIC LICENSE (VERSION 2)" section at the
 bottom of this document for the full licensing terms and conditions.
 
 ===========================================================================
-2. CodeJar (MIT License)
-===========================================================================
-<a href="https://github.com/antonmedv/codejar" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/antonmedv/codejar</a>
-
-Copyright (c) 2020 Anton Medvedev
-
-Please see the "MIT LICENSE" section at the 
-bottom of this document for the full licensing terms and conditions.
-
-===========================================================================
-3. THREE.JS (MIT License)
-===========================================================================
-<a href="https://github.com/mrdoob/three.js" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/mrdoob/three.js</a>
-
-Copyright © 2010-2026 three.js authors
-
-Please see the "MIT LICENSE" section at the 
-bottom of this document for the full licensing terms and conditions.
-
-===========================================================================
-4. OpenSCAD WASM (GNU GPL v2 License)
+                    OpenSCAD WASM (GNU GPL v2 License)
 ===========================================================================
 <a href="https://github.com/openscad/openscad-wasm" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/openscad/openscad-wasm</a>
 
@@ -1027,25 +1007,47 @@ Please see the "GNU GENERAL PUBLIC LICENSE (VERSION 2)" section at the
 bottom of this document for the full licensing terms and conditions.
 
 ===========================================================================
-5. SCAD2STL (MIT License)
+                          scad2stl (MIT License)
 ===========================================================================
 <a href="https://github.com/code4fukui/scad2stl" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/code4fukui/scad2stl</a>
+
 Copyright (c) 2024 Taisuke Fukuno
 
 Please see the "MIT LICENSE" section at the 
 bottom of this document for the full licensing terms and conditions.
 
 ===========================================================================
-6. Prism.js (MIT License)
+                           three.js (MIT License)
+===========================================================================
+<a href="https://github.com/mrdoob/three.js" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/mrdoob/three.js</a>
+
+Copyright © 2010-2026 three.js authors
+
+Please see the "MIT LICENSE" section at the 
+bottom of this document for the full licensing terms and conditions.
+
+===========================================================================
+                           CodeJar (MIT License)
+===========================================================================
+<a href="https://github.com/antonmedv/codejar" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/antonmedv/codejar</a>
+
+Copyright (c) 2020 Anton Medvedev
+
+Please see the "MIT LICENSE" section at the 
+bottom of this document for the full licensing terms and conditions.
+
+===========================================================================
+                            prism (MIT License)
 ===========================================================================
 <a href="https://github.com/PrismJS/prism" target="_blank" style="color: #52b1ff; text-decoration: underline; font-weight: bold;">https://github.com/PrismJS/prism</a>
+
 Copyright (c) 2012 Lea Verou
 
 Please see the "MIT LICENSE" section at the 
 bottom of this document for the full licensing terms and conditions.
 
 ===========================================================================
-GNU GENERAL PUBLIC LICENSE (VERSION 2)
+                  GNU GENERAL PUBLIC LICENSE (VERSION 2)
 ===========================================================================
 Applies to: Basic OpenSCAD PWA, OpenSCAD WASM
 
@@ -1390,7 +1392,7 @@ library.  If this is what you want to do, use the GNU Lesser General
 Public License instead of this License.
 
 ===========================================================================
-MIT LICENSE
+                                MIT LICENSE
 ===========================================================================
 Applies to: CodeJar, Three.js, Scad2Stl, Prism.js
 
