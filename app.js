@@ -1055,12 +1055,14 @@ if (btnCloseLicenses) {
     });
 }
 
+/*
 function closeAllMenus() {
     if (settingsOverlay) settingsOverlay.classList.add('hidden');
     if (fontsOverlay) fontsOverlay.classList.add('hidden');
     if (stlsOverlay) stlsOverlay.classList.add('hidden');
     if (svgsOverlay) svgsOverlay.classList.add('hidden');
 }
+*/
 
 if (btnSettings) btnSettings.addEventListener('click', () => settingsOverlay.classList.remove('hidden'));
 if (btnCloseSettings) btnCloseSettings.addEventListener('click', closeAllMenus);
