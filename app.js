@@ -732,20 +732,25 @@ linear_extrude(height = 4) {   // 3D text
 	);
 }
 
-translate([-50, 40, 0]) sphere(d=25);   // sphere
+translate([-50, 40, 0])
+sphere(d=25);             // sphere
 
 translate([0, 40, 0])
-	rotate_extrude(convexity = 10)   // torus
-		translate([14, 0, 0])
-			circle(r = 7);
+rotate_extrude(convexity = 10)   // torus
+	translate([14, 0, 0])
+		circle(r = 7);
 
-translate([50, 40, 0]) cylinder(d=25, h=20);   // cylinder
+translate([50, 40, 0])
+cylinder(d=25, h=20);    // cylinder
 
-translate([-50, -40, 0]) cube([25, 25, 25], center=true);   // cube
+translate([-50, -40, 0])
+cube([25, 25, 25], center=true);   // cube
 
-translate([0, -40, 0]) cylinder(d1=25, d2=0, h=20);   // conic cylinder
+translate([0, -40, 0])	
+cylinder(d1=25, d2=0, h=20);   // conic cylinder
 
-translate([50, -40, 0]) hull() {           // hull example (D6 die)
+translate([50, -40, 0])
+hull() {                                   // hull example (D6 die)
 	translate([-8, -8, -8]) sphere(d=4);
 	translate([8, -8, -8]) sphere(d=4);
 	translate([-8, 8, -8]) sphere(d=4);
