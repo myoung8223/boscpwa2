@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "86"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "87"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -606,46 +606,45 @@ if (btnCameraReset) {
 }
 */
 
-// Camera Reset Listener, improved
+// 📷 Reusable function to perfectly frame any Three.js mesh
+function frameModelInCamera(mesh) {
+    if (!camera || !controls) return;
+
+    if (mesh && mesh.geometry) {
+        mesh.geometry.computeBoundingBox();
+        const boundingBox = mesh.geometry.boundingBox;
+        
+        const size = new THREE.Vector3();
+        boundingBox.getSize(size);
+        const center = new THREE.Vector3();
+        boundingBox.getCenter(center);
+        
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        const padding = 1.2; 
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * padding;
+        
+        if (camera.aspect < 1) cameraDistance /= camera.aspect;
+
+        const viewDirection = new THREE.Vector3(1, 1.2, 1).normalize();
+        camera.position.copy(center).add(viewDirection.multiplyScalar(cameraDistance));
+        
+        controls.target.copy(center); 
+        camera.lookAt(center);
+    } else {
+        camera.position.set(40, 40, 40);
+        controls.target.set(0, 0, 0); 
+        camera.lookAt(0, 0, 0);
+    }
+    controls.update();
+}
+
+// 🔧 Camera Reset Listener
 if (btnCameraReset) {
     btnCameraReset.addEventListener('click', () => {
-        if (camera && controls) {
-            if (currentMesh && currentMesh.geometry) {
-                currentMesh.geometry.computeBoundingBox();
-                const boundingBox = currentMesh.geometry.boundingBox;
-                
-                // Get both the size AND the center of the model
-                const size = new THREE.Vector3();
-                boundingBox.getSize(size);
-                const center = new THREE.Vector3();
-                boundingBox.getCenter(center);
-                
-                const maxDim = Math.max(size.x, size.y, size.z);
-                
-                // TIGHTENING CONSTANT: 1.2 means 20% margin around the model
-                const padding = 1.2; 
-                const fov = camera.fov * (Math.PI / 180);
-                let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * padding;
-                
-                if (camera.aspect < 1) cameraDistance /= camera.aspect;
-
-                // Move the camera out diagonally from the actual center of the model
-                const viewDirection = new THREE.Vector3(1, 1.2, 1).normalize();
-                camera.position.copy(center).add(viewDirection.multiplyScalar(cameraDistance));
-                
-                // Look exactly at the center of the model
-                controls.target.copy(center); 
-                camera.lookAt(center);
-                
-            } else {
-                camera.position.set(40, 40, 40);
-                controls.target.set(0, 0, 0); 
-                camera.lookAt(0, 0, 0);
-            }
-            
-            controls.update();
-            logToConsole('📷 Camera view reset to object bounds.');
-        }
+        frameModelInCamera(currentMesh);
+        logToConsole('📷 Camera view reset to object bounds.');
     });
 }
 
@@ -963,12 +962,13 @@ function update3DModelViewer(blobUrl) {
         currentMesh = new THREE.Mesh(geometry, material); currentMesh.position.set(0, 0, 0); currentMesh.rotation.x = -Math.PI / 2;
         scene.add(currentMesh);
         geometry.computeBoundingBox(); geometry.computeBoundingSphere();
-        if (savedPosition && savedTarget) { camera.position.copy(savedPosition); controls.target.copy(savedTarget); } 
-        else {
-            const radius = geometry.boundingSphere.radius; const targetDistance = radius > 0 ? radius * 3.5 : 50; 
-            camera.position.set(targetDistance, targetDistance * 1.2, targetDistance); controls.target.set(0, 0, 0); camera.lookAt(0, 0, 0);
+        if (savedPosition && savedTarget) {
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+            controls.update();
+        } else {
+            frameModelInCamera(currentMesh);
         }
-        controls.update();
     });
 }
 
