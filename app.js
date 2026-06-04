@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "91"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "92"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -695,16 +695,26 @@ btnWireframe.addEventListener('click', () => {
 });
 
 window.addEventListener('keydown', (event) => {
-    // 🚀 NEW: Hijack [F5]
-    if (event.key === 'F5') {
+    // 🚀 Preview / Render [F5 or F6]
+    if (event.key === 'F5' || event.key === 'F6') {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
         if (!btnPreview.disabled) { 
-            logToConsole('⌨️ Hotkey Triggered: [F5]'); 
+            logToConsole(`⌨️ Hotkey Triggered: [${event.key}] (Preview)`);
             btnPreview.click(); 
         }
     }
 
+	// 🚀 Export to STL [F7]
+    if (event.key === 'F7') {
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        if (btnExport && !btnExport.disabled) { 
+            logToConsole('⌨️ Hotkey Triggered: [F7] (Export)'); 
+            btnExport.click(); 
+        }
+    }
+	
     // Existing: [Ctrl + Enter]
     if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault(); 
