@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "90"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "91"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -695,11 +695,26 @@ btnWireframe.addEventListener('click', () => {
 });
 
 window.addEventListener('keydown', (event) => {
-    if (event.ctrlKey && event.key === 'Enter') {
-        event.preventDefault(); event.stopImmediatePropagation(); 
-        if (!btnPreview.disabled) { logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]'); btnPreview.click(); }
+    // 🚀 NEW: Hijack [F5]
+    if (event.key === 'F5') {
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        if (!btnPreview.disabled) { 
+            logToConsole('⌨️ Hotkey Triggered: [F5]'); 
+            btnPreview.click(); 
+        }
     }
-}, true); 
+
+    // Existing: [Ctrl + Enter]
+    if (event.ctrlKey && event.key === 'Enter') {
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        if (!btnPreview.disabled) { 
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]'); 
+            btnPreview.click(); 
+        }
+    }
+}, true);
 
 btnColorTrigger.addEventListener('click', () => modelColorInput.click());
 modelColorInput.addEventListener('input', (event) => {
