@@ -27,7 +27,7 @@ The core purpose of this project is to make OpenSCAD design fully accessible on 
 - [x] **STL Importing:** Allow users to import STL files into the PWA and then import them into projects.
 - [x] **SVG Importing:** Allow users to import SVG files into the PWA and then import them into projects.
 - [x] **Custom Fonts:** Allow users to import TTF files into the PWA and then use them into projects.
-- [x] **Adjustable Axes and Grid:** Additional controls for the axes and grid would be handy, possibly even tick marks and numerical labels.
+- [ ] **Adjustable Axes and Grid:** Additional controls for the axes and grid would be handy, possibly even tick marks and numerical labels.
 - [x] **Replace textarea with CodeJar:** Replace textarea with CodeJar for syntax highlighting and block character matching.
 - [x] **Improve 3D Lighting and Model Texturing:** Right now the lighting needs improvement and texturing the models would improve the preview.
 - [ ] **Camera Movement Improvements:** Improve the camera movement, perhaps with translation accelleration.
@@ -43,6 +43,7 @@ The core purpose of this project is to make OpenSCAD design fully accessible on 
 - [ ] **Help Button:** Add a Help button for communicating basic use and app information.
 - [ ] **Link to OpenSCAD Cheat Sheet:** The ability to pop-up the super handy OpenSCAD cheat sheet would be a nice feature to add.
 - [ ] **Improve PWA Icon:** The icon is a little dark. It could use a snazzier icon.
+- [x] **F5 to Preview:** Press F5 key to quickly initiate a preview, just like in OpenSCAD.  Message overlay indicating preview build in progress.
 
 ## Getting Started
 
@@ -68,16 +69,19 @@ Whether installed as a PWA or loaded in the browser, the execution sequence init
 - **Loading Files:** Click the **Open** button to load `.scad` files into the editor workspace.
 - **Saving Files:** Click the **Save** button to download the current `.scad` code to your local machine.
 - **Smart Code Editor:** The workspace features intelligent formatting. Press `Tab` or `Shift + Tab` to quickly indent or outdent multi-line blocks of code. The editor also features real-time syntax highlighting, bi-directional bracket matching, and will automatically highlight the exact line of code if the compiler encounters a syntax error.
-- **Previewing:** Click the **Preview** button or use the **[Ctrl] + [Enter]** hotkey to compile your `.scad` code into a 3D model displayed in the right pane.
+- **Previewing:** Click the **Preview** button, press **[F5]***, **[F6]**, or use the **[Ctrl] + [Enter]** hotkey combo to compile your `.scad` code into a 3D model displayed in the right pane.
 - **3D Viewport & Display:** - Click the **Solid / Wireframe** button to toggle the mesh rendering mode.
-  - Click the **Color** button (the color swatch) to open the native color picker and dynamically change the 3D model's material color.
+  - Click the **Change (Color)** button (the color swatch) to open the native color picker and dynamically change the 3D model's material color.
   - You can drag the center gutter left or right to seamlessly adjust the width between the code editor and the 3D viewport.
 - **Workspace Settings (⚙️):** Click the Settings icon to access environmental toggles, including:
   - **Editor Font Size:** Scale the code text up or down for readability (line numbers will automatically sync).
   - **Toggle Line Numbers:** Show or hide the left-hand line number gutter.
   - **Toggle Console:** Show or hide the terminal output box at the bottom of the screen.
   - **Reset Camera:** Instantly snap the 3D viewport camera back to its default viewing distance and angle.
-- **Exporting to STL:** Once a model is compiled, click the **Export STL** button to download the final 3D geometry file for slicing or sharing.
+  - **Manage Custom Fonts:** Add custom fonts for use in models.
+  - **Manage STL Imports:** Import STL files for use in models.  Note that STL files must be ASCII format, not binary format.
+  - **Manage SVG Imports:** Add SVG files for use in models.
+- **Exporting to STL:** Once a model is compiled, click the **Export STL** button or press **[F7]** to download the final 3D geometry file for slicing or sharing.
 
 ## Built With
 
