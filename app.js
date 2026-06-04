@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "85"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "86"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -584,6 +584,7 @@ if (editorElement && editorFontSizeSelect) {
     });
 }
 
+/*
 // 🔧 RESTORED: Camera Reset Listener
 if (btnCameraReset) {
     btnCameraReset.addEventListener('click', () => {
@@ -600,6 +601,50 @@ if (btnCameraReset) {
             camera.lookAt(0, 0, 0);
             controls.update();
             logToConsole('📷 Camera view reset.');
+        }
+    });
+}
+*/
+
+// Camera Reset Listener, improved
+if (btnCameraReset) {
+    btnCameraReset.addEventListener('click', () => {
+        if (camera && controls) {
+            if (currentMesh && currentMesh.geometry) {
+                currentMesh.geometry.computeBoundingBox();
+                const boundingBox = currentMesh.geometry.boundingBox;
+                
+                // Get both the size AND the center of the model
+                const size = new THREE.Vector3();
+                boundingBox.getSize(size);
+                const center = new THREE.Vector3();
+                boundingBox.getCenter(center);
+                
+                const maxDim = Math.max(size.x, size.y, size.z);
+                
+                // TIGHTENING CONSTANT: 1.2 means 20% margin around the model
+                const padding = 1.2; 
+                const fov = camera.fov * (Math.PI / 180);
+                let cameraDistance = Math.abs(maxDim / 2 / Math.tan(fov / 2)) * padding;
+                
+                if (camera.aspect < 1) cameraDistance /= camera.aspect;
+
+                // Move the camera out diagonally from the actual center of the model
+                const viewDirection = new THREE.Vector3(1, 1.2, 1).normalize();
+                camera.position.copy(center).add(viewDirection.multiplyScalar(cameraDistance));
+                
+                // Look exactly at the center of the model
+                controls.target.copy(center); 
+                camera.lookAt(center);
+                
+            } else {
+                camera.position.set(40, 40, 40);
+                controls.target.set(0, 0, 0); 
+                camera.lookAt(0, 0, 0);
+            }
+            
+            controls.update();
+            logToConsole('📷 Camera view reset to object bounds.');
         }
     });
 }
