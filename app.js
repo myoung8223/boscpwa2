@@ -1541,7 +1541,8 @@ async function renderCustomFontManagerList() {
     customFonts.forEach(font => {
         let meta = { family: 'Unknown', style: 'Unknown' };
         if (font.binary) meta = extractFontMetadata(font.binary) || meta;
-        const safeFamily = meta.family.replace(/-/g, '\\-');
+        //const safeFamily = meta.family.replace(/-/g, '\\-');
+        const safeFamily = meta.family.replace(/-/g, '\\\\-');   // Fontconfig requires '\-' for literal hyphens, which means we must double-escape ('\\\\-') for OpenSCAD's C-style string parser.
         let openScadSyntax = `font = "${safeFamily}"`;
         if (meta.style !== 'Unknown' && meta.style !== 'Regular') openScadSyntax = `font = "${safeFamily}:style=${meta.style}"`;
 
