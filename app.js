@@ -817,7 +817,7 @@ btnPreview.addEventListener('click', async () => {
     
     // 🚀 NEW: Show the loading screen immediately
     if (placeholderText) {
-        placeholderText.textContent = "⚙️ Building Preview...";
+        placeholderText.textContent = "🛠️ Building Preview...";
         placeholderText.style.display = 'flex';
     }
 
