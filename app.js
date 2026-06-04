@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "87"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "88"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -855,9 +855,12 @@ btnPreview.addEventListener('click', async () => {
 
 btnExport.addEventListener('click', () => {
     if (!currentStlBlob) return;
-    const link = document.createElement('a'); link.href = URL.createObjectURL(currentStlBlob);
-    link.download = 'openscad_model.stl'; link.click();
-    logToConsole('Exported openscad_model.stl successfully.');
+    const link = document.createElement('a'); 
+    link.href = URL.createObjectURL(currentStlBlob);
+    const projectName = projectNameInput.value.trim() || "openscad_model"; 
+    link.download = `${projectName}.stl`; 
+    link.click();
+    logToConsole(`Exported ${projectName}.stl successfully.`);
 });
 
 if ('serviceWorker' in navigator) {
