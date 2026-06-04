@@ -814,6 +814,13 @@ hull() {                                   // hull example (D6 die)
 // ---- PREVIEW PIPELINE ----
 btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) return;
+    
+    // 🚀 NEW: Show the loading screen immediately
+    if (placeholderText) {
+        placeholderText.textContent = "⚙️ Building Preview...";
+        placeholderText.style.display = 'flex';
+    }
+
     clearErrorHighlights();
     logToConsole('--- Generating Preview ---');
     const scriptCode = jar.toString(); 
@@ -873,9 +880,15 @@ btnPreview.addEventListener('click', async () => {
             const stlData = instance.FS.readFile('/output.stl');
             currentStlBlob = new Blob([stlData], { type: 'application/sla' });
             update3DModelViewer(URL.createObjectURL(currentStlBlob));
-            placeholderText.style.display = 'none';
+            // 🚀 (Already here) Hides the text when successful
+            if (placeholderText) placeholderText.style.display = 'none';
             btnExport.disabled = false;
         } else {
+            // 🚀 NEW: Update the text so it doesn't get stuck on "Building..."
+            if (placeholderText) {
+                placeholderText.textContent = "❌ Build Failed (Check Console)";
+            }
+            
             let detectedErrorLine = null;
             for (const logLine of errorLogs) {
                 const lineMatch = logLine.match(/line\s+(\d+)/i);
@@ -884,6 +897,11 @@ btnPreview.addEventListener('click', async () => {
             if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
     } catch (error) { 
+        // 🚀 NEW: Hide or update the text on a hard WASM crash
+        if (placeholderText) {
+            placeholderText.textContent = "⚠️ Engine Crash";
+        }
+        
         let errorMsg = error.message || error;
         if (typeof error === 'number') {
             errorMsg = `[C++ Exception Pointer: ${error}] The WASM engine hard-crashed.`;
