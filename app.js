@@ -907,7 +907,7 @@ hull() {                                   // hull example (D6 die)
 btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) return;
     
-    // 🚀 NEW: Show the loading screen immediately
+    // 🚀 Show the loading screen immediately
     if (placeholderText) {
         placeholderText.textContent = "🛠️ Building Preview...";
         placeholderText.style.display = 'flex';
@@ -918,7 +918,7 @@ btnPreview.addEventListener('click', async () => {
     const scriptCode = jar.toString(); 
     const errorLogs = [];
 
-try {
+    try {
         // 🚀 Initialize the engine and point it directly to the local WASM file
         const instance = await openSCADFactory({
             noInitialRun: true,
@@ -930,7 +930,7 @@ try {
             }
         });
 
-        // 📝 Map custom fonts, STLs, and SVGs (Keep your existing mapping loops)
+        // 📝 Map custom fonts, STLs, and SVGs (Keeping your exact mapping loops intact)
         for (const fontName of Object.keys(fontCache)) {
             try { instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); } 
             catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /${fontName}`); }
@@ -953,16 +953,17 @@ try {
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
             
-			// 🚀 FIX: Wrap using the official 3D Manufacturing Format MIME type description
-            currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
+            // 🚀 STEP 1 FIX: Pass the raw Uint8Array data array directly to the viewer!
+            update3DModelViewer(outputData);
             
-            update3DModelViewer(URL.createObjectURL(currentStlBlob));
+            // 💾 Keep this intact so your standalone download button handler still pulls from it cleanly
+            currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
             
             if (placeholderText) placeholderText.style.display = 'none';
             btnExport.disabled = false;
 
-			// Cleanup virtual file space
-            instance.FS.unlink('/output.3mf');			
+            // Cleanup virtual file space
+            instance.FS.unlink('/output.3mf');            
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
@@ -1074,7 +1075,7 @@ function init3DWorkspace() {
     animate();
 }
 
-function update3DModelViewer(blobUrl) {
+function update3DModelViewer(raw3mfData) {
     if (!workspaceInitialized) init3DWorkspace();
 
     let savedPosition = null;
@@ -1097,63 +1098,70 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    logToConsole("📥 Processing 3D data pipeline...");
+    logToConsole("📥 Processing raw 3D data array...");
 
-    fetch(blobUrl)
-        .then(response => {
-            if (!response.ok) throw new Error("Could not extract binary data from Blob URL.");
-            return response.arrayBuffer();
-        })
-        .then(arrayBuffer => {
-            // Initialize ThreeMFLoader
-            const loader = new THREE.ThreeMFLoader();
-            
-            // Unpack 3MF structure using JSZip natively
-            const threemfGroup = loader.parse(arrayBuffer);
-            
-            currentMesh = threemfGroup;
+    try {
+        // Ensure JSZip actually exists globally before parsing
+        if (typeof window.JSZip === 'undefined') {
+            throw new Error("window.JSZip is undefined. Ensure jszip.min.js script tag is placed in index.html BEFORE 3MFLoader.js!");
+        }
 
-            // Traverse the imported nodes to apply user-selected color & shading styles
-            currentMesh.traverse((child) => {
-                if (child.isMesh) {
-                    // Create a robust, highly visible Material using your PWA's active color
-                    child.material = new THREE.MeshStandardMaterial({
-                        color: new THREE.Color(activeModelColor), // Uses the color from your color picker
-                        roughness: 0.4,
-                        metalness: 0.1,
-                        transparent: true,
-                        opacity: 0.85,                   // Gives it a high-quality sleek semi-clear look
-                        side: THREE.DoubleSide,         // Ensures inner walls are perfectly visible
-                        depthWrite: true,
-                        wireframe: wireframeMode         // Respects your wireframe button toggle state
-                    });
-                }
-            });
+        const loader = new THREE.ThreeMFLoader();
+        
+        // 🚀 Convert the incoming Uint8Array buffer explicitly into the raw ArrayBuffer container ThreeMFLoader expects
+        const bufferToParse = raw3mfData.buffer.slice(raw3mfData.byteOffset, raw3mfData.byteOffset + raw3mfData.byteLength);
+        
+        // Feed the uncorrupted binary structure directly to JSZip via the loader parser
+        const threemfGroup = loader.parse(bufferToParse);
+        
+        if (!threemfGroup) throw new Error("Loader returned an empty scene group wrapper.");
+        
+        currentMesh = threemfGroup;
 
-            // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
-            currentMesh.rotation.x = -Math.PI / 2;
-
-            // Inject the polished group into your main workspace viewport
-            scene.add(currentMesh);
-
-            // Maintain existing viewport perspective matrices
-            if (savedPosition && savedTarget) {
-                camera.position.copy(savedPosition);
-                controls.target.copy(savedTarget);
-                controls.update();
-            } else {
-                frameModelInCamera(currentMesh);
+        // Traverse the imported nodes to apply user-selected color & shading styles
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                // Assign a highly visible material using your color configuration
+                child.material = new THREE.MeshStandardMaterial({
+                    color: new THREE.Color(activeModelColor),
+                    roughness: 0.4,
+                    metalness: 0.1,
+                    transparent: true,
+                    opacity: 0.85,
+                    side: THREE.DoubleSide,
+                    depthWrite: true,
+                    wireframe: wireframeMode
+                });
             }
-
-            // Fire rendering sequence loop
-            if (typeof render === 'function') render(); 
-            logToConsole("✨ 3D Render Canvas Updated Successfully.");
-        })
-        .catch(err => {
-            console.error("3MF Parse Pipeline Failure:", err);
-            logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
-            if (placeholderText) placeholderText.textContent = "❌ Render Error";
         });
+
+        // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
+        currentMesh.rotation.x = -Math.PI / 2;
+
+        // Inject the polished group into your main workspace viewport
+        scene.add(currentMesh);
+
+        // Maintain existing viewport perspective matrices
+        if (savedPosition && savedTarget) {
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+            controls.update();
+        } else {
+            frameModelInCamera(currentMesh);
+        }
+
+        // Fire rendering sequence loop
+        if (typeof render === 'function') render(); 
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+        
+    } catch (err) {
+        console.error("3MF Parse Pipeline Failure:", err);
+        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
+    }
 }
 
 btnPreview.disabled = true; btnExport.disabled = true;
