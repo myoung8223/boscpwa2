@@ -111,6 +111,37 @@
                 padding-left: 0;
             }
         }
+
+        /* 📘 Help / Cheat Sheet Overlay */
+        #help-overlay {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(25, 25, 25, 0.95); /* Dark, 95% opaque */
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
+            z-index: 20; /* Sits above everything in the right panel */
+            padding: 30px;
+            overflow-y: auto; /* Allows scrolling */
+            color: #eee;
+            transition: opacity 0.2s ease;
+        }
+        
+        .cheat-sheet-content {
+            max-width: 800px;
+            margin: 0 auto;
+            user-select: text; /* 🚀 GUARANTEES text can be highlighted and copied! */
+            -webkit-user-select: text;
+            line-height: 1.6;
+        }
+
+        .cheat-sheet-content code {
+            background-color: #111;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #00c3ff;
+            font-family: 'Consolas', monospace;
+            user-select: all; /* One click selects the whole code block! */
+        }
     
 </style>
 </head>
@@ -143,8 +174,32 @@ with Extensive AI Assistance from Google Gemini</div>
 
         <div class="right-panel">
             <div id="placeholder-text" style="display: none;"></div>
-            
             <div id="viewer-3d"></div>
+            
+            <div id="help-overlay" class="hidden">
+                <button id="close-help-btn" class="close-btn">&times;</button>
+                <div class="cheat-sheet-content">
+                    <h2>OpenSCAD Cheat Sheet</h2>
+                    <p><em>Scroll down for syntax. Highlight and copy text directly into the editor!</em></p>
+                    
+                    <hr style="border-color: #444;">
+                    
+                    <h3>2D Shapes</h3>
+                    <code>circle(r=10);</code><br>
+                    <code>square(size=10, center=true);</code><br>
+                    <code>polygon(points=[[0,0],[10,0],[0,10]]);</code><br>
+                    <br>
+                    <h3>3D Shapes</h3>
+                    <code>sphere(r=10);</code><br>
+                    <code>cube([10,20,30], center=true);</code><br>
+                    <code>cylinder(h=20, r1=10, r2=0, center=true);</code><br>
+                    
+                    <br><br><br>
+                    <p style="font-size: 0.8rem; color: #888;">
+                        * OpenSCAD Cheat Sheet content is sourced from the official <a href="https://openscad.org" style="color: #007acc;">OpenSCAD Documentation</a>.
+                    </p>
+                </div>
+            </div>
         </div>
     </div>
 
