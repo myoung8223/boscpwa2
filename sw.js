@@ -23,7 +23,7 @@ const ASSETS_TO_CACHE = [
 
   // New local libraries
   './libs/three.min.js',
-  './libs/AMFLoader.js',
+  './libs/3MFLoader.js',
   './libs/OrbitControls.js',
   './libs/openscad.js',
   './libs/openscad.wasm',
