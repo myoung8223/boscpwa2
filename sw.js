@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boscpwa-v9';
+const CACHE_NAME = 'boscpwa-v10';
 
 const ASSETS_TO_CACHE = [
   // Base HTML and Manifest
@@ -26,7 +26,6 @@ const ASSETS_TO_CACHE = [
   './libs/AMFLoader.js',
   './libs/OrbitControls.js',
   './libs/openscad.js',
-  './libs/openscad.wasm.js',
   './libs/openscad.wasm',
 
   // 📴 NEW STANDALONE HIGHLIGHTING PIPELINE ASSETS:
