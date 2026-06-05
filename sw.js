@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boscpwa-v8';
+const CACHE_NAME = 'boscpwa-v9';
 
 const ASSETS_TO_CACHE = [
   // Base HTML and Manifest
@@ -22,9 +22,8 @@ const ASSETS_TO_CACHE = [
   //'https://code4fukui.github.io/scad2stl/openscad.wasm',
 
   // New local libraries
-  './libs/fflate.js',
   './libs/three.min.js',
-  './libs/3MFLoader.js',
+  './libs/AMFLoader.js',
   './libs/OrbitControls.js',
   './libs/openscad.js',
   './libs/openscad.wasm.js',
