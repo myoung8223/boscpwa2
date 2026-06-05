@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "94"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "96"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -21,6 +21,8 @@ const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
 const closeHelpBtn = document.getElementById('close-help-btn');
 const helpOverlay = document.getElementById('help-overlay');
+const btnSettingsCheatSheet = document.getElementById('btn-settings-cheat-sheet');
+const settingsOverlay = document.getElementById('settings-overlay');                 // (double check that 'settings-overlay' matches your actual HTML ID!)
 
 // 🌐 THREE.JS SCOPE VARIABLES
 let scene, camera, renderer, controls, currentMesh = null;
@@ -790,6 +792,15 @@ modelColorInput.addEventListener('input', (event) => {
     activeModelColor = parseInt(selectedHex.replace('#', '0x'), 16);
     if (currentMesh && currentMesh.material) currentMesh.material.color.setHex(activeModelColor);
 });
+
+// ❓ Open Cheat Sheet from Settings Menu
+if (btnSettingsCheatSheet && settingsOverlay && helpOverlay) {
+    btnSettingsCheatSheet.addEventListener('click', () => {
+        settingsOverlay.classList.add('hidden'); // Close Settings
+        helpOverlay.classList.remove('hidden');  // Open Cheat Sheet
+        logToConsole('📘 Opened Cheat Sheet from Settings Menu');
+    });
+}
 
 async function initOpenSCAD() {
     logToConsole(`Build ${BUILD_NUMBER} - OpenSCAD PWA Environment`);
