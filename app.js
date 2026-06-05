@@ -3,6 +3,7 @@ const BUILD_NUMBER = "101"; // <-- Incremented for SVG Import Database & Grid La
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
+import OpenSCAD from './libs/openscad.js';
 
 // Dom Elements
 const editorElement = document.getElementById('editor'); 
@@ -858,7 +859,7 @@ hull() {                                   // hull example (D6 die)
     
 	try {
 		// 🚀 Grab the global OpenSCAD factory initialized by your HTML script tag
-        openSCADFactory = window.OpenSCAD;
+        openSCADFactory = OpenSCAD;
         
         const fontFiles = [
             'LiberationSans-Regular.ttf', 'LiberationSans-Bold.ttf', 'LiberationSans-Italic.ttf', 'LiberationSans-BoldItalic.ttf',
