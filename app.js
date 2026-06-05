@@ -948,7 +948,7 @@ try {
         instance.FS.writeFile('/input.scad', scriptCode);
         
         // 🚀 THE MAGIC: Target .3mf and enable the blistering fast Manifold kernel!
-        instance.callMain(['/input.scad', '--enable=manifold', '-o', '/output.amf']); 
+        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.amf']); 
 
         if (instance.FS.analyzePath('/output.amf').exists) {
             const outputData = instance.FS.readFile('/output.amf');
