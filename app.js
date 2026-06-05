@@ -1098,34 +1098,59 @@ function update3DModelViewer(raw3mfData) {
         currentMesh = null;
     }
 
-    logToConsole("📥 Isolating raw 3D data array...");
+    logToConsole("📥 Processing 3MF archive using fflate...");
 
     try {
-        // Ensure JSZip actually exists globally before parsing
-        if (typeof window.JSZip === 'undefined') {
-            throw new Error("window.JSZip is undefined. Ensure jszip.min.js script tag is placed in index.html BEFORE 3MFLoader.js!");
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
         }
+
+        // 🚀 THE MAGIC COMPATIBILITY LAYER:
+        // We trick ThreeMFLoader into thinking it's talking to JSZip, 
+        // while routing all decompression directly into fflate!
+        window.JSZip = {
+            loadAsync: async function(data) {
+                // Ensure data is parsed as a clean, isolated Uint8Array copy
+                const bytes = new Uint8Array(data);
+                const unzippedFiles = fflate.unzipSync(bytes);
+                
+                return {
+                    file: function(relativePath) {
+                        const fileData = unzippedFiles[relativePath];
+                        if (!fileData) return null;
+                        
+                        // Recreate the exact micro-methods ThreeMFLoader expects
+                        const resolver = {
+                            async: async function(type) {
+                                if (type === 'string') {
+                                    return new TextDecoder().decode(fileData);
+                                }
+                                return fileData.buffer;
+                            }
+                        };
+                        return resolver;
+                    }
+                };
+            }
+        };
 
         const loader = new THREE.ThreeMFLoader();
         
-        // 🚀 THE FIX: Deep-copy the bytes out of WASM memory space completely 
-        // to construct a clean, pristine, uncorrupted standalone ArrayBuffer container.
+        // Ensure data is extracted out of any overlapping WASM heap address space
         const standaloneBytes = new Uint8Array(raw3mfData);
         const bufferToParse = standaloneBytes.buffer;
         
-        logToConsole(`📦 Feeding isolated binary container (${bufferToParse.byteLength} bytes) to JSZip/3MFLoader...`);
-        
-        // Feed the uncorrupted binary structure directly to JSZip via the loader parser
+        // This triggers our custom fflate layer synchronously 
         const threemfGroup = loader.parse(bufferToParse);
         
-        if (!threemfGroup) throw new Error("Loader returned an empty scene group wrapper.");
+        if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
         
         currentMesh = threemfGroup;
 
         // Traverse the imported nodes to apply user-selected color & shading styles
         currentMesh.traverse((child) => {
             if (child.isMesh) {
-                // Assign a highly visible material using your color configuration
+                // Assign a beautiful, highly visible material using your PWA's active color
                 child.material = new THREE.MeshStandardMaterial({
                     color: new THREE.Color(activeModelColor),
                     roughness: 0.4,
@@ -1142,10 +1167,10 @@ function update3DModelViewer(raw3mfData) {
         // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
         currentMesh.rotation.x = -Math.PI / 2;
 
-        // Inject the polished group into your main workspace viewport
+        // Inject into main scene viewport canvas
         scene.add(currentMesh);
 
-        // Maintain existing viewport perspective matrices
+        // Retain view camera coordinates
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
@@ -1154,12 +1179,11 @@ function update3DModelViewer(raw3mfData) {
             frameModelInCamera(currentMesh);
         }
 
-        // Fire rendering sequence loop
         if (typeof render === 'function') render(); 
-        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+        logToConsole("✨ 3D Render Canvas Updated Successfully via 3MF/fflate.");
         
     } catch (err) {
-        console.error("3MF Parse Pipeline Failure:", err);
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
         logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
         if (placeholderText) {
             placeholderText.textContent = "❌ Render Error (Check Console)";
