@@ -1098,7 +1098,7 @@ function update3DModelViewer(raw3mfData) {
         currentMesh = null;
     }
 
-    logToConsole("📥 Processing raw 3D data array...");
+    logToConsole("📥 Isolating raw 3D data array...");
 
     try {
         // Ensure JSZip actually exists globally before parsing
@@ -1108,8 +1108,12 @@ function update3DModelViewer(raw3mfData) {
 
         const loader = new THREE.ThreeMFLoader();
         
-        // 🚀 Convert the incoming Uint8Array buffer explicitly into the raw ArrayBuffer container ThreeMFLoader expects
-        const bufferToParse = raw3mfData.buffer.slice(raw3mfData.byteOffset, raw3mfData.byteOffset + raw3mfData.byteLength);
+        // 🚀 THE FIX: Deep-copy the bytes out of WASM memory space completely 
+        // to construct a clean, pristine, uncorrupted standalone ArrayBuffer container.
+        const standaloneBytes = new Uint8Array(raw3mfData);
+        const bufferToParse = standaloneBytes.buffer;
+        
+        logToConsole(`📦 Feeding isolated binary container (${bufferToParse.byteLength} bytes) to JSZip/3MFLoader...`);
         
         // Feed the uncorrupted binary structure directly to JSZip via the loader parser
         const threemfGroup = loader.parse(bufferToParse);
