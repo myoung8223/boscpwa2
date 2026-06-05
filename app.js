@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "106"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "107"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1097,73 +1097,46 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    console.log("Fetching binary 3MF data from Blob URL...");
+    logToConsole("📥 Processing 3D data pipeline...");
 
     fetch(blobUrl)
         .then(response => {
-            if (!response.ok) throw new Error("Could not retrieve binary data from file system blob.");
+            if (!response.ok) throw new Error("Could not extract binary data from Blob URL.");
             return response.arrayBuffer();
         })
         .then(arrayBuffer => {
-            console.log("Successfully fetched ArrayBuffer. Size:", arrayBuffer.byteLength, "bytes");
-
-            // 🔍 CHECK 1: Ensure JSZip actually exists globally
-            if (typeof window.JSZip === 'undefined') {
-                throw new Error("CRITICAL: window.JSZip is undefined! Check your script loading order in index.html.");
-            } else {
-                console.log("window.JSZip detected successfully.");
-            }
-
-            // 🔍 CHECK 2: Safeguard Loader Class Name Variations
-            let loader;
-            if (typeof THREE.ThreeMFLoader === 'function') {
-                console.log("Initializing THREE.ThreeMFLoader...");
-                loader = new THREE.ThreeMFLoader();
-            } else if (typeof THREE._3MFLoader === 'function') {
-                console.log("Initializing THREE._3MFLoader (alternative format)...");
-                loader = new THREE._3MFLoader();
-            } else {
-                throw new Error("CRITICAL: Neither THREE.ThreeMFLoader nor THREE._3MFLoader was found in your Three.js bundle.");
-            }
-
-            // 🔍 CHECK 3: Parse the data safely
-            let threemfGroup;
-            try {
-                console.log("Attempting to parse 3MF binary data...");
-                
-                // Some versions of ThreeMFLoader require a manager passed, or use standard parse
-                threemfGroup = loader.parse(arrayBuffer);
-                
-                console.log("3MF data parsed successfully into Three.js Object3D group!");
-            } catch (parseError) {
-                console.error("The loader failed inside its internal .parse() routine:", parseError);
-                throw parseError;
-            }
+            // Initialize ThreeMFLoader
+            const loader = new THREE.ThreeMFLoader();
+            
+            // Unpack 3MF structure using JSZip natively
+            const threemfGroup = loader.parse(arrayBuffer);
             
             currentMesh = threemfGroup;
 
-            // Ensure materials look good, respect wireframe, AND allow transparency
+            // Traverse the imported nodes to apply user-selected color & shading styles
             currentMesh.traverse((child) => {
                 if (child.isMesh) {
-                    if (child.material.color) {
-                        child.material.color.setRGB(1, 1, 1);
-                    }
-
-                    child.material.roughness = 0.6;
-                    child.material.metalness = 0.1;
-                    
-                    child.material.transparent = true;       
-                    child.material.side = THREE.DoubleSide;  
-                    child.material.depthWrite = true;        
-                    child.material.vertexColors = false;      
-                    
-                    if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
+                    // Create a robust, highly visible Material using your PWA's active color
+                    child.material = new THREE.MeshStandardMaterial({
+                        color: new THREE.Color(activeModelColor), // Uses the color from your color picker
+                        roughness: 0.4,
+                        metalness: 0.1,
+                        transparent: true,
+                        opacity: 0.85,                   // Gives it a high-quality sleek semi-clear look
+                        side: THREE.DoubleSide,         // Ensures inner walls are perfectly visible
+                        depthWrite: true,
+                        wireframe: wireframeMode         // Respects your wireframe button toggle state
+                    });
                 }
             });
 
+            // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
             currentMesh.rotation.x = -Math.PI / 2;
+
+            // Inject the polished group into your main workspace viewport
             scene.add(currentMesh);
 
+            // Maintain existing viewport perspective matrices
             if (savedPosition && savedTarget) {
                 camera.position.copy(savedPosition);
                 controls.target.copy(savedTarget);
@@ -1172,12 +1145,14 @@ function update3DModelViewer(blobUrl) {
                 frameModelInCamera(currentMesh);
             }
 
+            // Fire rendering sequence loop
             if (typeof render === 'function') render(); 
+            logToConsole("✨ 3D Render Canvas Updated Successfully.");
         })
         .catch(err => {
-            // This guarantees that any failure inside the .then chain lands here instead of staying silent
-            console.error("🛑 3MF Pipeline Failure Error Logged:", err.message, err.stack);
-            if (typeof showBuildError === 'function') showBuildError("3MF Processing Error");
+            console.error("3MF Parse Pipeline Failure:", err);
+            logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+            if (placeholderText) placeholderText.textContent = "❌ Render Error";
         });
 }
 
