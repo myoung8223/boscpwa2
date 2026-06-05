@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "112"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "113"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1105,7 +1105,7 @@ function update3DModelViewer(raw3mfData) {
             throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
         }
 
-        // 🚀 THE COMPATIBILITY LAYER 
+        // THE COMPATIBILITY LAYER
         window.JSZip = {
             loadAsync: async function(data) {
                 const bytes = new Uint8Array(data);
@@ -1140,25 +1140,36 @@ function update3DModelViewer(raw3mfData) {
         // Traverse the imported nodes to safely configure the hierarchy
         currentMesh.traverse((child) => {
             if (child.isMesh) {
+                // 🔍 Check 1: Does this specific geometry contain custom vertex color definitions?
+                const hasVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 
                 materials.forEach((mat) => {
                     if (!mat) return;
 
-                    // 🎨 SMART COLOR ROUTER:
-                    // Check if the 3MF file has built-in object colors or vertex attributes.
-                    // If the color is distinct from plain absolute black (#000000) or default white (#ffffff),
-                    // it means the user manually declared a color() block in OpenSCAD!
-                    const hasNativeScriptColor = mat.color && 
-                        (mat.color.r !== 1 || mat.color.g !== 1 || mat.color.b !== 1) && 
-                        (mat.color.r !== 0 || mat.color.g !== 0 || mat.color.b !== 0);
+                    if (hasVertexColors) {
+                        // 🚀 ENABLE VERTEX COLORS: If the compiler wrote colors directly into the coordinates,
+                        // tell the material to map them, and reset the base diffuse color to absolute white 
+                        // so it doesn't taint the script's original color hues!
+                        mat.vertexColors = true;
+                        mat.color.setRGB(1, 1, 1);
+                        logToConsole("🎨 Mesh has embedded geometry colors. Enabling vertex color rendering.");
+                    } else {
+                        // 🚀 MANAGE FALLBACK COLOR: If there are no vertex colors, we check if Three.js 
+                        // assigned its default blue placeholder. If it did, or if the color is default white/black,
+                        // we apply your workspace's picker color!
+                        mat.vertexColors = false;
 
-                    if (hasNativeScriptColor) {
-                        // Keep the exact RGB values supplied inside your .scad script code!
-                        logToConsole(`🎨 Applying script-defined color: RGB(${Math.round(mat.color.r*255)}, ${Math.round(mat.color.g*255)}, ${Math.round(mat.color.b*255)})`);
-                    } else if (typeof activeModelColor !== 'undefined') {
-                        // Fall back to your global UI color picker if no color command was specified
-                        mat.color.set(activeModelColor);
+                        // Check if the material color looks like Three.js's standard placeholder blue 
+                        // (often approx R: 0.5-0.7, G: 0.7-0.8, B: 0.9-1.0 depending on the build version)
+                        const isPlaceholderBlue = (mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
+                        const isWhiteOrBlack = (mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
+                                               (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0);
+
+                        if ((isPlaceholderBlue || isWhiteOrBlack) && typeof activeModelColor !== 'undefined') {
+                            mat.color.set(activeModelColor);
+                        }
                     }
 
                     // Shading adjustments so reflections catch the lighting profiles beautifully
@@ -1170,14 +1181,6 @@ function update3DModelViewer(raw3mfData) {
                     mat.opacity = 0.85;
                     mat.side = THREE.DoubleSide; 
                     mat.depthWrite = true;       
-                    
-                    // Let the core material mapping engine prioritize solid material parameters over vertex definitions
-                    mat.vertexColors = false;
-
-                    // Support the wireframe layout toggle switch state
-                    if (typeof wireframeMode !== 'undefined') {
-                        mat.wireframe = wireframeMode;
-                    }
                     
                     // Signal the WebGL context renderer to compile shaders for these property changes
                     mat.needsUpdate = true;
