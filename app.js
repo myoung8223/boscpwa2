@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "104"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "105"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1094,58 +1094,62 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    // 🚀 Canonical 3MF Loader Initialization (powered by your new JSZip library dependency)
-    const loader = new THREE.ThreeMFLoader();
-    
-    // 💡 Suffix the Blob URL so ThreeMFLoader identifies it as a 3MF asset file
-    const validatedUrl = blobUrl + '#model.3mf';
+    // 🚀 STEP 1: Fetch the raw binary array directly from the virtual blob url memory
+    fetch(blobUrl)
+        .then(response => {
+            if (!response.ok) throw new Error("Could not retrieve binary data from file system blob.");
+            return response.arrayBuffer();
+        })
+        .then(arrayBuffer => {
+            // 🚀 STEP 2: Initialize our canonical 3MF Loader
+            const loader = new THREE.ThreeMFLoader();
+            
+            // 🚀 STEP 3: Parse the raw array buffer directly! 
+            // This triggers JSZip internally without checking any URL string extensions or hashes.
+            const threemfGroup = loader.parse(arrayBuffer);
+            
+            currentMesh = threemfGroup;
 
-    // 🚀 Use standard .load() natively instead of wrapping it inside a manual binary fetch!
-    loader.load(validatedUrl, (threemfGroup) => {
-        currentMesh = threemfGroup;
+            // Ensure materials look good, respect wireframe, AND allow transparency
+            currentMesh.traverse((child) => {
+                if (child.isMesh) {
+                    // Reset base color so incoming 3MF mesh colors aren't multiplied by black
+                    if (child.material.color) {
+                        child.material.color.setRGB(1, 1, 1);
+                    }
 
-        // Ensure materials look good, respect wireframe, AND allow transparency
-        currentMesh.traverse((child) => {
-            if (child.isMesh) {
-                // Reset base color so incoming 3MF mesh colors aren't multiplied by black
-                if (child.material.color) {
-                    child.material.color.setRGB(1, 1, 1);
+                    child.material.roughness = 0.6;
+                    child.material.metalness = 0.1;
+                    
+                    // Glass Transparency Matrix
+                    child.material.transparent = true;       // Enables alpha blending
+                    child.material.side = THREE.DoubleSide;  // Lets us see back walls through front
+                    child.material.depthWrite = true;        // Keeps faces sorted correctly
+                    child.material.vertexColors = false;      
+                    
+                    if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
                 }
+            });
 
-                child.material.roughness = 0.6;
-                child.material.metalness = 0.1;
-                
-                // Glass Transparency Matrix
-                child.material.transparent = true;       // Enables alpha blending
-                child.material.side = THREE.DoubleSide;  // Lets us see back walls through front
-                child.material.depthWrite = true;        // Keeps faces sorted correctly
-                child.material.vertexColors = false;      
-                
-                if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
+            // Fix the OpenSCAD Z-up rotation issue
+            currentMesh.rotation.x = -Math.PI / 2;
+
+            scene.add(currentMesh);
+
+            if (savedPosition && savedTarget) {
+                camera.position.copy(savedPosition);
+                controls.target.copy(savedTarget);
+                controls.update();
+            } else {
+                frameModelInCamera(currentMesh);
             }
+
+            if (typeof render === 'function') render(); 
+        })
+        .catch(err => {
+            console.error("Canonical 3MF Loader Parse Failure:", err);
+            if (typeof showBuildError === 'function') showBuildError("3MF Processing Error");
         });
-
-        // Fix the OpenSCAD Z-up rotation issue
-        currentMesh.rotation.x = -Math.PI / 2;
-
-        scene.add(currentMesh);
-
-        if (savedPosition && savedTarget) {
-            camera.position.copy(savedPosition);
-            controls.target.copy(savedTarget);
-            controls.update();
-        } else {
-            frameModelInCamera(currentMesh);
-        }
-
-        if (typeof render === 'function') render(); 
-    }, 
-    undefined, // onProgress callback (not needed)
-    (err) => {
-        console.error("Canonical 3MF Loader failed:", err);
-        // This gives you real UI feedback if something goes wrong during the JSZip unpack
-        if (typeof showBuildError === 'function') showBuildError("3MF Processing Error");
-    });
 }
 
 btnPreview.disabled = true; btnExport.disabled = true;
