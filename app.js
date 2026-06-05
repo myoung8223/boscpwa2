@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "105"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "106"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1094,26 +1094,54 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    // 🚀 STEP 1: Fetch the raw binary array directly from the virtual blob url memory
+    console.log("Fetching binary 3MF data from Blob URL...");
+
     fetch(blobUrl)
         .then(response => {
             if (!response.ok) throw new Error("Could not retrieve binary data from file system blob.");
             return response.arrayBuffer();
         })
         .then(arrayBuffer => {
-            // 🚀 STEP 2: Initialize our canonical 3MF Loader
-            const loader = new THREE.ThreeMFLoader();
-            
-            // 🚀 STEP 3: Parse the raw array buffer directly! 
-            // This triggers JSZip internally without checking any URL string extensions or hashes.
-            const threemfGroup = loader.parse(arrayBuffer);
+            console.log("Successfully fetched ArrayBuffer. Size:", arrayBuffer.byteLength, "bytes");
+
+            // 🔍 CHECK 1: Ensure JSZip actually exists globally
+            if (typeof window.JSZip === 'undefined') {
+                throw new Error("CRITICAL: window.JSZip is undefined! Check your script loading order in index.html.");
+            } else {
+                console.log("window.JSZip detected successfully.");
+            }
+
+            // 🔍 CHECK 2: Safeguard Loader Class Name Variations
+            let loader;
+            if (typeof THREE.ThreeMFLoader === 'function') {
+                console.log("Initializing THREE.ThreeMFLoader...");
+                loader = new THREE.ThreeMFLoader();
+            } else if (typeof THREE._3MFLoader === 'function') {
+                console.log("Initializing THREE._3MFLoader (alternative format)...");
+                loader = new THREE._3MFLoader();
+            } else {
+                throw new Error("CRITICAL: Neither THREE.ThreeMFLoader nor THREE._3MFLoader was found in your Three.js bundle.");
+            }
+
+            // 🔍 CHECK 3: Parse the data safely
+            let threemfGroup;
+            try {
+                console.log("Attempting to parse 3MF binary data...");
+                
+                // Some versions of ThreeMFLoader require a manager passed, or use standard parse
+                threemfGroup = loader.parse(arrayBuffer);
+                
+                console.log("3MF data parsed successfully into Three.js Object3D group!");
+            } catch (parseError) {
+                console.error("The loader failed inside its internal .parse() routine:", parseError);
+                throw parseError;
+            }
             
             currentMesh = threemfGroup;
 
             // Ensure materials look good, respect wireframe, AND allow transparency
             currentMesh.traverse((child) => {
                 if (child.isMesh) {
-                    // Reset base color so incoming 3MF mesh colors aren't multiplied by black
                     if (child.material.color) {
                         child.material.color.setRGB(1, 1, 1);
                     }
@@ -1121,19 +1149,16 @@ function update3DModelViewer(blobUrl) {
                     child.material.roughness = 0.6;
                     child.material.metalness = 0.1;
                     
-                    // Glass Transparency Matrix
-                    child.material.transparent = true;       // Enables alpha blending
-                    child.material.side = THREE.DoubleSide;  // Lets us see back walls through front
-                    child.material.depthWrite = true;        // Keeps faces sorted correctly
+                    child.material.transparent = true;       
+                    child.material.side = THREE.DoubleSide;  
+                    child.material.depthWrite = true;        
                     child.material.vertexColors = false;      
                     
                     if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
                 }
             });
 
-            // Fix the OpenSCAD Z-up rotation issue
             currentMesh.rotation.x = -Math.PI / 2;
-
             scene.add(currentMesh);
 
             if (savedPosition && savedTarget) {
@@ -1147,7 +1172,8 @@ function update3DModelViewer(blobUrl) {
             if (typeof render === 'function') render(); 
         })
         .catch(err => {
-            console.error("Canonical 3MF Loader Parse Failure:", err);
+            // This guarantees that any failure inside the .then chain lands here instead of staying silent
+            console.error("🛑 3MF Pipeline Failure Error Logged:", err.message, err.stack);
             if (typeof showBuildError === 'function') showBuildError("3MF Processing Error");
         });
 }
