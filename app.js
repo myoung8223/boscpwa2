@@ -857,8 +857,9 @@ hull() {                                   // hull example (D6 die)
     if (typeof triggerLineUpdate === 'function') triggerLineUpdate();
     
 	try {
-        // 🚀 Grab the global OpenSCAD factory initialized by your new HTML script tag
-        openSCADFactory = window.OpenSCAD;
+        // 🚀 Dynamically import the ES module!
+        const OpenSCADModule = await import('./libs/openscad.js');
+        openSCADFactory = OpenSCADModule.default || OpenSCADModule;
         
         const fontFiles = [
             'LiberationSans-Regular.ttf', 'LiberationSans-Bold.ttf', 'LiberationSans-Italic.ttf', 'LiberationSans-BoldItalic.ttf',
