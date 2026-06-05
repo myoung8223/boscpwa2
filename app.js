@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "113"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "114"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1140,7 +1140,7 @@ function update3DModelViewer(raw3mfData) {
         // Traverse the imported nodes to safely configure the hierarchy
         currentMesh.traverse((child) => {
             if (child.isMesh) {
-                // 🔍 Check 1: Does this specific geometry contain custom vertex color definitions?
+                // Check if this specific geometry contains custom vertex color definitions
                 const hasVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                 
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
@@ -1148,39 +1148,56 @@ function update3DModelViewer(raw3mfData) {
                 materials.forEach((mat) => {
                     if (!mat) return;
 
+                    // 🛠️ ALWAYS ENABLE TRANSPARENCY PIPELINE SUPPORT
+                    // This tells Three.js to use alpha blending channels on this mesh shader group
+                    mat.transparent = true;
+                    mat.side = THREE.DoubleSide; 
+                    mat.depthWrite = true;       
+
                     if (hasVertexColors) {
-                        // 🚀 ENABLE VERTEX COLORS: If the compiler wrote colors directly into the coordinates,
+                        // ENABLE VERTEX COLORS: If the compiler wrote colors directly into the coordinates,
                         // tell the material to map them, and reset the base diffuse color to absolute white 
-                        // so it doesn't taint the script's original color hues!
                         mat.vertexColors = true;
                         mat.color.setRGB(1, 1, 1);
-                        logToConsole("🎨 Mesh has embedded geometry colors. Enabling vertex color rendering.");
+                        
+                        // Let Three.js look at the native opacity channel parsed from the vertex attributes
+                        // If it wasn't specified or defaults to 1, we keep it as is.
                     } else {
-                        // 🚀 MANAGE FALLBACK COLOR: If there are no vertex colors, we check if Three.js 
-                        // assigned its default blue placeholder. If it did, or if the color is default white/black,
-                        // we apply your workspace's picker color!
                         mat.vertexColors = false;
 
                         // Check if the material color looks like Three.js's standard placeholder blue 
-                        // (often approx R: 0.5-0.7, G: 0.7-0.8, B: 0.9-1.0 depending on the build version)
                         const isPlaceholderBlue = (mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
                         const isWhiteOrBlack = (mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
                                                (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0);
 
                         if ((isPlaceholderBlue || isWhiteOrBlack) && typeof activeModelColor !== 'undefined') {
                             mat.color.set(activeModelColor);
+                            
+                            // 🚀 SMART ALPHA ROUTER FALLBACK:
+                            // If the user didn't write an explicit color() wrapper in their code, 
+                            // we give it a clean, beautiful subtle default transparency factor of 1.0 (Solid)
+                            // or feel free to change this to 0.85 if you prefer a global translucent theme.
+                            if (mat.opacity === 1) {
+                                mat.opacity = 1.0; 
+                            }
                         }
+                    }
+
+                    // 🚀 THE FIX: If the parsed material from the 3MF file has a custom opacity 
+                    // that is NOT exactly 1.0, it means it extracted a fractional alpha value 
+                    // from your script's color() vector array! We leave it alone so it displays perfectly.
+                    if (mat.opacity < 1.0) {
+                        logToConsole(`✨ Script-defined Alpha Transparency detected: ${mat.opacity}`);
                     }
 
                     // Shading adjustments so reflections catch the lighting profiles beautifully
                     mat.roughness = 0.5;
                     mat.metalness = 0.1;
                     
-                    // Glass Shading Matrix
-                    mat.transparent = true;
-                    mat.opacity = 0.85;
-                    mat.side = THREE.DoubleSide; 
-                    mat.depthWrite = true;       
+                    // Support the wireframe layout toggle switch state
+                    if (typeof wireframeMode !== 'undefined') {
+                        mat.wireframe = wireframeMode;
+                    }
                     
                     // Signal the WebGL context renderer to compile shaders for these property changes
                     mat.needsUpdate = true;
