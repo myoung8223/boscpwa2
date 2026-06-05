@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "92"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "93"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -724,6 +724,41 @@ window.addEventListener('keydown', (event) => {
             btnPreview.click(); 
         }
     }
+
+	// 💾 Save File [Ctrl + S]
+    if (event.ctrlKey && event.key.toLowerCase() === 's') {
+        event.preventDefault(); // Stops browser "Save Page As"
+        event.stopImmediatePropagation();
+        if (btnSave && !btnSave.disabled) {
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl + S] (Save)');
+            btnSave.click();
+        }
+    }
+
+    // 📂 Open File [Ctrl + O]
+    if (event.ctrlKey && event.key.toLowerCase() === 'o') {
+        event.preventDefault(); // Stops browser "Open Local File"
+        event.stopImmediatePropagation();
+        if (fileLoad) {
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl + O] (Open)');
+            fileLoad.click();
+        }
+    }
+
+    // ⚙️ Open Settings [Ctrl + ,] or [F1]
+    if (event.key === 'F1' || (event.ctrlKey && event.key === ',')) {
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        logToConsole(`⌨️ Hotkey Triggered: Settings`); 
+        
+        // 👉 Grab the actual settings button by its ID and click it
+        // (Change 'btn-settings' if your HTML uses a different ID for the gear icon!)
+        const settingsButton = document.getElementById('btn-settings');
+        if (settingsButton) {
+            settingsButton.click();
+        }
+    }
+
 }, true);
 
 btnColorTrigger.addEventListener('click', () => modelColorInput.click());
