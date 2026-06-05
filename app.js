@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "110"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "111"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1105,30 +1105,21 @@ function update3DModelViewer(raw3mfData) {
             throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
         }
 
-        // 🚀 THE MAGIC COMPATIBILITY LAYER:
-        // We trick ThreeMFLoader into thinking it's talking to JSZip, 
-        // while routing all decompression directly into fflate!
+        // 🚀 THE COMPATIBILITY LAYER (Working beautifully!)
         window.JSZip = {
             loadAsync: async function(data) {
-                // Ensure data is parsed as a clean, isolated Uint8Array copy
                 const bytes = new Uint8Array(data);
                 const unzippedFiles = fflate.unzipSync(bytes);
-                
                 return {
                     file: function(relativePath) {
                         const fileData = unzippedFiles[relativePath];
                         if (!fileData) return null;
-                        
-                        // Recreate the exact micro-methods ThreeMFLoader expects
-                        const resolver = {
+                        return {
                             async: async function(type) {
-                                if (type === 'string') {
-                                    return new TextDecoder().decode(fileData);
-                                }
+                                if (type === 'string') return new TextDecoder().decode(fileData);
                                 return fileData.buffer;
                             }
                         };
-                        return resolver;
                     }
                 };
             }
@@ -1136,30 +1127,52 @@ function update3DModelViewer(raw3mfData) {
 
         const loader = new THREE.ThreeMFLoader();
         
-        // Ensure data is extracted out of any overlapping WASM heap address space
+        // Isolate WASM memory buffer allocation space
         const standaloneBytes = new Uint8Array(raw3mfData);
         const bufferToParse = standaloneBytes.buffer;
         
-        // This triggers our custom fflate layer synchronously 
+        // Parse the 3MF package
         const threemfGroup = loader.parse(bufferToParse);
-        
         if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
         
         currentMesh = threemfGroup;
 
-        // Traverse the imported nodes to apply user-selected color & shading styles
+        // 🚀 THE SHADING FIX: Tweak native materials instead of replacing them completely
         currentMesh.traverse((child) => {
             if (child.isMesh) {
-                // Assign a beautiful, highly visible material using your PWA's active color
-                child.material = new THREE.MeshStandardMaterial({
-                    color: new THREE.Color(activeModelColor),
-                    roughness: 0.4,
-                    metalness: 0.1,
-                    transparent: true,
-                    opacity: 0.85,
-                    side: THREE.DoubleSide,
-                    depthWrite: true,
-                    wireframe: wireframeMode
+                // Ensure material structure arrays are normalized
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                
+                materials.forEach((mat) => {
+                    if (!mat) return;
+
+                    // 🎨 Apply your PWA's color picker hex color directly
+                    if (typeof activeModelColor !== 'undefined') {
+                        mat.color.set(activeModelColor);
+                    } else {
+                        mat.color.setRGB(1, 1, 1); // Default safe white backup
+                    }
+
+                    // Tweak standard physical reflections so lights shine off it elegantly
+                    mat.roughness = 0.5;
+                    mat.metalness = 0.1;
+                    
+                    // Glass Transparency Matrix
+                    mat.transparent = true;
+                    mat.opacity = 0.85;
+                    mat.side = THREE.DoubleSide; // Render inside walls
+                    mat.depthWrite = true;       // Keeps surfaces sorted mathematically
+                    
+                    // 3MF maps colors via solid submesh definitions, disable raw vertex arrays
+                    mat.vertexColors = false;
+
+                    // Map wireframe button toggle state
+                    if (typeof wireframeMode !== 'undefined') {
+                        mat.wireframe = wireframeMode;
+                    }
+                    
+                    // 💡 Tell the lighting manager to rebuild the shader caches for this material
+                    mat.needsUpdate = true;
                 });
             }
         });
@@ -1167,7 +1180,7 @@ function update3DModelViewer(raw3mfData) {
         // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
         currentMesh.rotation.x = -Math.PI / 2;
 
-        // Inject into main scene viewport canvas
+        // Push the fully compiled group into the primary renderer viewport
         scene.add(currentMesh);
 
         // Retain view camera coordinates
