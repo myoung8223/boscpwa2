@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "101"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "102"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1106,10 +1106,15 @@ function update3DModelViewer(blobUrl) {
                 child.material.roughness = 0.6;
                 child.material.metalness = 0.1;
                 
-                // 🚀 THE TRANSPARENCY FIXES
-                child.material.transparent = true;         // Allows the alpha channel to work
-                child.material.side = THREE.DoubleSide;    // Renders the inside of the glass
-                child.material.depthWrite = false;         // Fixes glitchy overlapping glass shapes
+                // 🚀 THE CORRECTED TRANSPARENCY MATRIX
+                child.material.transparent = true;       // Enables alpha blending
+                child.material.side = THREE.DoubleSide;  // Lets us see the back walls through the front
+                child.material.depthWrite = true;        // 🛑 TURNED BACK ON: Keeps the cube faces mathematically sorted!
+                
+                // 🎨 FORCE COLOR RECOGNITION
+                // OpenSCAD's AMF exporter bundles colors per-vertex/per-geometry. 
+                // This forces Three.js to look at that internal color data instead of defaulting to grey.
+                child.material.vertexColors = true;      
                 
                 if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
             }
