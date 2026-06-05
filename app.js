@@ -950,16 +950,19 @@ try {
         // 🚀 THE MAGIC: Target .3mf and enable the blistering fast Manifold kernel!
         instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']); 
 
-        if (instance.FS.analyzePath('/output.amf').exists) {
-            const outputData = instance.FS.readFile('/output.amf');
+        if (instance.FS.analyzePath('/output.3mf').exists) {
+            const outputData = instance.FS.readFile('/output.3mf');
             
-            // 🚀 Switch Blob type to standard XML
-            currentStlBlob = new Blob([outputData], { type: 'application/xml' });
+			// 🚀 FIX: Wrap using the official 3D Manufacturing Format MIME type description
+            currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
             
             update3DModelViewer(URL.createObjectURL(currentStlBlob));
             
             if (placeholderText) placeholderText.style.display = 'none';
             btnExport.disabled = false;
+
+			// Cleanup virtual file space
+            instance.FS.unlink('/output.3mf');			
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
