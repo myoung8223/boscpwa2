@@ -1094,52 +1094,58 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    // 🚀 Load modern 3MF instead of AMF
-    const loader = new THREE.ThreeMFLoader();
-    loader.load(blobUrl, (threemfGroup) => {
-        
-        currentMesh = threemfGroup;
+    // 🚀 FETCH THE RAW DATA TO BYPASS BLOB URL PARSING GLITCHES
+    fetch(blobUrl)
+        .then(response => response.arrayBuffer())
+        .then(arrayBuffer => {
+            
+            // Initialize the 3MF Loader
+            const loader = new THREE.ThreeMFLoader();
+            
+            // 🚀 Use .parse() instead of .load() to feed the binary array directly!
+            const threemfGroup = loader.parse(arrayBuffer);
+            
+            currentMesh = threemfGroup;
 
-        // Ensure materials look good, respect wireframe, AND allow transparency
-        currentMesh.traverse((child) => {
-            if (child.isMesh) {
-                // 🎨 RESET THE BASE MATERIAL COLOR
-                // 3MF attaches standard colors to the material directly. Resetting this to white 
-                // prevents Three.js from multiplying the incoming 3MF color against a default black base.
-                if (child.material.color) {
-                    child.material.color.setRGB(1, 1, 1);
+            // Ensure materials look good, respect wireframe, AND allow transparency
+            currentMesh.traverse((child) => {
+                if (child.isMesh) {
+                    // Reset base color so incoming 3MF mesh colors aren't multiplied by black
+                    if (child.material.color) {
+                        child.material.color.setRGB(1, 1, 1);
+                    }
+
+                    child.material.roughness = 0.6;
+                    child.material.metalness = 0.1;
+                    
+                    // Glass Transparency Matrix
+                    child.material.transparent = true;       // Enables alpha blending
+                    child.material.side = THREE.DoubleSide;  // Lets us see back walls through front
+                    child.material.depthWrite = true;        // Keeps faces sorted correctly
+                    child.material.vertexColors = false;      
+                    
+                    if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
                 }
+            });
 
-                child.material.roughness = 0.6;
-                child.material.metalness = 0.1;
-                
-                // 🚀 THE TRANSPARENCY MATRIX
-                child.material.transparent = true;       // Enables alpha blending
-                child.material.side = THREE.DoubleSide;  // Lets us see the back walls through the front
-                child.material.depthWrite = true;        // Keeps the cube faces mathematically sorted!
-                
-                // 🎨 3MF doesn't use vertex arrays for color, so we ensure this is false/removed
-                child.material.vertexColors = false;      
-                
-                if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
+            // Fix the OpenSCAD Z-up rotation issue
+            currentMesh.rotation.x = -Math.PI / 2;
+
+            scene.add(currentMesh);
+
+            if (savedPosition && savedTarget) {
+                camera.position.copy(savedPosition);
+                controls.target.copy(savedTarget);
+                controls.update();
+            } else {
+                frameModelInCamera(currentMesh);
             }
+
+            if (typeof render === 'function') render(); 
+        })
+        .catch(err => {
+            console.error("ThreeMFLoader binary parse error:", err);
         });
-
-        // Fix the OpenSCAD Z-up rotation issue
-        currentMesh.rotation.x = -Math.PI / 2;
-
-        scene.add(currentMesh);
-
-        if (savedPosition && savedTarget) {
-            camera.position.copy(savedPosition);
-            controls.target.copy(savedTarget);
-            controls.update();
-        } else {
-            frameModelInCamera(currentMesh);
-        }
-
-        if (typeof render === 'function') render(); 
-    });
 }
 
 btnPreview.disabled = true; btnExport.disabled = true;
