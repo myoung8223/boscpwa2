@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "97"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "98"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -22,7 +22,7 @@ const btnColorTrigger = document.getElementById('btn-color-trigger');
 const closeHelpBtn = document.getElementById('close-help-btn');
 const helpOverlay = document.getElementById('help-overlay');
 const btnSettingsCheatSheet = document.getElementById('btn-settings-cheat-sheet');
-const settingsOverlay = document.getElementById('settings-overlay');                 // (double check that 'settings-overlay' matches your actual HTML ID!)
+const settingsOverlay = document.getElementById('settings-overlay');
 
 // 🌐 THREE.JS SCOPE VARIABLES
 let scene, camera, renderer, controls, currentMesh = null;
@@ -856,10 +856,9 @@ hull() {                                   // hull example (D6 die)
     }
     if (typeof triggerLineUpdate === 'function') triggerLineUpdate();
     
-    try {
-        const OpenSCADModule = await import('./libs/openscad.js');
-        openSCADFactory = OpenSCADModule.default || OpenSCADModule.createOpenSCAD || OpenSCADModule;
-        await openSCADFactory();
+	try {
+        // 🚀 Grab the global OpenSCAD factory initialized by your new HTML script tag
+        openSCADFactory = window.OpenSCAD;
         
         const fontFiles = [
             'LiberationSans-Regular.ttf', 'LiberationSans-Bold.ttf', 'LiberationSans-Italic.ttf', 'LiberationSans-BoldItalic.ttf',
@@ -918,69 +917,50 @@ btnPreview.addEventListener('click', async () => {
     const scriptCode = jar.toString(); 
     const errorLogs = [];
 
-    try {
-        const instance = await new Promise((resolve, reject) => {
-            try {
-                const inst = openSCADFactory({
-                    noInitialRun: true,
-                    print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
-                    printErr: (text) => { logToConsole(`[ERROR]: ${text}`); errorLogs.push(text); },
-                    onRuntimeInitialized: () => resolve(inst)
-                });
-                if (inst && typeof inst.then === 'function') inst.then(resolve).catch(reject);
-            } catch (initError) { reject(initError); }
+try {
+        // 🚀 Initialize the engine and point it directly to the local WASM file
+        const instance = await openSCADFactory({
+            noInitialRun: true,
+            locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
+            print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
+            printErr: (text) => {
+                errorLogs.push(text);
+                logToConsole(`[ERROR]: ${text}`);
+            }
         });
 
-        try { instance.FS.mkdir('/fonts'); } catch(e) { /* ignore */ }
-        
-        for (const [fontName, fontData] of Object.entries(fontCache)) {
-            instance.FS.writeFile(`/${fontName}`, fontData);
-            instance.FS.writeFile(`/fonts/${fontName}`, fontData);
-            if (instance.fonts && typeof instance.fonts.registerFont === 'function') {
-                instance.fonts.registerFont(`/${fontName}`);
-                instance.fonts.registerFont(`/fonts/${fontName}`);
-            }
+        // 📝 Map custom fonts, STLs, and SVGs (Keep your existing mapping loops)
+        for (const fontName of Object.keys(fontCache)) {
+            try { instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); } 
+            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /${fontName}`); }
         }
-        if (instance.ENV) instance.ENV.OPENSCAD_FONTDIR = '/fonts';
-
-        // 📁 INJECT STLS INTO WASM ROOT
-        for (const [stlName, stlData] of Object.entries(stlCache)) {
-            try {
-                instance.FS.writeFile(`/${stlName}`, stlData);
-                const stat = instance.FS.stat(`/${stlName}`);
-                logToConsole(`✔ WASM FS Mapped: /${stlName} (${stat.size} bytes)`);
-            } catch (fsErr) {
-                logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`);
-            }
+        for (const stlName of Object.keys(stlCache)) {
+            try { instance.FS.writeFile(`/${stlName}`, stlCache[stlName]); logToConsole(`Mounted STL: /${stlName}`); } 
+            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
+        }
+        for (const svgName of Object.keys(svgCache)) {
+            try { instance.FS.writeFile(`/${svgName}`, svgCache[svgName]); logToConsole(`Mounted SVG: /${svgName}`); } 
+            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
         }
 
-        // 📁 INJECT SVGS INTO WASM ROOT
-        for (const [svgName, svgData] of Object.entries(svgCache)) {
-            try {
-                instance.FS.writeFile(`/${svgName}`, svgData);
-                const stat = instance.FS.stat(`/${svgName}`);
-                logToConsole(`✔ WASM FS Mapped: /${svgName} (${stat.size} bytes)`);
-            } catch (fsErr) {
-                logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`);
-            }
-        }
-
+        // Write the code to the virtual filesystem
         instance.FS.writeFile('/input.scad', scriptCode);
-        instance.callMain(['/input.scad', '-o', '/output.stl']);
         
-        if (instance.FS.analyzePath('/output.stl').exists) {
-            const stlData = instance.FS.readFile('/output.stl');
-            currentStlBlob = new Blob([stlData], { type: 'application/sla' });
+        // 🚀 THE MAGIC: Target .3mf and enable the blistering fast Manifold kernel!
+        instance.callMain(['/input.scad', '--enable=manifold', '-o', '/output.3mf']); 
+
+        if (instance.FS.analyzePath('/output.3mf').exists) {
+            const outputData = instance.FS.readFile('/output.3mf');
+            
+            // 🚀 Switch Blob type to the 3MF standard MIME type
+            currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' }); 
+            
             update3DModelViewer(URL.createObjectURL(currentStlBlob));
-            // 🚀 (Already here) Hides the text when successful
+            
             if (placeholderText) placeholderText.style.display = 'none';
             btnExport.disabled = false;
         } else {
-            // 🚀 NEW: Update the text so it doesn't get stuck on "Building..."
-            if (placeholderText) {
-                placeholderText.textContent = "❌ Build Failed (Check Console)";
-            }
-            
+            if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
             for (const logLine of errorLogs) {
                 const lineMatch = logLine.match(/line\s+(\d+)/i);
@@ -988,20 +968,9 @@ btnPreview.addEventListener('click', async () => {
             }
             if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
-    } catch (error) { 
-        // 🚀 NEW: Hide or update the text on a hard WASM crash
-        if (placeholderText) {
-            placeholderText.textContent = "⚠️ Engine Crash";
-        }
-        
-        let errorMsg = error.message || error;
-        if (typeof error === 'number') {
-            errorMsg = `[C++ Exception Pointer: ${error}] The WASM engine hard-crashed.`;
-            if (typeof instance !== 'undefined' && instance.getExceptionMessage) {
-                try { errorMsg += `\nDetailed Trace: ${instance.getExceptionMessage(error)}`; } catch(e){}
-            }
-        }
-        logToConsole(`Execution error: ${errorMsg}`); 
+    } catch (error) {
+        if (placeholderText) placeholderText.textContent = "⚠️ Engine Crash";
+        logToConsole(`Execution error: ${error.message || error}`);
     }
 });
 
@@ -1010,9 +979,9 @@ btnExport.addEventListener('click', () => {
     const link = document.createElement('a'); 
     link.href = URL.createObjectURL(currentStlBlob);
     const projectName = projectNameInput.value.trim() || "openscad_model"; 
-    link.download = `${projectName}.stl`; 
+    link.download = `${projectName}.3mf`; // 🚀 Switch extension
     link.click();
-    logToConsole(`Exported ${projectName}.stl successfully.`);
+    logToConsole(`Exported ${projectName}.3mf successfully.`);
 });
 
 if ('serviceWorker' in navigator) {
@@ -1102,21 +1071,50 @@ function init3DWorkspace() {
 }
 
 function update3DModelViewer(blobUrl) {
-    if (!workspaceInitialized) init3DWorkspace(); 
-    let savedPosition = null, savedTarget = null;
-    if (currentMesh && camera && controls) { savedPosition = camera.position.clone(); savedTarget = controls.target.clone(); }
-    if (currentMesh) { scene.remove(currentMesh); currentMesh.geometry.dispose(); currentMesh.material.dispose(); currentMesh = null; }
+    if (!workspaceInitialized) init3DWorkspace();
 
-    new THREE.STLLoader().load(blobUrl, (geometry) => {
-        geometry.computeVertexNormals();
-        const material = new THREE.MeshStandardMaterial({ color: activeModelColor, roughness: 0.85, metalness: 0.05, wireframe: wireframeMode });
-        material.onBeforeCompile = (shader) => {
-            shader.fragmentShader = `float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); } float proceduralNoise(vec3 p) { return hash(p.xy + p.z); }\n` + shader.fragmentShader;
-            shader.fragmentShader = shader.fragmentShader.replace(`#include <opaque_fragment>`, `float noiseGrit = proceduralNoise(vViewPosition * 4.0) * 0.12; outgoingLight.rgb += vec3(noiseGrit - 0.06); #include <opaque_fragment>`);
-        };
-        currentMesh = new THREE.Mesh(geometry, material); currentMesh.position.set(0, 0, 0); currentMesh.rotation.x = -Math.PI / 2;
+    let savedPosition = null;
+    let savedTarget = null;
+    if (currentMesh && camera && controls) {
+        savedPosition = camera.position.clone();
+        savedTarget = controls.target.clone();
+    }
+
+    // Safely remove the old 3MF group from the scene and free memory
+    if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+            }
+        });
+        currentMesh = null;
+    }
+
+    // 🚀 Load the new color-packed 3MF file
+    const loader = new THREE.ThreeMFLoader();
+    loader.load(blobUrl, (loadedGroup) => {
+        
+        currentMesh = loadedGroup;
+
+        // Apply visual tweaks (like wireframe) to every shape in the group
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                // Ensure the lighting looks fantastic
+                child.material.roughness = 0.85;
+                child.material.metalness = 0.05;
+                if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
+            }
+        });
+
+        // 3MF from OpenSCAD requires a 90-degree tilt to match Three.js Z-up coordinates
+        currentMesh.rotation.x = -Math.PI / 2;
+
         scene.add(currentMesh);
-        geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+
+        // Keep the camera locked on where the user was looking
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
@@ -1124,6 +1122,8 @@ function update3DModelViewer(blobUrl) {
         } else {
             frameModelInCamera(currentMesh);
         }
+
+        if (typeof render === 'function') render(); 
     });
 }
 
