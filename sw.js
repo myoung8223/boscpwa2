@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boscpwa-v5';
+const CACHE_NAME = 'boscpwa-v6';
 
 const ASSETS_TO_CACHE = [
   // Base HTML and Manifest
@@ -24,6 +24,7 @@ const ASSETS_TO_CACHE = [
   // New local libraries
   './libs/fflate.js',
   './libs/three.min.js',
+  './libs/3MFLoader.js',
   './libs/STLLoader.js',
   './libs/OrbitControls.js',
   './libs/openscad.js',
