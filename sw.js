@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boscpwa-v3'; // Bumped to v3 to force the browser to update!
+const CACHE_NAME = 'boscpwa-v4'; // Bumped to v4 to force the browser to update!
 
 const ASSETS_TO_CACHE = [
   // Base HTML and Manifest
@@ -6,6 +6,7 @@ const ASSETS_TO_CACHE = [
   './index.html',
   './app.js',
   './manifest.json',
+  './favicon.ico',
   
   // PWA Icons (make sure these exist in your root folder!)
   './icon-192.png',
