@@ -179,25 +179,116 @@ with Extensive AI Assistance from Google Gemini</div>
             <div id="help-overlay" class="hidden">
                 <button id="close-help-btn" class="close-btn">&times;</button>
                 <div class="cheat-sheet-content">
-                    <h2>OpenSCAD Cheat Sheet</h2>
-                    <p><em>Scroll down for syntax. Highlight and copy text directly into the editor!</em></p>
+
+<h2>OpenSCAD Cheat Sheet</h2>
+                    <p><em>Scroll down for syntax. Click to highlight, then copy and paste directly into the editor!</em></p>
                     
                     <hr style="border-color: #444;">
                     
-                    <h3>2D Shapes</h3>
-                    <code>circle(r=10);</code><br>
-                    <code>square(size=10, center=true);</code><br>
-                    <code>polygon(points=[[0,0],[10,0],[0,10]]);</code><br>
+                    <h3>Syntax & Includes</h3>
+                    <code>var = value;</code><br>
+                    <code>module name(...) { ... }</code><br>
+                    <code>name();</code><br>
+                    <code>function name(...) = ...;</code><br>
+                    <code>include &lt;filename.scad&gt;</code><br>
+                    <code>use &lt;filename.scad&gt;</code><br>
                     <br>
+
+                    <h3>2D Shapes</h3>
+                    <code>circle(radius | d=diameter);</code><br>
+                    <code>square(size, center);</code><br>
+                    <code>square([width, height], center);</code><br>
+                    <code>polygon([points]);</code><br>
+                    <code>polygon([points], [paths]);</code><br>
+                    <code>text(text, size, font, halign, valign, spacing, direction, language, script);</code><br>
+                    <br>
+
                     <h3>3D Shapes</h3>
-                    <code>sphere(r=10);</code><br>
-                    <code>cube([10,20,30], center=true);</code><br>
-                    <code>cylinder(h=20, r1=10, r2=0, center=true);</code><br>
+                    <code>sphere(radius | d=diameter);</code><br>
+                    <code>cube(size, center);</code><br>
+                    <code>cube([width, depth, height], center);</code><br>
+                    <code>cylinder(h, r|d, center);</code><br>
+                    <code>cylinder(h, r1|d1, r2|d2, center);</code><br>
+                    <code>polyhedron(points, faces, convexity);</code><br>
+                    <br>
+
+                    <h3>Transformations</h3>
+                    <code>translate([x, y, z])</code><br>
+                    <code>rotate([x, y, z])</code><br>
+                    <code>rotate(a, [x, y, z])</code><br>
+                    <code>scale([x, y, z])</code><br>
+                    <code>resize([x, y, z], auto)</code><br>
+                    <code>mirror([x, y, z])</code><br>
+                    <code>multmatrix(m)</code><br>
+                    <code>color("colorname", alpha)</code><br>
+                    <code>color([r, g, b, a])</code><br>
+                    <code>offset(r|delta, chamfer)</code><br>
+                    <code>hull()</code><br>
+                    <code>minkowski()</code><br>
+                    <br>
+
+                    <h3>Boolean Operations</h3>
+                    <code>union()</code><br>
+                    <code>difference()</code><br>
+                    <code>intersection()</code><br>
+                    <br>
+
+                    <h3>Extrusion & Projection</h3>
+                    <code>linear_extrude(height, center, convexity, twist, slices, scale, $fn, $fa, $fs)</code><br>
+                    <code>rotate_extrude(angle, convexity, $fn, $fa, $fs)</code><br>
+                    <code>projection(cut)</code><br>
+                    <code>surface(file, center, invert, convexity)</code><br>
+                    <br>
+
+                    <h3>Modifiers</h3>
+                    <code>*</code> Disable (ignores the subtree)<br>
+                    <code>!</code> Show only (ignores everything else)<br>
+                    <code>#</code> Highlight (draws in transparent pink)<br>
+                    <code>%</code> Transparent (draws in transparent gray)<br>
+                    <br>
+
+                    <h3>Loops & Conditionals</h3>
+                    <code>for (i = [start:end]) { ... }</code><br>
+                    <code>for (i = [start:step:end]) { ... }</code><br>
+                    <code>for (i = [...]) { ... }</code><br>
+                    <code>intersection_for(i = [start:end]) { ... }</code><br>
+                    <code>if (...) { ... } else { ... }</code><br>
+                    <br>
+
+                    <h3>List Comprehensions</h3>
+                    <code>[ for (i = range|list) i ]</code><br>
+                    <code>[ for (i = ...) if (condition(i)) i ]</code><br>
+                    <code>[ for (i = ...) let (a = ...) a ]</code><br>
+                    <br>
+
+                    <h3>Math & String Functions</h3>
+                    <code>abs(), sign(), sin(), cos(), tan(), acos(), asin(), atan(), atan2()</code><br>
+                    <code>floor(), round(), ceil(), ln(), len(), let(), log(), pow(), sqrt(), exp()</code><br>
+                    <code>rands(), min(), max(), norm(), cross(), concat(), lookup()</code><br>
+                    <code>str(), chr(), ord(), search(), version(), version_num(), parent_module()</code><br>
+                    <br>
+
+                    <h3>Other</h3>
+                    <code>echo(...)</code><br>
+                    <code>render(convexity)</code><br>
+                    <code>import("....ext")</code><br>
+                    <br>
+
+                    <h3>Special Variables</h3>
+                    <code>$fa</code> Minimum angle<br>
+                    <code>$fs</code> Minimum size<br>
+                    <code>$fn</code> Number of fragments<br>
+                    <code>$t</code> Animation step<br>
+                    <code>$vpr</code> Viewport rotation<br>
+                    <code>$vpt</code> Viewport translation<br>
+                    <code>$vpd</code> Viewport camera distance<br>
+                    <code>$children</code> Number of module children<br>
                     
                     <br><br><br>
                     <p style="font-size: 0.8rem; color: #888;">
-                        * OpenSCAD Cheat Sheet content is sourced from the official <a href="https://openscad.org" style="color: #007acc;">OpenSCAD Documentation</a>.
+                        * OpenSCAD Cheat Sheet content is sourced from the official <a href="https://openscad.org" style="color: #007acc;" target="_blank">OpenSCAD Documentation</a>.
                     </p>
+                    
                 </div>
             </div>
         </div>
