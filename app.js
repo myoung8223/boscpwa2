@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "93"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "94"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -19,6 +19,8 @@ const projectNameInput = document.getElementById('project-name-input');
 const editorFontSizeSelect = document.getElementById('editor-font-size-select');
 const modelColorInput = document.getElementById('model-color');
 const btnColorTrigger = document.getElementById('btn-color-trigger');
+const closeHelpBtn = document.getElementById('close-help-btn');
+const helpOverlay = document.getElementById('help-overlay');
 
 // 🌐 THREE.JS SCOPE VARIABLES
 let scene, camera, renderer, controls, currentMesh = null;
@@ -653,6 +655,13 @@ if (modelColorInput) modelColorInput.value = savedColorHexStr;
 if (btnColorTrigger) btnColorTrigger.style.background = savedColorHexStr;
 let activeModelColor = parseInt(savedColorHexStr.replace('#', '0x'), 16);
 
+// ❌ Close Help Menu Button Listener
+if (closeHelpBtn && helpOverlay) {
+    closeHelpBtn.addEventListener('click', () => {
+        helpOverlay.classList.add('hidden');
+    });
+}
+
 function logToConsole(message) {
     let cleanMessage = message.replace(/^\[ERROR\]:\s*/gm, '');
     if (cleanMessage.includes("Could not initialize localization") || cleanMessage.includes("Fontconfig error")) return; 
@@ -745,8 +754,8 @@ window.addEventListener('keydown', (event) => {
         }
     }
 
-    // ⚙️ Open Settings [Ctrl] + [,] or [F1]
-    if (event.key === 'F1' || (event.ctrlKey && event.key === ',')) {
+    // ⚙️ Open Settings [Ctrl] + [,]
+    if (event.ctrlKey && event.key === ',') {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
         logToConsole(`⌨️ Hotkey Triggered: Settings`); 
@@ -759,6 +768,18 @@ window.addEventListener('keydown', (event) => {
         }
     }
 
+	// ❓ Open/Close Help Cheat Sheet [F1]
+    if (event.key === 'F1') {
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        
+        const helpOverlay = document.getElementById('help-overlay');
+        if (helpOverlay) {
+            helpOverlay.classList.toggle('hidden'); // Flips it on or off!
+            logToConsole(`⌨️ Hotkey Triggered: [F1] (Toggled Help)`); 
+        }
+    }
+	
 }, true);
 
 btnColorTrigger.addEventListener('click', () => modelColorInput.click());
