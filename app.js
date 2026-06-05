@@ -22,7 +22,7 @@ const btnColorTrigger = document.getElementById('btn-color-trigger');
 const closeHelpBtn = document.getElementById('close-help-btn');
 const helpOverlay = document.getElementById('help-overlay');
 const btnSettingsCheatSheet = document.getElementById('btn-settings-cheat-sheet');
-//const settingsOverlay = document.getElementById('settings-overlay');                 // (double check that 'settings-overlay' matches your actual HTML ID!)
+const settingsOverlay = document.getElementById('settings-overlay');                 // (double check that 'settings-overlay' matches your actual HTML ID!)
 
 // 🌐 THREE.JS SCOPE VARIABLES
 let scene, camera, renderer, controls, currentMesh = null;
@@ -1136,7 +1136,7 @@ btnWireframe.style.background = '#007acc';
 // ==========================================================================
 const btnSettings = document.getElementById('btn-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
-const settingsOverlay = document.getElementById('settings-overlay');
+//const settingsOverlay = document.getElementById('settings-overlay');    // already declared with other Dom elements at top of source
 const btnToggleGrid = document.getElementById('btn-toggle-grid');
 const btnToggleAxes = document.getElementById('btn-toggle-axes');
 
