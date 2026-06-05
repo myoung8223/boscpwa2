@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "102"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "103"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -948,7 +948,7 @@ try {
         instance.FS.writeFile('/input.scad', scriptCode);
         
         // 🚀 THE MAGIC: Target .3mf and enable the blistering fast Manifold kernel!
-        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.amf']); 
+        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']); 
 
         if (instance.FS.analyzePath('/output.amf').exists) {
             const outputData = instance.FS.readFile('/output.amf');
@@ -1094,27 +1094,32 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    // 🚀 Load color AMF
-    const loader = new THREE.AMFLoader();
-    loader.load(blobUrl, (amfGroup) => {
+    // 🚀 Load modern 3MF instead of AMF
+    const loader = new THREE.ThreeMFLoader();
+    loader.load(blobUrl, (threemfGroup) => {
         
-        currentMesh = amfGroup;
+        currentMesh = threemfGroup;
 
         // Ensure materials look good, respect wireframe, AND allow transparency
         currentMesh.traverse((child) => {
             if (child.isMesh) {
+                // 🎨 RESET THE BASE MATERIAL COLOR
+                // 3MF attaches standard colors to the material directly. Resetting this to white 
+                // prevents Three.js from multiplying the incoming 3MF color against a default black base.
+                if (child.material.color) {
+                    child.material.color.setRGB(1, 1, 1);
+                }
+
                 child.material.roughness = 0.6;
                 child.material.metalness = 0.1;
                 
-                // 🚀 THE CORRECTED TRANSPARENCY MATRIX
+                // 🚀 THE TRANSPARENCY MATRIX
                 child.material.transparent = true;       // Enables alpha blending
                 child.material.side = THREE.DoubleSide;  // Lets us see the back walls through the front
-                child.material.depthWrite = true;        // 🛑 TURNED BACK ON: Keeps the cube faces mathematically sorted!
+                child.material.depthWrite = true;        // Keeps the cube faces mathematically sorted!
                 
-                // 🎨 FORCE COLOR RECOGNITION
-                // OpenSCAD's AMF exporter bundles colors per-vertex/per-geometry. 
-                // This forces Three.js to look at that internal color data instead of defaulting to grey.
-                child.material.vertexColors = true;      
+                // 🎨 3MF doesn't use vertex arrays for color, so we ensure this is false/removed
+                child.material.vertexColors = false;      
                 
                 if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
             }
