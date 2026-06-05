@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boscpwa-v11';
+const CACHE_NAME = 'boscpwa-v12';
 
 const ASSETS_TO_CACHE = [
   // Base HTML and Manifest
