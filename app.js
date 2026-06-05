@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "111"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "112"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1105,7 +1105,7 @@ function update3DModelViewer(raw3mfData) {
             throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
         }
 
-        // 🚀 THE COMPATIBILITY LAYER (Working beautifully!)
+        // 🚀 THE COMPATIBILITY LAYER 
         window.JSZip = {
             loadAsync: async function(data) {
                 const bytes = new Uint8Array(data);
@@ -1137,41 +1137,49 @@ function update3DModelViewer(raw3mfData) {
         
         currentMesh = threemfGroup;
 
-        // 🚀 THE SHADING FIX: Tweak native materials instead of replacing them completely
+        // Traverse the imported nodes to safely configure the hierarchy
         currentMesh.traverse((child) => {
             if (child.isMesh) {
-                // Ensure material structure arrays are normalized
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 
                 materials.forEach((mat) => {
                     if (!mat) return;
 
-                    // 🎨 Apply your PWA's color picker hex color directly
-                    if (typeof activeModelColor !== 'undefined') {
+                    // 🎨 SMART COLOR ROUTER:
+                    // Check if the 3MF file has built-in object colors or vertex attributes.
+                    // If the color is distinct from plain absolute black (#000000) or default white (#ffffff),
+                    // it means the user manually declared a color() block in OpenSCAD!
+                    const hasNativeScriptColor = mat.color && 
+                        (mat.color.r !== 1 || mat.color.g !== 1 || mat.color.b !== 1) && 
+                        (mat.color.r !== 0 || mat.color.g !== 0 || mat.color.b !== 0);
+
+                    if (hasNativeScriptColor) {
+                        // Keep the exact RGB values supplied inside your .scad script code!
+                        logToConsole(`🎨 Applying script-defined color: RGB(${Math.round(mat.color.r*255)}, ${Math.round(mat.color.g*255)}, ${Math.round(mat.color.b*255)})`);
+                    } else if (typeof activeModelColor !== 'undefined') {
+                        // Fall back to your global UI color picker if no color command was specified
                         mat.color.set(activeModelColor);
-                    } else {
-                        mat.color.setRGB(1, 1, 1); // Default safe white backup
                     }
 
-                    // Tweak standard physical reflections so lights shine off it elegantly
+                    // Shading adjustments so reflections catch the lighting profiles beautifully
                     mat.roughness = 0.5;
                     mat.metalness = 0.1;
                     
-                    // Glass Transparency Matrix
+                    // Glass Shading Matrix
                     mat.transparent = true;
                     mat.opacity = 0.85;
-                    mat.side = THREE.DoubleSide; // Render inside walls
-                    mat.depthWrite = true;       // Keeps surfaces sorted mathematically
+                    mat.side = THREE.DoubleSide; 
+                    mat.depthWrite = true;       
                     
-                    // 3MF maps colors via solid submesh definitions, disable raw vertex arrays
+                    // Let the core material mapping engine prioritize solid material parameters over vertex definitions
                     mat.vertexColors = false;
 
-                    // Map wireframe button toggle state
+                    // Support the wireframe layout toggle switch state
                     if (typeof wireframeMode !== 'undefined') {
                         mat.wireframe = wireframeMode;
                     }
                     
-                    // 💡 Tell the lighting manager to rebuild the shader caches for this material
+                    // Signal the WebGL context renderer to compile shaders for these property changes
                     mat.needsUpdate = true;
                 });
             }
@@ -1180,10 +1188,10 @@ function update3DModelViewer(raw3mfData) {
         // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
         currentMesh.rotation.x = -Math.PI / 2;
 
-        // Push the fully compiled group into the primary renderer viewport
+        // Display the fully assembled scene hierarchy group
         scene.add(currentMesh);
 
-        // Retain view camera coordinates
+        // Retain view camera positions
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
@@ -1193,7 +1201,7 @@ function update3DModelViewer(raw3mfData) {
         }
 
         if (typeof render === 'function') render(); 
-        logToConsole("✨ 3D Render Canvas Updated Successfully via 3MF/fflate.");
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
         
     } catch (err) {
         console.error("3MF Parse Pipeline Failure via fflate:", err);
