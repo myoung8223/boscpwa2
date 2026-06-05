@@ -1620,7 +1620,8 @@ function closeAllMenus() {
     if (fontsOverlay) fontsOverlay.classList.add('hidden');
     if (stlsOverlay) stlsOverlay.classList.add('hidden');
     if (svgsOverlay) svgsOverlay.classList.add('hidden');
-    if (licensesOverlay) licensesOverlay.classList.add('hidden'); // 🔌 ADDED
+    if (licensesOverlay) licensesOverlay.classList.add('hidden');
+	if (typeof helpOverlay !== 'undefined' && helpOverlay) helpOverlay.classList.add('hidden');
 }
 
 // Update your window click listener to include the new overlay
@@ -1633,7 +1634,7 @@ window.addEventListener('click', (event) => {
 // Update your Escape key listener
 window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') {
-        const isAnyOpen = [settingsOverlay, fontsOverlay, stlsOverlay, svgsOverlay, licensesOverlay].some(el => el && !el.classList.contains('hidden'));
+        const isAnyOpen = [settingsOverlay, fontsOverlay, stlsOverlay, svgsOverlay, licensesOverlay, helpOverlay].some(el => el && !el.classList.contains('hidden'));
         if (isAnyOpen) { logToConsole('⌨️ Hotkey Triggered: [Escape] - Closing Overlays'); closeAllMenus(); }
     }
 });
