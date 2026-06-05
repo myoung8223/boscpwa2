@@ -66,14 +66,14 @@ Whether installed as a PWA or loaded in the browser, the execution sequence init
 
 ### Basic Use
 
-- **Loading Files:** Click the **Open** button to load `.scad` files into the editor workspace.
-- **Saving Files:** Click the **Save** button to download the current `.scad` code to your local machine.
+- **Loading Files:** Click the **Open** button or press **[Ctrl] + [O]** to load `.scad` files into the editor workspace.
+- **Saving Files:** Click the **Save** button or press **[Ctrl] + [S]** to download the current `.scad` code to your local machine.
 - **Smart Code Editor:** The workspace features intelligent formatting. Press `Tab` or `Shift + Tab` to quickly indent or outdent multi-line blocks of code. The editor also features real-time syntax highlighting, bi-directional bracket matching, and will automatically highlight the exact line of code if the compiler encounters a syntax error.
 - **Previewing:** Click the **Preview** button, press **[F5]***, **[F6]**, or use the **[Ctrl] + [Enter]** hotkey combo to compile your `.scad` code into a 3D model displayed in the right pane.
 - **3D Viewport & Display:** - Click the **Solid / Wireframe** button to toggle the mesh rendering mode.
   - Click the **Change (Color)** button (the color swatch) to open the native color picker and dynamically change the 3D model's material color.
   - You can drag the center gutter left or right to seamlessly adjust the width between the code editor and the 3D viewport.
-- **Workspace Settings (⚙️):** Click the Settings icon to access environmental toggles, including:
+- **Workspace Settings (⚙️):** Click the Settings icon, press **[Ctrl] + [,]** or **[F1]** to access Workspace Settings, including:
   - **Editor Font Size:** Scale the code text up or down for readability (line numbers will automatically sync).
   - **Toggle Line Numbers:** Show or hide the left-hand line number gutter.
   - **Toggle Console:** Show or hide the terminal output box at the bottom of the screen.
