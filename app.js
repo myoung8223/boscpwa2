@@ -1136,7 +1136,7 @@ btnWireframe.style.background = '#007acc';
 // ==========================================================================
 const btnSettings = document.getElementById('btn-settings');
 const btnCloseSettings = document.getElementById('btn-close-settings');
-const settingsOverlay = document.getElementById('settings-overlay');
+//const settingsOverlay = document.getElementById('settings-overlay');
 const btnToggleGrid = document.getElementById('btn-toggle-grid');
 const btnToggleAxes = document.getElementById('btn-toggle-axes');
 
