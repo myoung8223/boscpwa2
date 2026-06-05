@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "116"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "117"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1396,7 +1396,6 @@ function update3DModelViewer(raw3mfData) {
         }
     }
 }
-*/
 
 function update3DModelViewer(raw3mfData) {
     if (!workspaceInitialized) init3DWorkspace();
@@ -1503,6 +1502,166 @@ function update3DModelViewer(raw3mfData) {
                             mat.depthWrite = true;
                             mat.opacity = 1.0; // Force full solid rendering
                         }
+                    }
+
+                    // Shading adjustments so reflections catch the lighting profiles beautifully
+                    mat.roughness = 0.5;
+                    mat.metalness = 0.1;
+                    
+                    // Support the wireframe layout toggle switch state
+                    if (typeof wireframeMode !== 'undefined') {
+                        mat.wireframe = wireframeMode;
+                    }
+                    
+                    // Signal the WebGL context renderer to compile shaders for these property changes
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+
+        // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
+        currentMesh.rotation.x = -Math.PI / 2;
+
+        // Display the fully assembled scene hierarchy group
+        scene.add(currentMesh);
+
+        // Retain view camera positions
+        if (savedPosition && savedTarget) {
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+            controls.update();
+        } else {
+            frameModelInCamera(currentMesh);
+        }
+
+        if (typeof render === 'function') render(); 
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+        
+    } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
+        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
+    }
+}
+*/
+
+function update3DModelViewer(raw3mfData) {
+    if (!workspaceInitialized) init3DWorkspace();
+
+    let savedPosition = null;
+    let savedTarget = null;
+    if (currentMesh && camera && controls) {
+        savedPosition = camera.position.clone();
+        savedTarget = controls.target.clone();
+    }
+
+    // Safely remove the old mesh from the scene and free memory
+    if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+            }
+        });
+        currentMesh = null;
+    }
+
+    logToConsole("📥 Processing 3MF archive using fflate...");
+
+    try {
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
+        }
+
+        // THE COMPATIBILITY LAYER
+        window.JSZip = {
+            loadAsync: async function(data) {
+                const bytes = new Uint8Array(data);
+                const unzippedFiles = fflate.unzipSync(bytes);
+                return {
+                    file: function(relativePath) {
+                        const fileData = unzippedFiles[relativePath];
+                        if (!fileData) return null;
+                        return {
+                            async: async function(type) {
+                                if (type === 'string') return new TextDecoder().decode(fileData);
+                                return fileData.buffer;
+                            }
+                        };
+                    }
+                };
+            }
+        };
+
+        const loader = new THREE.ThreeMFLoader();
+        
+        // Isolate WASM memory buffer allocation space
+        const standaloneBytes = new Uint8Array(raw3mfData);
+        const bufferToParse = standaloneBytes.buffer;
+        
+        // Parse the 3MF package
+        const threemfGroup = loader.parse(bufferToParse);
+        if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
+        
+        currentMesh = threemfGroup;
+
+        // Pull the exact, active chosen hex value from your HTML color input box
+        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#ff007f";
+
+        // Traverse the imported nodes to safely configure the hierarchy
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                
+                materials.forEach((mat) => {
+                    if (!mat) return;
+
+                    mat.side = THREE.DoubleSide; 
+
+                    // 🔍 RE-ENGINEERED COLOR DETECTOR:
+                    // Check if ThreeMFLoader natively flagged this material for vertex coloring,
+                    // OR if the color attributes match OpenSCAD's default preview yellow.
+                    const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
+                    
+                    const isDefaultOpenSCADYellow = (mat.color && mat.color.r > 0.9 && mat.color.g > 0.8 && mat.color.b < 0.6);
+                    const isPlaceholderBlue = (mat.color && mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
+                    const isWhiteOrBlack = (mat.color && ((mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
+                                           (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0)));
+
+                    // If the loader explicitly specified vertex colors, OR if the color is NOT one of the default templates,
+                    // it means an inline color() command was declared in the script code!
+                    const hasInlineScriptColor = loaderFlaggedVertexColors || (!isDefaultOpenSCADYellow && !isPlaceholderBlue && !isWhiteOrBlack);
+
+                    if (hasInlineScriptColor) {
+                        // 🎨 PIPELINE A: Keep your custom script-defined color parameters untouched!
+                        // If it used a vertex color map, ensure Three.js is rendering it relative to white
+                        if (loaderFlaggedVertexColors) {
+                            mat.vertexColors = true;
+                            mat.color.setRGB(1, 1, 1); 
+                        }
+                        
+                        // Configure Alpha Sorting rules for transparent custom code blocks
+                        if (mat.opacity < 1.0) {
+                            mat.transparent = true;
+                            mat.depthWrite = false; 
+                        } else {
+                            mat.transparent = false;
+                            mat.depthWrite = true;
+                        }
+                    } else {
+                        // 🎨 PIPELINE B: Fall back to your workspace layout settings panel picker color!
+                        mat.vertexColors = false;
+                        mat.color.set(fallbackHexColor);
+
+                        // If the object didn't have an inline color block, make it solid
+                        mat.transparent = false;
+                        mat.depthWrite = true;
+                        mat.opacity = 1.0; 
                     }
 
                     // Shading adjustments so reflections catch the lighting profiles beautifully
