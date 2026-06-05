@@ -695,7 +695,7 @@ btnWireframe.addEventListener('click', () => {
 });
 
 window.addEventListener('keydown', (event) => {
-    // 🚀 Preview / Render [F5 or F6]
+    // 🚀 Preview / Render [F5] or [F6]
     if (event.key === 'F5' || event.key === 'F6') {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
@@ -715,37 +715,37 @@ window.addEventListener('keydown', (event) => {
         }
     }
 	
-    // Existing: [Ctrl + Enter]
+    // Existing: [Ctrl] + [Enter]
     if (event.ctrlKey && event.key === 'Enter') {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
         if (!btnPreview.disabled) { 
-            logToConsole('⌨️ Hotkey Triggered: [Ctrl + Enter]'); 
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl] + [Enter]'); 
             btnPreview.click(); 
         }
     }
 
-	// 💾 Save File [Ctrl + S]
+	// 💾 Save File [Ctrl] + [S]
     if (event.ctrlKey && event.key.toLowerCase() === 's') {
         event.preventDefault(); // Stops browser "Save Page As"
         event.stopImmediatePropagation();
         if (btnSave && !btnSave.disabled) {
-            logToConsole('⌨️ Hotkey Triggered: [Ctrl + S] (Save)');
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl] + [S] (Save)');
             btnSave.click();
         }
     }
 
-    // 📂 Open File [Ctrl + O]
+    // 📂 Open File [Ctrl] + [O]
     if (event.ctrlKey && event.key.toLowerCase() === 'o') {
         event.preventDefault(); // Stops browser "Open Local File"
         event.stopImmediatePropagation();
         if (fileLoad) {
-            logToConsole('⌨️ Hotkey Triggered: [Ctrl + O] (Open)');
+            logToConsole('⌨️ Hotkey Triggered: [Ctrl] + [O] (Open)');
             fileLoad.click();
         }
     }
 
-    // ⚙️ Open Settings [Ctrl + ,] or [F1]
+    // ⚙️ Open Settings [Ctrl] + [,] or [F1]
     if (event.key === 'F1' || (event.ctrlKey && event.key === ',')) {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
