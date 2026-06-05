@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "114"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "115"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1075,6 +1075,7 @@ function init3DWorkspace() {
     animate();
 }
 
+/*
 function update3DModelViewer(raw3mfData) {
     if (!workspaceInitialized) init3DWorkspace();
 
@@ -1188,6 +1189,170 @@ function update3DModelViewer(raw3mfData) {
                     // from your script's color() vector array! We leave it alone so it displays perfectly.
                     if (mat.opacity < 1.0) {
                         logToConsole(`✨ Script-defined Alpha Transparency detected: ${mat.opacity}`);
+                    }
+
+                    // Shading adjustments so reflections catch the lighting profiles beautifully
+                    mat.roughness = 0.5;
+                    mat.metalness = 0.1;
+                    
+                    // Support the wireframe layout toggle switch state
+                    if (typeof wireframeMode !== 'undefined') {
+                        mat.wireframe = wireframeMode;
+                    }
+                    
+                    // Signal the WebGL context renderer to compile shaders for these property changes
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+
+        // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
+        currentMesh.rotation.x = -Math.PI / 2;
+
+        // Display the fully assembled scene hierarchy group
+        scene.add(currentMesh);
+
+        // Retain view camera positions
+        if (savedPosition && savedTarget) {
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+            controls.update();
+        } else {
+            frameModelInCamera(currentMesh);
+        }
+
+        if (typeof render === 'function') render(); 
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+        
+    } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
+        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
+    }
+}
+*/
+
+function update3DModelViewer(raw3mfData) {
+    if (!workspaceInitialized) init3DWorkspace();
+
+    let savedPosition = null;
+    let savedTarget = null;
+    if (currentMesh && camera && controls) {
+        savedPosition = camera.position.clone();
+        savedTarget = controls.target.clone();
+    }
+
+    // Safely remove the old mesh from the scene and free memory
+    if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+            }
+        });
+        currentMesh = null;
+    }
+
+    logToConsole("📥 Processing 3MF archive using fflate...");
+
+    try {
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
+        }
+
+        // THE COMPATIBILITY LAYER
+        window.JSZip = {
+            loadAsync: async function(data) {
+                const bytes = new Uint8Array(data);
+                const unzippedFiles = fflate.unzipSync(bytes);
+                return {
+                    file: function(relativePath) {
+                        const fileData = unzippedFiles[relativePath];
+                        if (!fileData) return null;
+                        return {
+                            async: async function(type) {
+                                if (type === 'string') return new TextDecoder().decode(fileData);
+                                return fileData.buffer;
+                            }
+                        };
+                    }
+                };
+            }
+        };
+
+        const loader = new THREE.ThreeMFLoader();
+        
+        // Isolate WASM memory buffer allocation space
+        const standaloneBytes = new Uint8Array(raw3mfData);
+        const bufferToParse = standaloneBytes.buffer;
+        
+        // Parse the 3MF package
+        const threemfGroup = loader.parse(bufferToParse);
+        if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
+        
+        currentMesh = threemfGroup;
+
+        // Traverse the imported nodes to safely configure the hierarchy
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                // Check if this specific geometry contains custom vertex color definitions
+                const hasVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                
+                materials.forEach((mat) => {
+                    if (!mat) return;
+
+                    mat.side = THREE.DoubleSide; 
+
+                    if (hasVertexColors) {
+                        // VERTEX COLORS PIPELINE (Script has a color modifier applied)
+                        mat.vertexColors = true;
+                        mat.color.setRGB(1, 1, 1); // Reset base diffuse multiplier
+                        
+                        // Check if the script color has alpha transparency
+                        if (mat.opacity < 1.0) {
+                            mat.transparent = true;
+                            mat.depthWrite = false; // 🚀 FIX: Prevents hiding background shapes when looking through clear walls!
+                        } else {
+                            mat.transparent = false;
+                            mat.depthWrite = true;
+                        }
+                    } else {
+                        // MATERIAL HUE FALLBACK PIPELINE
+                        mat.vertexColors = false;
+
+                        // 🔍 FIX: Detect OpenSCAD's default preview yellow theme color
+                        // Native OpenSCAD preview yellow has high Red and Green, with lower Blue (e.g., R=1, G=1, B=0.5 or similar)
+                        const isDefaultOpenSCADYellow = (mat.color.r > 0.9 && mat.color.g > 0.8 && mat.color.b < 0.6);
+                        
+                        // Detect standard Three.js loader placeholder blues
+                        const isPlaceholderBlue = (mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
+                        
+                        // Detect uncolored absolute white/black states
+                        const isWhiteOrBlack = (mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
+                                               (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0);
+
+                        // If any default engine states are triggered, force the workspace color picker override!
+                        if ((isDefaultOpenSCADYellow || isPlaceholderBlue || isWhiteOrBlack) && typeof activeModelColor !== 'undefined') {
+                            mat.color.set(activeModelColor);
+                            mat.opacity = 1.0;
+                        }
+
+                        // Set transparency behavior based on actual finalized opacity
+                        if (mat.opacity < 1.0) {
+                            mat.transparent = true;
+                            mat.depthWrite = false; // 🚀 FIX: Prevents hiding background shapes
+                        } else {
+                            // If it's your solid layout picker color, keep it 100% opaque to prevent clipping sorting bugs
+                            mat.transparent = false;
+                            mat.depthWrite = true;
+                        }
                     }
 
                     // Shading adjustments so reflections catch the lighting profiles beautifully
