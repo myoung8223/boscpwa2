@@ -948,13 +948,13 @@ try {
         instance.FS.writeFile('/input.scad', scriptCode);
         
         // 🚀 THE MAGIC: Target .3mf and enable the blistering fast Manifold kernel!
-        instance.callMain(['/input.scad', '--enable=manifold', '-o', '/output.3mf']); 
+        instance.callMain(['/input.scad', '--enable=manifold', '-o', '/output.amf']); 
 
-        if (instance.FS.analyzePath('/output.3mf').exists) {
-            const outputData = instance.FS.readFile('/output.3mf');
+        if (instance.FS.analyzePath('/output.amf').exists) {
+            const outputData = instance.FS.readFile('/output.amf');
             
-            // 🚀 Switch Blob type to the 3MF standard MIME type
-            currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' }); 
+            // 🚀 Switch Blob type to standard XML
+            currentStlBlob = new Blob([outputData], { type: 'application/xml' });
             
             update3DModelViewer(URL.createObjectURL(currentStlBlob));
             
@@ -1094,28 +1094,26 @@ function update3DModelViewer(blobUrl) {
         currentMesh = null;
     }
 
-    // 🚀 Load the new color-packed 3MF file
-    const loader = new THREE.ThreeMFLoader();
-    loader.load(blobUrl, (loadedGroup) => {
+    // 🚀 Load color AMF
+    const loader = new THREE.AMFLoader();
+    loader.load(blobUrl, (amfGroup) => {
         
-        currentMesh = loadedGroup;
+        currentMesh = amfGroup;
 
-        // Apply visual tweaks (like wireframe) to every shape in the group
+		// Ensure materials look good and respect wireframe
         currentMesh.traverse((child) => {
             if (child.isMesh) {
-                // Ensure the lighting looks fantastic
-                child.material.roughness = 0.85;
-                child.material.metalness = 0.05;
+                child.material.roughness = 0.6;
+                child.material.metalness = 0.1;
                 if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
             }
         });
 
-        // 3MF from OpenSCAD requires a 90-degree tilt to match Three.js Z-up coordinates
+        // Fix the OpenSCAD Z-up rotation issue
         currentMesh.rotation.x = -Math.PI / 2;
 
         scene.add(currentMesh);
 
-        // Keep the camera locked on where the user was looking
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
