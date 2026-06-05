@@ -1081,7 +1081,7 @@ function update3DModelViewer(blobUrl) {
         savedTarget = controls.target.clone();
     }
 
-    // Safely remove the old 3MF group from the scene and free memory
+    // Safely remove the old mesh from the scene and free memory
     if (currentMesh) {
         scene.remove(currentMesh);
         currentMesh.traverse((child) => {
@@ -1100,11 +1100,17 @@ function update3DModelViewer(blobUrl) {
         
         currentMesh = amfGroup;
 
-		// Ensure materials look good and respect wireframe
+        // Ensure materials look good, respect wireframe, AND allow transparency
         currentMesh.traverse((child) => {
             if (child.isMesh) {
                 child.material.roughness = 0.6;
                 child.material.metalness = 0.1;
+                
+                // 🚀 THE TRANSPARENCY FIXES
+                child.material.transparent = true;         // Allows the alpha channel to work
+                child.material.side = THREE.DoubleSide;    // Renders the inside of the glass
+                child.material.depthWrite = false;         // Fixes glitchy overlapping glass shapes
+                
                 if (typeof wireframeMode !== 'undefined') child.material.wireframe = wireframeMode;
             }
         });
