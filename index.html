@@ -49,6 +49,8 @@
         
         #viewer-3d { position: absolute; top: 0; bottom: 0; left: 0; right: 0; width: 100%; height: 100%; display: block; background-color: #222222; z-index: 1; }
         #viewer-3d canvas { width: 100% !important; height: 100% !important; display: block; }
+        #viewer-3d { position: absolute; top: 0; bottom: 0; left: 0; right: 0; width: 100%; height: 100%; display: block; background-color: #222222; z-index: 1; }
+        #viewer-3d canvas { width: 100% !important; height: 100% !important; display: block; }
         
         /* 🚀 NEW: The loading overlay replacing the old .viewer-placeholder */
         #placeholder-text { 
@@ -67,22 +69,17 @@
         }
 
         .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.15s ease; }
+
+        .overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0, 0, 0, 0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 1000; transition: opacity 0.15s ease; }
         .overlay-content { background-color: #1e1e1e; border: 1px solid #333; color: #ffffff; padding: 24px; border-radius: 6px; width: 320px; position: relative; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6); }
         .hidden { display: none !important; }
-        
         .close-btn { position: absolute; top: 12px; right: 16px; background: none; border: none; color: #888; font-size: 22px; cursor: pointer; padding: 0; line-height: 1; }
         .close-btn:hover { color: #fff; }
-        
         .settings-group { margin: 16px 0; display: flex; justify-content: space-between; align-items: center; }
 
-        /* 📘 Cheat Sheet Button Styling */
-        #btn-settings-cheat-sheet {
-            background-color: #d4a017 !important; /* Golden yellow */
-            color: #ffffff !important;
-        }
-        #btn-settings-cheat-sheet:hover {
-            background-color: #b58813 !important; /* Slightly darker yellow on hover */
-        }
+        /* 📊 Two Column Settings Layout */
+        /* .settings-columns-wrapper { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; } */
+        /* @media (max-width: 600px) { .settings-columns-wrapper { grid-template-columns: 1fr; gap: 10px; } } */
 
         /* 📊 Two Column Settings Layout with Vertical Divider */
         .settings-columns-wrapper { 
@@ -92,7 +89,7 @@
         }
         .settings-column:first-child {
             padding-right: 20px;
-            border-right: 1px solid #444; 
+            border-right: 1px solid #444; /* The thin gray line */
         }
         .settings-column:last-child {
             padding-left: 20px;
@@ -106,7 +103,7 @@
             .settings-column:first-child {
                 padding-right: 0;
                 border-right: none;
-                border-bottom: 1px solid #444; 
+                border-bottom: 1px solid #444; /* Swaps to horizontal on mobile */
                 padding-bottom: 15px;
                 margin-bottom: 15px;
             }
@@ -119,31 +116,20 @@
         #help-overlay {
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
-            background-color: rgba(25, 25, 25, 0.95); 
+            background-color: rgba(25, 25, 25, 0.95); /* Dark, 95% opaque */
             backdrop-filter: blur(5px);
             -webkit-backdrop-filter: blur(5px);
-            z-index: 20; 
-            overflow: hidden; /* Prevent the outer container from scrolling */
+            z-index: 20; /* Sits above everything in the right panel */
+            padding: 30px;
+            overflow-y: auto; /* Allows scrolling */
+            color: #eee;
             transition: opacity 0.2s ease;
         }
-
-        /* 📌 Pin the close button perfectly to the top-right of the pane */
-        #close-help-btn {
-            position: absolute;
-            top: 15px;
-            right: 15px;
-            z-index: 30; /* Ensures it stays floating above the text */
-        }
         
-        /* 📜 Make the text content area handle the scrolling instead */
         .cheat-sheet-content {
             max-width: 800px;
-            height: 100%; /* Fills the height of the static overlay */
             margin: 0 auto;
-            padding: 30px; 
-            overflow-y: auto; /* The magic rule! Now only the text scrolls */
-            box-sizing: border-box; /* Keeps the padding from breaking the height */
-            user-select: text; 
+            user-select: text; /* 🚀 GUARANTEES text can be highlighted and copied! */
             -webkit-user-select: text;
             line-height: 1.6;
         }
@@ -154,8 +140,9 @@
             border-radius: 4px;
             color: #00c3ff;
             font-family: 'Consolas', monospace;
-            user-select: all; 
+            user-select: all; /* One click selects the whole code block! */
         }
+    
 </style>
 </head>
 <body>
