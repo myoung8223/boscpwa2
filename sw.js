@@ -1,4 +1,4 @@
-const CACHE_NAME = 'boscpwa-v4'; // Bumped to v4 to force the browser to update!
+const CACHE_NAME = 'boscpwa-v5';
 
 const ASSETS_TO_CACHE = [
   // Base HTML and Manifest
@@ -22,6 +22,7 @@ const ASSETS_TO_CACHE = [
   //'https://code4fukui.github.io/scad2stl/openscad.wasm',
 
   // New local libraries
+  './libs/fflate.js',
   './libs/three.min.js',
   './libs/STLLoader.js',
   './libs/OrbitControls.js',
