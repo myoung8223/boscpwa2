@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "177"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "178"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1084,7 +1084,7 @@ if (hasGhost) {
     
     const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
     
-    // 💡 THE CRITICAL FIX: Add a trailing newline (\n) to the module header string!
+    // 💡 THE FIX: Add double trailing newlines (\n\n) to isolate the module header!
     const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
     const ghostCode = ghostModuleHeader + cleanGhostCode;
     
@@ -1093,17 +1093,16 @@ if (hasGhost) {
     logToConsole("🪲 -----------------------------------------\n");
     
     try {
-        instance.FS.writeFile('/ghost_input.scad', ghostCode);
-        
-        // Clear any leftover file from previous attempts to ensure clean tracking
+        // Clear out any old /ghost.3mf remnant to guarantee true state tracking
         try { if (instance.FS.analyzePath('/ghost.3mf').exists) instance.FS.unlink('/ghost.3mf'); } catch(e){}
         
+        instance.FS.writeFile('/ghost_input.scad', ghostCode);
         instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
         
         if (instance.FS.analyzePath('/ghost.3mf').exists) {
             ghostData = instance.FS.readFile('/ghost.3mf');
         } else {
-            logToConsole("🪲 [DEBUG ALERT] OpenSCAD ran but /ghost.3mf was not created!");
+            logToConsole("🪲 [DEBUG ALERT] OpenSCAD finished, but /ghost.3mf was not generated.");
         }
     } catch (err) {
         logToConsole("Pass 2 execution notice.");
