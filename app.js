@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "123"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "124"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1157,42 +1157,39 @@ function update3DModelViewer(raw3mfData) {
 
                     const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                     
-                    // 🔍 DEEP GEOMETRY INSPECTION
-                    // Check if OpenSCAD baked its default pastel yellow theme into the file
+                    // 🔍 SPACE-PROOF DEFAULT YELLOW DETECTION
                     let isDefaultOpenSCADYellow = false;
 
-                    // Check material-level fallback color
+                    // 1. Inspect material-level base color
                     if (mat.color) {
-                        if (mat.color.r > 0.75 && mat.color.g > 0.65 && mat.color.b > 0.15 && mat.color.b < 0.70) {
+                        const r = mat.color.r;
+                        const g = mat.color.g;
+                        const b = mat.color.b;
+                        // Yellow/Orange profile: Red & Green are high, Blue is consistently low
+                        if (r > 0.75 && g > 0.60 && b < 0.65 && (r - b) > 0.20) {
                             isDefaultOpenSCADYellow = true;
                         }
                     }
 
-                    // Check vertex-level color stream (Where Manifold maps unstyled face templates)
+                    // 2. Inspect vertex color stream attributes (where unstyled shapes get painted)
                     if (hasGeometryVertexColors) {
                         const colorAttr = child.geometry.attributes.color;
                         if (colorAttr && colorAttr.count > 0) {
-                            // Extract RGB floats from the first vertex index
                             const vR = colorAttr.getX(0);
                             const vG = colorAttr.getY(0);
                             const vB = colorAttr.getZ(0);
-
-                            // Bounding box matching default OpenSCAD colors across standard/linear profiles
-                            if (vR > 0.75 && vG > 0.65 && vB > 0.15 && vB < 0.70) {
+                            if (vR > 0.75 && vG > 0.60 && vB < 0.65 && (vR - vB) > 0.20) {
                                 isDefaultOpenSCADYellow = true;
                             }
                         }
                     }
 
-                    // 🚀 THE ULTIMATE ROUTER
-                    // If it matches the baked uncolored scheme, force it to behave as an unstyled background item.
-                    const isBaselineFallbackMesh = isDefaultOpenSCADYellow;
-
-                    if (!isBaselineFallbackMesh) {
+                    // 🚀 THE FIXED ROUTER
+                    if (!isDefaultOpenSCADYellow) {
                         // 🎨 PIPELINE A: Script has an explicit, custom color() configuration applied
                         if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                             mat.vertexColors = true;
-                            mat.color.setRGB(1, 1, 1); // Reset material base so vertex data streams perfectly
+                            mat.color.setRGB(1, 1, 1); // Reset base material multiplier
                         }
                         
                         // Smart opacity polygon sorting configuration
@@ -1212,17 +1209,17 @@ function update3DModelViewer(raw3mfData) {
                             mat.side = THREE.FrontSide;
                         }
                     } else {
-                        // 🎨 PIPELINE B: Unstyled baseline geometry asset
-                        // Override OpenSCAD's default baked yellow with your active UI color panel preference!
-                        mat.vertexColors = false; // Disables vertex-level coloring completely
-                        mat.color.set(fallbackHexColor); // Force material color selection
+                        // 🎨 PIPELINE B: Unstyled background mesh (Detected OpenSCAD default Yellow)
+                        // Setting vertexColors to false forces the shader to ignore the vertex stream arrays!
+                        mat.vertexColors = false; 
+                        mat.color.set(fallbackHexColor); // Force our workspace settings color choice
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.side = THREE.FrontSide;
                         mat.opacity = 1.0; 
                     }
 
-                    // Premium physical layout lighting attributes
+                    // Shading lighting attributes
                     mat.roughness = 0.5;
                     mat.metalness = 0.1;
                     
