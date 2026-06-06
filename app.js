@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "144"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "145"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1172,16 +1172,17 @@ btnExport.addEventListener('click', () => {
             }
         });
         
-        // 3. 🔥 FIX: Bypassing Euler order traps by combining transformations with Matrices
-        // Axis 1: The flip to stand it upright (equivalent to your working Z-axis adjustment)
-        const standUpMatrix = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
+		// 3. 🔥 FIX: Apply explicit 90-degree rotations around both the Y and Z axes
+        // Operation 1: 90-degree tilt (adjusting what maps to your slicer's layout)
+        // If it tilts the wrong way, change Math.PI / 2 to -Math.PI / 2
+        const rotateZMatrix = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
         
-        // Axis 2: The absolute 90-degree horizontal spin around the vertical axis
-        // 💡 Note: If it spins the wrong direction in your slicer, swap Math.PI / 2 to -Math.PI / 2
-        const spinMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+        // Operation 2: 90-degree spin around the vertical axis
+        // If it spins the wrong direction, change Math.PI / 2 to -Math.PI / 2
+        const rotateYMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2);
         
-        // Combine transformations: Spin first, then Stand Up
-        const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(standUpMatrix, spinMatrix);
+        // Combine them sequentially: Apply the Y rotation, then compound it with the Z rotation
+        const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(rotateZMatrix, rotateYMatrix);
         
         // Traverse the clone and bake this compound transformation directly into the geometry vertices
         exportClone.traverse((child) => {
