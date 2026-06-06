@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "166"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "167"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1351,17 +1351,18 @@ function update3DModelViewer(raw3mfData) {
                         }
                         
                         // Smart opacity polygon sorting configuration
-                        if (mat.opacity < 1.0) {
+                        // (Checking < 0.99 catches OpenSCAD's occasional 0.999 alpha math quirks)
+                        if (mat.opacity < 0.99) {
                             mat.transparent = true;
                             
                             // Push translucent shapes to the very back of the draw queue
                             child.renderOrder = 999; 
                             
-                            // 🔥 THE FIX: Restore normal depth tracking!
-                            // Because renderOrder now guarantees the red box draws first, 
-                            // we can safely let the transparent box track its own depth normally.
-                            mat.depthWrite = true;  
-                            mat.side = THREE.FrontSide; // Stops the back-walls from bleeding through
+                            // 🔥 THE FINAL COMBINATION
+                            // false: stops transparent polygons from slicing each other up
+                            // FrontSide: permanently stops the "inside-out" optical illusion
+                            mat.depthWrite = false;  
+                            mat.side = THREE.FrontSide; 
                             
                         } else {
                             mat.transparent = false;
