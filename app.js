@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "130"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "131"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -907,7 +907,6 @@ hull() {                                   // hull example (D6 die)
 btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) return;
     
-    // 🚀 Show the loading screen immediately
     if (placeholderText) {
         placeholderText.textContent = "🛠️ Building Preview...";
         placeholderText.style.display = 'flex';
@@ -919,30 +918,31 @@ btnPreview.addEventListener('click', async () => {
     const errorLogs = [];
 
     try {
-        // 🚀 Initialize the engine and point it directly to the local WASM file
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
+            
+            // 💡 Tell Fontconfig exactly where the "user" home folder is
             ENV: {
-                OPENSCAD_FONT_PATH: '/fonts', // Tells Fontconfig exactly where to look
-                HOME: '/home/web_user'
+                HOME: '/home/web_user' 
             },
             
-            // 🔥 THE FIX: Setup the fonts folder and inject BINARY files BEFORE boot!
+            // 🔥 DROP FONTS INTO THE LINUX USER FONT FOLDER BEFORE BOOT!
             preRun: [
                 function(Module) {
-                    try { Module.FS.mkdir('/fonts'); } catch(e) {}
+                    // Recreate the standard Linux user fonts directory
+                    try { Module.FS.mkdir('/home'); } catch(e) {}
+                    try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
+                    try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
 
                     for (const fontName of Object.keys(fontCache)) {
                         try { 
-                            // 💡 CRITICAL FIX: Force the ArrayBuffer into a strict Uint8Array
+                            // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
                             const fontData = new Uint8Array(fontCache[fontName]);
-                            Module.FS.writeFile(`/fonts/${fontName}`, fontData); 
-                            
-                            // Log the byte size so we can prove it's not a string!
-                            console.log(`[preRun] Mounted Font: /fonts/${fontName} (${fontData.length} bytes)`);
+                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
+                            console.log(`[preRun] Font Mapped: ~/.fonts/${fontName} (${fontData.length} bytes)`);
                         } 
-                        catch (fsErr) { console.error(`[ERROR] Failed to map: /fonts/${fontName}`); }
+                        catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
                     }
                 }
             ],
@@ -954,7 +954,7 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 📝 Map custom STLs and SVGs as strict Uint8Arrays!
+        // 📝 Map custom STLs and SVGs as strict Uint8Arrays
         for (const stlName of Object.keys(stlCache)) {
             try { 
                 instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
@@ -984,7 +984,6 @@ btnPreview.addEventListener('click', async () => {
             if (placeholderText) placeholderText.style.display = 'none';
             btnExport.disabled = false;
 
-            // Cleanup virtual file space
             instance.FS.unlink('/output.3mf');            
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
