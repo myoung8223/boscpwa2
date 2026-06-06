@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "168"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "169"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1295,7 +1295,7 @@ function update3DModelViewer(raw3mfData) {
         
         currentMesh = threemfGroup;
 
-        // Pull the exact, active chosen hex value from your HTML color input box
+// Pull the exact, active chosen hex value from your HTML color input box
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
         // Traverse the imported nodes to safely configure the hierarchy
@@ -1310,94 +1310,65 @@ function update3DModelViewer(raw3mfData) {
                 const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 
+                let hasTransparent = false;
+
                 materials.forEach((mat) => {
                     if (!mat) return;
-
-                    const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                     
-                    // 🔍 SPACE-PROOF DEFAULT YELLOW DETECTION
-                    let isDefaultOpenSCADYellow = false;
-
-                    // 1. Inspect material-level base color
-                    if (mat.color) {
-                        const r = mat.color.r;
-                        const g = mat.color.g;
-                        const b = mat.color.b;
-                        // Yellow/Orange profile: Red & Green are high, Blue is consistently low
-                        if (r > 0.75 && g > 0.60 && b < 0.65 && (r - b) > 0.20) {
-                            isDefaultOpenSCADYellow = true;
-                        }
+                    // Reset custom OpenSCAD vertex colors
+                    if (hasGeometryVertexColors || mat.vertexColors === true || mat.vertexColors === THREE.VertexColors) {
+                        mat.vertexColors = true;
+                        mat.color.setRGB(1, 1, 1);
                     }
 
-                    // 2. Inspect vertex color stream attributes (where unstyled shapes get painted)
-                    if (hasGeometryVertexColors) {
-                        const colorAttr = child.geometry.attributes.color;
-                        if (colorAttr && colorAttr.count > 0) {
-                            const vR = colorAttr.getX(0);
-                            const vG = colorAttr.getY(0);
-                            const vB = colorAttr.getZ(0);
-                            if (vR > 0.75 && vG > 0.60 && vB < 0.65 && (vR - vB) > 0.20) {
-                                isDefaultOpenSCADYellow = true;
-                            }
-                        }
-                    }
-
-					// 🚀 THE FIXED ROUTER
-                    if (!isDefaultOpenSCADYellow) {
-                        if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
-                            mat.vertexColors = true;
-                            mat.color.setRGB(1, 1, 1); 
-                        }
-                        
-                        // 💎 THE PHYSICAL GLASS UPGRADE
-                        if (mat.opacity < 0.99) {
-                            // Create a brand new physically-based glass material
-                            const glassMat = new THREE.MeshPhysicalMaterial({
-                                color: mat.color,
-                                metalness: 0.1,
-                                roughness: 0.1,
-                                transmission: 1.0, // Force light to transmit through the object
-                                opacity: 1.0,      // Keep opacity at 1.0 so standard alpha-blending doesn't interfere
-                                transparent: true,
-                                ior: 1.5,          // Index of Refraction (1.5 = Standard Glass)
-                                side: THREE.DoubleSide,
-                                depthWrite: false  // Prevent glass-on-glass Z-fighting
-                            });
-                            
-                            // Replace the loader's basic material with our new glass
-                            child.material = glassMat;
-                            
-                            // Push glass to the back of the render queue
-                            child.renderOrder = 999; 
-                            
-                        } else {
-                            // Solid objects stay exactly the same
-                            mat.transparent = false;
-                            mat.depthWrite = true;
-                            mat.side = THREE.FrontSide;
-                            child.renderOrder = 1; 
-                        }
+                    // Check if this specific material is glass/translucent
+                    if (mat.opacity < 0.99) {
+                        hasTransparent = true;
+                        mat.transparent = true;
+                        mat.depthWrite = false; // Stop glass faces from blocking each other
+                        mat.side = THREE.DoubleSide;
                     } else {
-                        // Unstyled background mesh
-                        mat.vertexColors = false; 
-                        mat.color.set(fallbackHexColor); 
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.side = THREE.FrontSide;
-                        mat.opacity = 1.0; 
-                        child.renderOrder = 1; 
                     }
-
-                    // Shading lighting attributes
+                    
                     mat.roughness = 0.5;
                     mat.metalness = 0.1;
                     
+                    // Wireframe toggler
                     if (typeof wireframeMode !== 'undefined') {
                         mat.wireframe = wireframeMode;
                     }
                     
                     mat.needsUpdate = true;
                 });
+
+                // 🪓 THE SPLITTER LOGIC:
+                if (hasTransparent && Array.isArray(child.material) && child.material.length > 1) {
+                    
+                    // 1. Original mesh gets forced to the background, and hides the glass
+                    child.renderOrder = 1;
+                    const solidMaterials = materials.map(m => {
+                        const mClone = m.clone();
+                        if (mClone.opacity < 0.99) mClone.visible = false; 
+                        return mClone;
+                    });
+                    child.material = solidMaterials;
+
+                    // 2. Clone the mesh, force it to the foreground, and hide the solids
+                    const glassClone = new THREE.Mesh(child.geometry, materials.map(m => {
+                        const mClone = m.clone();
+                        if (mClone.opacity >= 0.99) mClone.visible = false; 
+                        return mClone;
+                    }));
+                    glassClone.renderOrder = 999;
+                    
+                    // Add the glass layer directly to the parent group
+                    if (child.parent) {
+                        child.parent.add(glassClone);
+                    }
+                }
             }
         });
 
