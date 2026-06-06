@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "158"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "159"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1111,23 +1111,25 @@ btnExport.addEventListener('click', () => {
         exportClone.updateMatrixWorld(true);
 		*/
 
-// 3. 🔥 THE ULTIMATE FIX: Lay flat, then spin around the true vertical axis
-// Reset any broken Euler properties first
+// 3. 🔥 THE FINAL PIECE: Lay flat, then apply a pure quaternion spin on the up-vector
 exportClone.rotation.set(0, 0, 0); 
 
-// First: Lay it perfectly flat on the bed (this gave us the stable image_1e70e5 layout!)
+// First: Lay it perfectly flat on the bed (the stable layout we established)
 exportClone.rotation.z = Math.PI / 2;
 
-// Force Three.js to bake this flatness into the group's memory space
+// Force Three.js to process and bake the horizontal orientation first
 exportClone.updateMatrix();
 exportClone.updateMatrixWorld(true);
 
-// Second: Pure spin around the print bed's vertical axis (Z-axis in the exporter context)
-// Change Math.PI / 2 to -Math.PI / 2 if it needs to spin the opposite direction!
-const upVector = new THREE.Vector3(0, 0, 1); 
-exportClone.rotateOnAxis(upVector, Math.PI / 2);
+// Second: Rotate exactly 90 degrees around the slicer's Up Vector (Z-Axis)
+// Note: If it spins clockwise but you wanted counter-clockwise, change Math.PI / 2 to -Math.PI / 2
+const upAxis = new THREE.Vector3(0, 0, 1);
+const spinQuaternion = new THREE.Quaternion().setFromAxisAngle(upAxis, Math.PI / 2);
 
-// 4. Final bake before sending the coordinates to the STL parser
+// Apply the spin directly to the object's combined matrix
+exportClone.applyQuaternion(spinQuaternion);
+
+// 4. Final bake before sending the stable coordinates to the STL exporter
 exportClone.updateMatrix();
 exportClone.updateMatrixWorld(true);
 
