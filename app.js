@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "147"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "148"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1165,27 +1165,19 @@ btnExport.addEventListener('click', () => {
         // 1. Create a structural clone of the visual group container
         const exportClone = currentMesh.clone();
         
-        // 2. 🔥 FIX: Rotate the WHOLE assembly together as one solid unit using Quaternions
-        // This keeps all parts glued perfectly in their respective locations.
-        const quaternionZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2); // Upright Tilt
-        const quaternionY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2); // Horizontal Spin
+        // 2. 🔥 CLEAN ROTATION: Adjust these simple angles to lay it flat.
+        // Since we are rotating the parent group, nothing will explode!
+        // Swap these numbers based on the tuning guide below.
+        exportClone.rotation.x = 0;
+        exportClone.rotation.y = Math.PI / 2; 
+        exportClone.rotation.z = 0;
         
-        // Combine them sequentially into a single absolute orientation matrix
-        const finalQuaternion = new THREE.Quaternion();
-        finalQuaternion.multiplyQuaternions(quaternionY, quaternionZ);
-        
-        // Apply the combined rotation strictly to the parent container
-        exportClone.quaternion.copy(finalQuaternion);
-        
-        // 3. 🔥 CRITICAL: Force Three.js to compute and push the group rotation down 
-        // to the world matrices so the STLExporter reads it correctly.
-        exportClone.updateMatrix();
+        // 3. Force Three.js to calculate the changes down through the group hierarchy
         exportClone.updateMatrixWorld(true);
         
-        logToConsole(`📦 Packaging nested coordinate arrays into binary STL...`);
+        logToConsole(`📦 Packaging coordinate arrays into binary STL...`);
         
-        // 4. Parse the fully updated and oriented structural clone
-        // (STLExporter automatically processes the parent transforms down to the output file)
+        // 4. Parse the oriented group clone
         const stlResult = exporter.parse(exportClone, { binary: true });
         
         // 5. Package and Download
