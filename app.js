@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "191"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "192"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2504,11 +2504,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-		if (isWrapper) {
+if (isWrapper) {
             let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
-            let isGhostCsgBase = false;
+            let containsGhost = false;
             if (isCsgFilterOp && !stripAllGhostsMode) {
                 // Find where this block ends to limit our peek window safely
                 let openBraces = 0;
@@ -2525,23 +2525,28 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 
                 let blockSlice = code.slice(i, endSearchIdx);
                 
-                // Flag mutation if a ghost modifier is hidden inside
+                // Flag if a ghost modifier is hidden inside this CSG operation
                 if (blockSlice.includes('%')) {
-                    isGhostCsgBase = true;
+                    containsGhost = true;
                 }
             }
 
-            // DYNAMIC FIX: Do NOT force effectiveGhost = true here.
-            // Let child blocks naturally evaluate their own modifiers!
+            // Let children evaluate their own scope naturally
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             
-            // If we are an active ghost csg base, our children shouldn't count as disabled
+            // THE FIX: If this is a difference cutting into a ghost base, 
+            // reactivate the cutting tools by stripping the comment asterisks!
+            if (containsGhost && !stripAllGhostsMode) {
+                childContent = childContent.replace(/^\*\s*/gm, '');
+            }
+
             let shouldDisableWrapper = false;
-            if (!isGhostCsgBase) {
+            if (!containsGhost) {
                 shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
             }
 
+            // Pass 1 Routing (Solid Geometry / Strip All Ghosts)
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
                     return `cube([0.001, 0.001, 0.001], center=true);\n`;
@@ -2549,19 +2554,15 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 return `${expression}\n${childContent}`;
             }
 
-            // Apply operator transformation text updates if flagged
-            if (isGhostCsgBase) {
-                expression = expression.replace(/difference|intersection/, 'union');
-            }
-
+            // Pass 2 Routing (Ghost / Glass Geometry Layout)
             if (effectiveGhost) {
                 if (hasGhostModifier && !isInsideGhostScope) {
                     return `__GHOST__() ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
             } else {
-                // If this is a mutated CSG base tool container, keep it completely visible!
-                if (isGhostCsgBase) {
+                if (containsGhost) {
+                    // KEEP the operator as a difference so it cuts holes!
                     return `${expression}\n${childContent}`;
                 }
                 if (shouldDisableWrapper) {
