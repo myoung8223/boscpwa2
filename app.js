@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "176"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "177"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1077,31 +1077,38 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: Geometry processing notice.");
         }
 
-        // --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
-        let ghostData = null;
-        if (hasGhost) {
-            logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
-            
-            const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
-			//const ghostModuleHeader = `module __GHOST__() { union() { scale([1.0001, 1.0001, 1.0001]) children(); } }\n`;
-            const ghostCode = ghostModuleHeader + cleanGhostCode;
-            
-            logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
-            logToConsole(ghostCode);
-            logToConsole("🪲 -----------------------------------------\n");
-            
-            try {
-                instance.FS.writeFile('/ghost_input.scad', ghostCode);
-                instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
-                
-                if (instance.FS.analyzePath('/ghost.3mf').exists) {
-                    ghostData = instance.FS.readFile('/ghost.3mf');
-                }
-            } catch (err) {
-                logToConsole("Pass 2: Ghost processing notice.");
-            }
+// --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
+let ghostData = null;
+if (hasGhost) {
+    logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
+    
+    const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
+    
+    // 💡 THE CRITICAL FIX: Add a trailing newline (\n) to the module header string!
+    const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
+    const ghostCode = ghostModuleHeader + cleanGhostCode;
+    
+    logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
+    logToConsole(ghostCode);
+    logToConsole("🪲 -----------------------------------------\n");
+    
+    try {
+        instance.FS.writeFile('/ghost_input.scad', ghostCode);
+        
+        // Clear any leftover file from previous attempts to ensure clean tracking
+        try { if (instance.FS.analyzePath('/ghost.3mf').exists) instance.FS.unlink('/ghost.3mf'); } catch(e){}
+        
+        instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
+        
+        if (instance.FS.analyzePath('/ghost.3mf').exists) {
+            ghostData = instance.FS.readFile('/ghost.3mf');
+        } else {
+            logToConsole("🪲 [DEBUG ALERT] OpenSCAD ran but /ghost.3mf was not created!");
         }
+    } catch (err) {
+        logToConsole("Pass 2 execution notice.");
+    }
+}
 
         // ---------------------------------------------------------
         // 📦 ASSEMBLE & RENDER DISPATCH (Both buffers now safely collected)
