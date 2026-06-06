@@ -1089,6 +1089,7 @@ btnExport.addEventListener('click', () => {
 });
 */
 
+/*
 // STL export feature
 btnExport.addEventListener('click', () => {
     if (!currentMesh) {
@@ -1122,6 +1123,85 @@ btnExport.addEventListener('click', () => {
         exportClone.updateMatrix();
         exportClone.updateMatrixWorld(true);
 		
+        logToConsole(`📦 Packaging corrected coordinate arrays into binary STL...`);
+        
+        // 5. Parse the fully updated and baked structural clone
+        const stlResult = exporter.parse(exportClone, { binary: true });
+        
+        // 6. Package and Download
+        const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(stlBlob);
+        
+        const projectName = projectNameInput.value.trim() || "openscad_model";
+        link.download = `${projectName}.stl`; 
+        link.click();
+        
+        // 7. Housekeeping: Free up memory from temporary cloned objects
+        exportClone.traverse((child) => {
+            if (child.isMesh && child.geometry) child.geometry.dispose();
+        });
+        
+        logToConsole(`✔ Exported ${projectName}.stl successfully!`);
+    } catch (exportErr) {
+        logToConsole(`[ERROR]: Failed to export STL geometry: ${exportErr.message}`);
+        console.error(exportErr);
+    }
+});
+*/
+
+// STL export feature
+btnExport.addEventListener('click', () => {
+    if (!currentMesh) {
+        logToConsole(`[ERROR]: No model loaded to export.`);
+        return;
+    }
+    
+    try {
+        logToConsole(`⚙️ Forcing absolute orientation matrices for STL export...`);
+        
+        const exporter = new THREE.STLExporter();
+        
+        // 1. Structural clone of the visual group structure
+        const exportClone = currentMesh.clone();
+        
+        // 2. Break the link to the live preview's sharing by deep-cloning inner geometries
+        exportClone.traverse((child) => {
+            if (child.isMesh && child.geometry) {
+                child.geometry = child.geometry.clone();
+            }
+        });
+        
+        // 3. 🔥 FIX: Bypassing Euler order traps by combining transformations with Matrices
+        // Axis 1: The flip to stand it upright (equivalent to your working Z-axis adjustment)
+        const standUpMatrix = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
+        
+        // Axis 2: The absolute 90-degree horizontal spin around the vertical axis
+        // 💡 Note: If it spins the wrong direction in your slicer, swap Math.PI / 2 to -Math.PI / 2
+        const spinMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+        
+        // Combine transformations: Spin first, then Stand Up
+        const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(standUpMatrix, spinMatrix);
+        
+        // Traverse the clone and bake this compound transformation directly into the geometry vertices
+        exportClone.traverse((child) => {
+            if (child.isMesh && child.geometry) {
+                // Clear out any local object-level rotation properties to avoid double-transformation
+                child.rotation.set(0, 0, 0);
+                
+                // Physically alter the underlying coordinate vertex arrays
+                child.geometry.applyMatrix4(finalExportMatrix);
+                child.geometry.computeVertexNormals(); // Recalculate face normals for clean shading in slicers
+            }
+        });
+        
+        // Clear container transformations so they don't multiply against the newly baked child arrays
+        exportClone.rotation.set(0, 0, 0);
+        
+        // 4. Force Three.js to completely rebuild and bake this absolute orientation
+        exportClone.updateMatrix();
+        exportClone.updateMatrixWorld(true);
+        
         logToConsole(`📦 Packaging corrected coordinate arrays into binary STL...`);
         
         // 5. Parse the fully updated and baked structural clone
