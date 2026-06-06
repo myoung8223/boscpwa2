@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "172"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "169"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -979,6 +979,7 @@ hull() {                                   // hull example (D6 die)
     } catch (err) { logToConsole(`Failed to initialize OpenSCAD: ${err.message}`); }
 }
 
+// ---- PREVIEW PIPELINE ----
 btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) return;
     
@@ -997,19 +998,31 @@ btnPreview.addEventListener('click', async () => {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
-            ENV: { HOME: '/home/web_user' },
+            
+            // 💡 Tell Fontconfig exactly where the "user" home folder is
+            ENV: {
+                HOME: '/home/web_user' 
+            },
+            
+            // 🔥 DROP FONTS INTO THE LINUX USER FONT FOLDER BEFORE BOOT!
             preRun: [
                 function(Module) {
+                    // Recreate the standard Linux user fonts directory
                     try { Module.FS.mkdir('/home'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
+
                     for (const fontName of Object.keys(fontCache)) {
                         try { 
-                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName])); 
-                        } catch (e) {}
+                            // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
+                            const fontData = new Uint8Array(fontCache[fontName]);
+                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
+                        } 
+                        catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
                     }
                 }
             ],
+
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -1017,21 +1030,33 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // Map asset caches
-        for (const stlName of Object.keys(stlCache)) { try { instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e){} }
-        for (const svgName of Object.keys(svgCache)) { try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
+        // 📝 Map custom STLs and SVGs as strict Uint8Arrays to the main instance
+        for (const stlName of Object.keys(stlCache)) {
+            try { 
+                instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
+                logToConsole(`Mounted STL: /${stlName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
+        }
+        for (const svgName of Object.keys(svgCache)) {
+            try { 
+                instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); 
+                logToConsole(`Mounted SVG: /${svgName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
+        }
 
-// ---------------------------------------------------------
-        // 🚀 TWO-PASS EXPORT PIPELINE
         // ---------------------------------------------------------
-        const targetKeywords = '(?:cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)';
-        const ghostRegex = new RegExp(`%\\s*(?=\\b${targetKeywords}\\b)`, 'g');
+        // 🚀 THE REGEX MACRO PIPELINE
+        // ---------------------------------------------------------
+        
+        // 1. Safely isolate % modifiers (ignoring math modulo operations)
+        const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
+
+        // Reset the search index immediately after testing
         const hasGhost = ghostRegex.test(scriptCode);
         ghostRegex.lastIndex = 0; 
 
-        // --- PASS 1: COMPILE PURE SOLIDS ---
-        // Turn off background shapes completely using '*'
-        const solidCode = scriptCode.replace(ghostRegex, '*'); 
+        // --- PASS 1: COMPILE SOLIDS ---
+        const solidCode = scriptCode.replace(ghostRegex, '*'); // Turn off ghosts
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
         let solidData = null;
@@ -1039,6 +1064,8 @@ btnPreview.addEventListener('click', async () => {
             instance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
             if (instance.FS.analyzePath('/solid.3mf').exists) {
                 solidData = instance.FS.readFile('/solid.3mf');
+                
+                // 💾 Save ONLY the solid parts for the 3D Printer Export button
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
@@ -1046,12 +1073,12 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-		// --- PASS 2: COMPILE TRACKED GHOSTS ---
+        // --- PASS 2: COMPILE GHOSTS (Fresh companion instance to prevent closed context drops) ---
         let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Injecting tracking signature into background layers...");
-            // Paint every single '%' object with an impossible cryptographic color
-            const ghostCode = scriptCode.replace(ghostRegex, 'color([0.98, 0.01, 0.87]) ');
+            logToConsole("📥 Processing Multi-Pass 3MF assembly...");
+            ghostRegex.lastIndex = 0; 
+            const ghostCode = scriptCode.replace(ghostRegex, '!'); // Solo the ghost elements
             
             try {
                 const ghostInstance = await openSCADFactory({
@@ -1064,27 +1091,34 @@ btnPreview.addEventListener('click', async () => {
                             try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                             try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
                             for (const fontName of Object.keys(fontCache)) {
-                                try { Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName])); } catch (e) {}
+                                try {
+                                    Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName]));
+                                } catch (fsErr) {}
                             }
                         }
                     ],
-                    print: () => {}, 
+                    print: () => {}, // Quiet logs for the ghost evaluator
                     printErr: () => {}
                 });
 
-                for (const stlName of Object.keys(stlCache)) { try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e){} }
-                for (const svgName of Object.keys(svgCache)) { try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
+                // Mirror custom assets to the temporary ghost environment 
+                for (const stlName of Object.keys(stlCache)) {
+                    try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
+                }
+                for (const svgName of Object.keys(svgCache)) {
+                    try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
+                }
 
                 ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
                 
-                // 🔑 CRITICAL FIX: Explicitly match the Manifold backend used in Pass 1!
-                ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
+                // Run execution WITHOUT Manifold backend to bypass root assertion errors on solitary '!' rules
+                ghostInstance.callMain(['/ghost_input.scad', '-o', '/ghost.3mf']);
                 
                 if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
                     ghostData = ghostInstance.FS.readFile('/ghost.3mf');
                 }
             } catch (err) {
-                logToConsole("⚠️ Notice: Ghost evaluation dropped by engine core.");
+                logToConsole("⚠️ Notice: Ghost evaluation skipped or dropped by engine core.");
             }
         }
 
@@ -1096,6 +1130,7 @@ btnPreview.addEventListener('click', async () => {
             if (placeholderText) placeholderText.style.display = 'none';
             logToConsole("✨ 3D Render Canvas Updated Successfully.");
 
+            // Clean up the virtual core filesystem to prevent browser leaks
             try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
             try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
             
@@ -1328,8 +1363,8 @@ function update3DModelViewer(solidData, ghostData = null) {
         const masterGroup = new THREE.Group();
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
-		// ---------------------------------------------------------
-        // 🟨 PASS 1: CORE SOLID GEOMETRY PROCESSING
+        // ---------------------------------------------------------
+        // 🎨 PASS 1: CORE SOLID GEOMETRY PROCESSING
         // ---------------------------------------------------------
         if (solidData) {
             const solidBytes = new Uint8Array(solidData);
@@ -1347,6 +1382,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (!mat) return;
                             const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                             
+                            // 🔍 WIDENED DETECTOR: Catch variant default OpenSCAD yellows/oranges safely
                             let isDefaultOpenSCADYellow = false;
                             if (mat.color) {
                                 const r = mat.color.r, g = mat.color.g, b = mat.color.b;
@@ -1354,7 +1390,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                                     isDefaultOpenSCADYellow = true;
                                 }
                             }
-                            if (hasGeometryVertexColors && !isDefaultOpenSCADYellow) {
+                            if (hasGeometryVertexColors) {
                                 const colorAttr = child.geometry.attributes.color;
                                 if (colorAttr && colorAttr.count > 0) {
                                     const vR = colorAttr.getX(0), vG = colorAttr.getY(0), vB = colorAttr.getZ(0);
@@ -1364,7 +1400,9 @@ function update3DModelViewer(solidData, ghostData = null) {
                                 }
                             }
 
+                            // 🚀 MATERIAL COLOR ROUTER
                             if (!isDefaultOpenSCADYellow) {
+                                // Script has an explicit, custom color() rule applied
                                 if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                                     mat.vertexColors = true;
                                     mat.color.setRGB(1, 1, 1);
@@ -1384,6 +1422,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                                     mat.side = THREE.FrontSide;
                                 }
                             } else {
+                                // Unstyled geometry -> Force your custom workspace color picker setting
                                 mat.vertexColors = false;
                                 mat.color.set(fallbackHexColor);
                                 mat.transparent = false;
@@ -1397,14 +1436,14 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
-                        masterGroup.add(child.clone());
                     }
                 });
+                masterGroup.add(solidGroup);
             }
         }
 
         // ---------------------------------------------------------
-        // 🧊 PASS 2: SIGNATURE GHOST FILTER (ICE GLASS)
+        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
         // ---------------------------------------------------------
         if (ghostData) {
             const ghostBytes = new Uint8Array(ghostData);
@@ -1415,55 +1454,37 @@ function update3DModelViewer(solidData, ghostData = null) {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
-                        const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                         const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        
-                        let isTargetGhost = false;
-
-                        // 🔍 Wide bounds comparison to avoid float-to-byte compression drops
-                        const matchSignature = (r, g, b) => {
-                            return (r > 0.90 && r < 1.0) && (g >= 0.0 && g < 0.05) && (b > 0.80 && b < 0.95);
-                        };
-
-                        materials.forEach((mat) => {
-                            if (!mat) return;
-                            if (mat.color && matchSignature(mat.color.r, mat.color.g, mat.color.b)) {
-                                isTargetGhost = true;
-                            }
-                        });
-
-                        if (hasGeometryVertexColors && !isTargetGhost) {
-                            const colorAttr = child.geometry.attributes.color;
-                            if (colorAttr && colorAttr.count > 0) {
-                                if (matchSignature(colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0))) {
-                                    isTargetGhost = true;
-                                }
-                            }
-                        }
-
-                        // ⭐ If this element doesn't carry the tracking signature color, toss it!
-                        if (!isTargetGhost) return;
-
-                        // It IS background geometry -> Style it into semi-translucent blue ice glass
                         materials.forEach((mat) => {
                             if (!mat) return;
 
-                            mat.vertexColors = false;   
-                            mat.color.set('#a5f3fc');     // Light icy cyan
+							/*
+                            // 🛠️ TRANSFORM INTO CLEAN SMOKY GLASS
+                            mat.vertexColors = false;   // Strip out unstyled background yellows
+                            mat.color.set('#222222');     // Dark, premium charcoal glass tint
                             mat.transparent = true;
-                            mat.opacity = 0.35;           
-                            mat.depthWrite = false;       // Stops layered geometry flashing artifacts
-                            mat.side = THREE.DoubleSide;  // Render front and back faces
-                            mat.roughness = 0.15;         
-                            mat.metalness = 0.0;
-                            
+                            mat.opacity = 0.55;           // Darkened and thickened (up from faint translucent levels)
+                            mat.depthWrite = false;       // Eliminates transparent layer clipping artifacts
+                            mat.side = THREE.DoubleSide;  // Draw both sides of the window panes
+                            mat.roughness = 0.15;         // Sleek, glossy surface finish
+                            mat.metalness = 0.1;
+							*/
+
+							mat.vertexColors = false;   
+							mat.color.set('#a5f3fc');     // 🧊 Vibrant light cyan / ice glass
+							mat.transparent = true;
+							mat.opacity = 0.30;           // High legibility overlay
+							mat.depthWrite = false;       
+							mat.side = THREE.DoubleSide;  
+							mat.roughness = 0.2;          
+							mat.metalness = 0.1;
+							
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
-
-                        masterGroup.add(child.clone());
                     }
                 });
+                masterGroup.add(ghostGroup);
             }
         }
 
@@ -1472,18 +1493,25 @@ function update3DModelViewer(solidData, ghostData = null) {
         currentMesh.rotation.x = -Math.PI / 2; // Correct OpenSCAD coordinate system to Three.js space
         scene.add(currentMesh);
 
-        // Restore original camera properties if updating an existing workspace model view
-        if (savedPosition && savedTarget && controls) {
+        // Retain view camera positions smoothly
+        if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
             controls.update();
         } else {
-            resetCameraView();
+            frameModelInCamera(currentMesh);
         }
 
-    } catch (error) {
-        logToConsole(`[Three.js Error]: Failed parsing multi-pass structural stream: ${error.message}`);
-        console.error(error);
+        if (typeof render === 'function') render();
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+
+    } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
+        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
     }
 }
 
