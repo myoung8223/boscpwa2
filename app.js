@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "171"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -993,7 +993,7 @@ btnPreview.addEventListener('click', async () => {
     const scriptCode = jar.toString(); 
     const errorLogs = [];
 
-try {
+    try {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
@@ -1018,15 +1018,14 @@ try {
         for (const svgName of Object.keys(svgCache)) { try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {} }
 
         // ---------------------------------------------------------
-        // 🚀 THE __GHOST__ TAGGING PIPELINE
+        // 🚀 THE REGEX INVERSION PIPELINE
         // ---------------------------------------------------------
-        const targetKeywords = '(?:cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)';
-        const ghostRegex = new RegExp(`%\\s*(?=\\b${targetKeywords}\\b)`, 'g');
-        const hasGhost = ghostRegex.test(scriptCode);
-        ghostRegex.lastIndex = 0; 
+        
+        const hasGhost = scriptCode.includes('%');
 
         // --- PASS 1: COMPILE PURE SOLIDS ---
-        const solidCode = scriptCode.replace(ghostRegex, '*'); // Disable ghosts
+        // Turn off anything with %
+        const solidCode = scriptCode.replace(/%/g, '*'); 
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
         let solidData = null;
@@ -1034,8 +1033,6 @@ try {
             instance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
             if (instance.FS.analyzePath('/solid.3mf').exists) {
                 solidData = instance.FS.readFile('/solid.3mf');
-                
-                // Keep the pure solids attached to the STL export!
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
@@ -1043,17 +1040,26 @@ try {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: TAGGED GHOST COMPILATION ---
+        // --- PASS 2: INVERTED GHOST COMPILER ---
         let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Processing Multi-Pass 3MF assembly via __GHOST__ Tracking...");
-            ghostRegex.lastIndex = 0; 
+            logToConsole("📥 Processing Multi-Pass Ghosts via Regex Inversion...");
             
-            // Inject the tracking module definition at the very top of the script
-            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
+            let ghostCode = scriptCode;
             
-            // Replace every % with the module call
-            const ghostCode = ghostModuleHeader + scriptCode.replace(ghostRegex, '__GHOST__() ');
+            // Step 1: Protect the user's requested ghost objects with a temporary text tag
+            ghostCode = ghostCode.replace(/%/g, '___GHOST___');
+            
+            // Step 2: Disable ALL base geometric shapes across the file by prefixing them with a '*'
+            const shapeRegex = /\b(cube|sphere|cylinder|polyhedron|square|circle|polygon|linear_extrude|rotate_extrude|surface|projection|text|import)\b/g;
+            ghostCode = ghostCode.replace(shapeRegex, '*$1');
+            
+            // Step 3: Re-enable only the shapes that were protected. 
+            // (e.g. '___GHOST___*cube' becomes 'cube')
+            ghostCode = ghostCode.replace(/___GHOST___\*/g, '');
+            
+            // Step 4: Clean up any leftover tags just in case they were placed on non-base shapes
+            ghostCode = ghostCode.replace(/___GHOST___/g, '');
             
             try {
                 const ghostInstance = await openSCADFactory({
@@ -1074,7 +1080,7 @@ try {
 
                 ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
                 
-                // IMPORTANT: We use Manifold backend for both passes so they compile identically!
+                // Match the Manifold backend so both layers compile perfectly
                 ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
                 
                 if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
@@ -1314,7 +1320,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
         // ---------------------------------------------------------
-        // 🟨 PASS 1: CORE SOLID GEOMETRY PROCESSING
+        // 🟨 PASS 1: CORE SOLID GEOMETRY (Standard Styling)
         // ---------------------------------------------------------
         if (solidData) {
             const solidBytes = new Uint8Array(solidData);
@@ -1364,7 +1370,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         }
 
         // ---------------------------------------------------------
-        // 🧊 PASS 2: __GHOST__ FILTERING & DELETION
+        // 🧊 PASS 2: GHOST GEOMETRY (Blindly apply glass to everything!)
         // ---------------------------------------------------------
         if (ghostData) {
             const ghostBytes = new Uint8Array(ghostData);
@@ -1375,31 +1381,10 @@ function update3DModelViewer(solidData, ghostData = null) {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
-                        const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                         const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        
-                        let isGhostTagFound = false;
 
-                        // Identify the [0.987, 0.012, 0.876] floating signature
-                        const matchSignature = (r, g, b) => { return (r > 0.95 && r < 1.0) && (g >= 0.0 && g < 0.05) && (b > 0.80 && b < 0.95); };
-
-                        materials.forEach((mat) => {
-                            if (!mat) return;
-                            if (mat.color && matchSignature(mat.color.r, mat.color.g, mat.color.b)) isGhostTagFound = true;
-                        });
-
-                        if (hasGeometryVertexColors && !isGhostTagFound) {
-                            const colorAttr = child.geometry.attributes.color;
-                            if (colorAttr && colorAttr.count > 0) {
-                                if (matchSignature(colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0))) isGhostTagFound = true;
-                            }
-                        }
-
-                        // ⭐ CRITICAL FILTRATION: If this mesh wasn't tagged with __GHOST__(), we THROW IT AWAY!
-                        // (Because Pass 1 already rendered it as a solid!)
-                        if (!isGhostTagFound) return;
-
-                        // It IS background geometry -> Turn it into translucent ice glass
+                        // ⭐ We know for an absolute fact this entire file is ghost geometry. 
+                        // Strip out whatever color it had, and turn it into glass!
                         materials.forEach((mat) => {
                             if (!mat) return;
                             mat.vertexColors = false;   
@@ -1429,7 +1414,7 @@ function update3DModelViewer(solidData, ghostData = null) {
             controls.target.copy(savedTarget);
             controls.update();
         } else {
-            resetCameraView(); // ensure you have a resetCameraView() or fallback to frameModelInCamera()
+            resetCameraView(); // Make sure this matches your camera reset function name!
         }
 
     } catch (error) {
