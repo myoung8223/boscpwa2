@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "169"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1047,8 +1047,8 @@ btnPreview.addEventListener('click', async () => {
         // Write the code to the virtual filesystem
         instance.FS.writeFile('/input.scad', scriptCode);
         
-        // 🚀 YOUR CORRECT MANIFOLD PIPELINE
-        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']);
+		// 🚀 YOUR CORRECT MANIFOLD PIPELINE (Now with Lazy Unions!)
+		instance.callMain(['/input.scad', '--backend=manifold', '--enable=lazy-unions', '-o', '/output.3mf']);
 
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
