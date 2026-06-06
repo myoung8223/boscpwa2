@@ -1430,7 +1430,7 @@ function update3DModelViewer(solidData, ghostData = null) {
             }
         }
 
-        // ---------------------------------------------------------
+		// ---------------------------------------------------------
         // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
         // ---------------------------------------------------------
         if (ghostData) {
@@ -1442,34 +1442,23 @@ function update3DModelViewer(solidData, ghostData = null) {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
-                        const materials = Array.isArray(child.material) ? child.material : [child.material];
-                        materials.forEach((mat) => {
-                            if (!mat) return;
-
-							/*
-                            // 🛠️ TRANSFORM INTO CLEAN SMOKY GLASS
-                            mat.vertexColors = false;   // Strip out unstyled background yellows
-                            mat.color.set('#222222');     // Dark, premium charcoal glass tint
-                            mat.transparent = true;
-                            mat.opacity = 0.55;           // Darkened and thickened (up from faint translucent levels)
-                            mat.depthWrite = false;       // Eliminates transparent layer clipping artifacts
-                            mat.side = THREE.DoubleSide;  // Draw both sides of the window panes
-                            mat.roughness = 0.15;         // Sleek, glossy surface finish
-                            mat.metalness = 0.1;
-							*/
-
-							mat.vertexColors = false;   
-							mat.color.set('#a5f3fc');     // 🧊 Vibrant light cyan / ice glass
-							mat.transparent = true;
-							mat.opacity = 0.30;           // High legibility overlay
-							mat.depthWrite = false;       
-							mat.side = THREE.DoubleSide;  
-							mat.roughness = 0.2;          
-							mat.metalness = 0.1;
-							
-                            if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
-                            mat.needsUpdate = true;
+                        // 💡 CRITICAL FIX: Decouple from shared material trees by generating 
+                        // a totally fresh, isolated material unique to this ghost node.
+                        child.material = new THREE.MeshStandardMaterial({
+                            color: 0xa5f3fc,          // 🧊 Vibrant light cyan / ice glass
+                            transparent: true,        // Enable alpha channels natively
+                            opacity: 0.35,            // Clean overlay opacity density
+                            depthWrite: false,        // Prevents ghost planes from masking objects behind them
+                            side: THREE.DoubleSide,    // Render backfaces for interior hull/casing views
+                            roughness: 0.2,           // Sleek surface finish
+                            metalness: 0.1
                         });
+
+                        if (typeof wireframeMode !== 'undefined') {
+                            child.material.wireframe = wireframeMode;
+                        }
+                        
+                        child.material.needsUpdate = true;
                     }
                 });
                 masterGroup.add(ghostGroup);
