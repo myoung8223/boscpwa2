@@ -1021,14 +1021,16 @@ btnPreview.addEventListener('click', async () => {
         for (const stlName of Object.keys(stlCache)) { try { instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e){} }
         for (const svgName of Object.keys(svgCache)) { try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
 
-        // Isolate % markers safely
+// ---------------------------------------------------------
+        // 🚀 TWO-PASS EXPORT PIPELINE
+        // ---------------------------------------------------------
         const targetKeywords = '(?:cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)';
         const ghostRegex = new RegExp(`%\\s*(?=\\b${targetKeywords}\\b)`, 'g');
         const hasGhost = ghostRegex.test(scriptCode);
-        ghostRegex.lastIndex = 0;
+        ghostRegex.lastIndex = 0; 
 
-        // --- PASS 1: COMPILE SOLIDS ---
-        // Turn off all background elements using '*'
+        // --- PASS 1: COMPILE PURE SOLIDS ---
+        // Turn off background shapes completely using '*'
         const solidCode = scriptCode.replace(ghostRegex, '*'); 
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
@@ -1044,64 +1046,13 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: SANDBOXED GHOST COMPILER ---
+        // --- PASS 2: COMPILE TRACKED GHOSTS ---
         let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Compiling background elements via Ghost Sandbox...");
-
-            // 🎨 Step A: Paint all % objects with a clean tracking color signature
-            const ghostPaintedCode = scriptCode.replace(ghostRegex, 'color([0.123, 0.456, 0.789]) ');
-
-            // 🛡️ Step B: Prepend a sandbox header that intercept shapes.
-            // If they don't have our tracking color, they drop to an empty union(), making them vanish!
-            const sandboxHeader = `
-// 🧠 Ghost Sandbox Interceptor
-module cube(size=[1,1,1], center=false) { if ($children > 0) { children(); } else if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_cube(size=size, center=center); } }
-module sphere(r=1, d=undef) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_sphere(r=r, d=d); } }
-module cylinder(h=1, r=undef, r1=undef, r2=undef, d=undef, d1=undef, d2=undef, center=false) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_cylinder(h=h, r=r, r1=r1, r2=r2, d=d, d1=d1, d2=d2, center=center); } }
-module linear_extrude(height=undef, center=false, convexity=undef, twist=undef, slices=undef, scale=undef, fn=undef) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_linear_extrude(height=height, center=center, convexity=convexity, twist=twist, slices=slices, scale=scale, fn=fn) children(); } else { children(); } }
-module rotate_extrude(angle=undef, convexity=undef) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_rotate_extrude(angle=angle, convexity=convexity) children(); } else { children(); } }
-module text(text, size=10, font=undef, halign="left", valign="baseline", spacing=1, direction="ltr", language="en", script="latin") { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_text(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing, direction=direction, language=language, script=script); } }
-
-// Helper module to peel the tracking tint off so it renders cleanly in 3MF
-module unset_color() { color([1, 1, 1, 1]) children(); }
-
-// Map standard keywords to primitives aliases
-module typeof_cube(size, center) { OpenSCAD_cube(size, center); }
-module typeof_sphere(r, d) { OpenSCAD_sphere(r, d); }
-module typeof_cylinder(h, r, r1, r2, d, d1, d2, center) { OpenSCAD_cylinder(h, r, r1, r2, d, d1, d2, center); }
-module typeof_linear_extrude(height, center, convexity, twist, slices, scale, fn) { OpenSCAD_linear_extrude(height, center, convexity, twist, slices, scale, fn) children(); }
-module typeof_rotate_extrude(angle, convexity) { OpenSCAD_rotate_extrude(angle, convexity) children(); }
-module typeof_text(text, size, font, halign, valign, spacing, direction, language, script) { OpenSCAD_text(text, size, font, halign, valign, spacing, direction, language, script); }
-
-// Fix basic keyword mappings for runtime execution
-module OpenSCAD_cube(size, center) { let(s = is_list(size) ? size : [size, size, size]) translate(center ? -s/2 : [0,0,0]) builtin_cube(s); }
-module OpenSCAD_sphere(r, d) { builtin_sphere(r = is_undef(d) ? r : d/2); }
-module OpenSCAD_cylinder(h, r, r1, r2, d, d1, d2, center) { let(br = !is_undef(d) ? d/2 : (!is_undef(r) ? r : 1), tr1 = !is_undef(d1) ? d1/2 : (!is_undef(r1) ? r1 : br), tr2 = !is_undef(d2) ? d2/2 : (!is_undef(r2) ? r2 : br)) translate(center ? [0,0,-h/2] : [0,0,0]) builtin_cylinder(h=h, r1=tr1, r2=tr2); }
-module OpenSCAD_linear_extrude(height, center, convexity, twist, slices, scale, fn) { builtin_linear_extrude(height=height, center=center, twist=twist, scale=scale) children(); }
-module OpenSCAD_rotate_extrude(angle, convexity) { builtin_rotate_extrude(angle=angle) children(); }
-module OpenSCAD_text(text, size, font, halign, valign, spacing, direction, language, script) { builtin_text(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing); }
-
-// Native structural mappings to built-in tokens
-module builtin_cube(size) { math_cube(size); }
-module builtin_sphere(r) { math_sphere(r); }
-module builtin_cylinder(h, r1, r2) { math_cylinder(h=h, r1=r1, r2=r2); }
-module builtin_linear_extrude(height, center, twist, scale) { math_linear_extrude(height=height, center=center, twist=twist, scale=scale) children(); }
-module builtin_rotate_extrude(angle) { math_rotate_extrude(angle=angle) children(); }
-module builtin_text(text, size, font, halign, valign, spacing) { math_text(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing); }
-
-// Direct math definitions mapping straight to OpenSCAD Core
-module math_cube(size) { "cube"(size); }
-module math_sphere(r) { "sphere"(r); }
-module math_cylinder(h, r1, r2) { "cylinder"(h=h, r1=r1, r2=r2); }
-module math_linear_extrude(height, center, twist, scale) { "linear_extrude"(height=height, center=center, twist=twist, scale=scale) children(); }
-module math_rotate_extrude(angle) { "rotate_extrude"(angle=angle) children(); }
-module math_text(text, size, font, halign, valign, spacing) { "text"(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing); }
-
-`;
-
-            const finalGhostInputCode = sandboxHeader + ghostPaintedCode;
-
+            logToConsole("📥 Injecting tracking signature into background layers...");
+            // Paint every single '%' object with an impossible cryptographic floating-point color
+            const ghostCode = scriptCode.replace(ghostRegex, 'color([0.987, 0.012, 0.876]) ');
+            
             try {
                 const ghostInstance = await openSCADFactory({
                     noInitialRun: true,
@@ -1124,14 +1075,14 @@ module math_text(text, size, font, halign, valign, spacing) { "text"(text=text, 
                 for (const stlName of Object.keys(stlCache)) { try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e){} }
                 for (const svgName of Object.keys(svgCache)) { try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
 
-                ghostInstance.FS.writeFile('/ghost_input.scad', finalGhostInputCode);
+                ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
                 ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
                 
                 if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
                     ghostData = ghostInstance.FS.readFile('/ghost.3mf');
                 }
             } catch (err) {
-                logToConsole("⚠️ Notice: Ghost evaluation skipped or dropped by engine core.");
+                logToConsole("⚠️ Notice: Ghost evaluation dropped by engine core.");
             }
         }
 
@@ -1376,7 +1327,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
         // ---------------------------------------------------------
-        // 🎨 PASS 1: CORE SOLID GEOMETRY PROCESSING
+        // 🟨 PASS 1: CORE SOLID GEOMETRY PROCESSING
         // ---------------------------------------------------------
         if (solidData) {
             const solidBytes = new Uint8Array(solidData);
@@ -1394,7 +1345,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (!mat) return;
                             const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                             
-                            // 🔍 WIDENED DETECTOR: Catch variant default OpenSCAD yellows/oranges safely
+                            // Check if color is the default yellow/orange variant OpenSCAD exports
                             let isDefaultOpenSCADYellow = false;
                             if (mat.color) {
                                 const r = mat.color.r, g = mat.color.g, b = mat.color.b;
@@ -1402,7 +1353,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                                     isDefaultOpenSCADYellow = true;
                                 }
                             }
-                            if (hasGeometryVertexColors) {
+                            if (hasGeometryVertexColors && !isDefaultOpenSCADYellow) {
                                 const colorAttr = child.geometry.attributes.color;
                                 if (colorAttr && colorAttr.count > 0) {
                                     const vR = colorAttr.getX(0), vG = colorAttr.getY(0), vB = colorAttr.getZ(0);
@@ -1448,14 +1399,16 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
+                        
+                        // We clone the mesh into our fresh tracking group structure
+                        masterGroup.add(child.clone());
                     }
                 });
-                masterGroup.add(solidGroup);
             }
         }
 
         // ---------------------------------------------------------
-        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
+        // 🧊 PASS 2: SIGNATURE GHOST FILTER (SMOKY ICE GLASS)
         // ---------------------------------------------------------
         if (ghostData) {
             const ghostBytes = new Uint8Array(ghostData);
@@ -1466,37 +1419,55 @@ function update3DModelViewer(solidData, ghostData = null) {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
+                        const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                         const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        
+                        let isTargetGhost = false;
+
+                        // Check if color matches our signature signature tracking token: [0.987, 0.012, 0.876]
+                        const matchSignature = (r, g, b) => {
+                            return (r > 0.95 && r < 0.99) && (g >= 0.0 && g < 0.05) && (b > 0.84 && b < 0.90);
+                        };
+
+                        materials.forEach((mat) => {
+                            if (!mat) return;
+                            if (mat.color && matchSignature(mat.color.r, mat.color.g, mat.color.b)) {
+                                isTargetGhost = true;
+                            }
+                        });
+
+                        if (hasGeometryVertexColors && !isTargetGhost) {
+                            const colorAttr = child.geometry.attributes.color;
+                            if (colorAttr && colorAttr.count > 0) {
+                                if (matchSignature(colorAttr.getX(0), colorAttr.getY(0), colorAttr.getZ(0))) {
+                                    isTargetGhost = true;
+                                }
+                            }
+                        }
+
+                        // ⭐ THE GATEKEEPER: If this object does NOT contain our secret ghost color signature, drop it!
+                        if (!isTargetGhost) return;
+
+                        // It IS an intended ghost background object -> Transform it into sleek cyan glass
                         materials.forEach((mat) => {
                             if (!mat) return;
 
-							/*
-                            // 🛠️ TRANSFORM INTO CLEAN SMOKY GLASS
-                            mat.vertexColors = false;   // Strip out unstyled background yellows
-                            mat.color.set('#222222');     // Dark, premium charcoal glass tint
+                            mat.vertexColors = false;   // Clear out vertex colors so material works cleanly
+                            mat.color.set('#a5f3fc');     // 🧊 Vibrant light cyan / ice glass
                             mat.transparent = true;
-                            mat.opacity = 0.55;           // Darkened and thickened (up from faint translucent levels)
-                            mat.depthWrite = false;       // Eliminates transparent layer clipping artifacts
-                            mat.side = THREE.DoubleSide;  // Draw both sides of the window panes
-                            mat.roughness = 0.15;         // Sleek, glossy surface finish
-                            mat.metalness = 0.1;
-							*/
-
-							mat.vertexColors = false;   
-							mat.color.set('#a5f3fc');     // 🧊 Vibrant light cyan / ice glass
-							mat.transparent = true;
-							mat.opacity = 0.30;           // High legibility overlay
-							mat.depthWrite = false;       
-							mat.side = THREE.DoubleSide;  
-							mat.roughness = 0.2;          
-							mat.metalness = 0.1;
-							
+                            mat.opacity = 0.35;           // High visibility transparency overlay
+                            mat.depthWrite = false;       // Fixes nested depth-sorting layer clipping box artifacts
+                            mat.side = THREE.DoubleSide;  // Draw inside and outside faces
+                            mat.roughness = 0.15;         // Premium, shiny gloss
+                            mat.metalness = 0.0;
+                            
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
+
+                        masterGroup.add(child.clone());
                     }
                 });
-                masterGroup.add(ghostGroup);
             }
         }
 
@@ -1505,25 +1476,18 @@ function update3DModelViewer(solidData, ghostData = null) {
         currentMesh.rotation.x = -Math.PI / 2; // Correct OpenSCAD coordinate system to Three.js space
         scene.add(currentMesh);
 
-        // Retain view camera positions smoothly
-        if (savedPosition && savedTarget) {
+        // Restore original camera properties if updating an existing workspace model view
+        if (savedPosition && savedTarget && controls) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
             controls.update();
         } else {
-            frameModelInCamera(currentMesh);
+            resetCameraView();
         }
 
-        if (typeof render === 'function') render();
-        logToConsole("✨ 3D Render Canvas Updated Successfully.");
-
-    } catch (err) {
-        console.error("3MF Parse Pipeline Failure via fflate:", err);
-        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
-        if (placeholderText) {
-            placeholderText.textContent = "❌ Render Error (Check Console)";
-            placeholderText.style.display = 'flex';
-        }
+    } catch (error) {
+        logToConsole(`[Three.js Error]: Failed parsing multi-pass structural stream: ${error.message}`);
+        console.error(error);
     }
 }
 
