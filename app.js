@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "165"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "166"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1044,16 +1044,18 @@ btnPreview.addEventListener('click', async () => {
             } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
         }
 
-// ---------------------------------------------------------
-        // 🚀 THE REGEX MACRO PIPELINE
+		// ---------------------------------------------------------
+        // 🚀 THE REGEX MACRO PIPELINE (FIXED)
         // ---------------------------------------------------------
         
-        // 1. Safely find `%` modifiers (ignoring math modulo operators)
+        // 1. Safely isolate % modifiers (ignoring math modulo operations)
         const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
 
+        // 🔥 CRITICAL FIX: Reset the search index immediately after testing
         const hasGhost = ghostRegex.test(scriptCode);
+        ghostRegex.lastIndex = 0; 
 
-        // PASS 1: Compile Solids (Replace % with * to disable ghosts)
+        // PASS 1: Compile Solids (Replace % with * to turn off ghosts completely)
         const solidCode = scriptCode.replace(ghostRegex, '*');
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
@@ -1071,9 +1073,11 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // PASS 2: Compile Ghosts (Replace % with ! to solo them)
+        // PASS 2: Compile Ghosts (Replace % with ! to SOLO the ghost geometry)
         let ghostData = null;
         if (hasGhost) {
+            // Reset index again just to be absolutely safe before replacing
+            ghostRegex.lastIndex = 0; 
             const ghostCode = scriptCode.replace(ghostRegex, '!');
             instance.FS.writeFile('/ghost_input.scad', ghostCode);
             
@@ -1083,7 +1087,7 @@ btnPreview.addEventListener('click', async () => {
                     ghostData = instance.FS.readFile('/ghost.3mf');
                 }
             } catch (err) {
-                logToConsole("Pass 2: No transparent geometry detected.");
+                logToConsole("Pass 2: Ghost rendering compilation dropped.");
             }
         }
 
@@ -1094,11 +1098,11 @@ btnPreview.addEventListener('click', async () => {
             update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
 
-            // Clean up the virtual file system
+            // Clean up the virtual filesystem to prevent browser leaks
             if (solidData) instance.FS.unlink('/solid.3mf');
             if (ghostData) instance.FS.unlink('/ghost.3mf');
-            instance.FS.unlink('/solid_input.scad');
-            if (hasGhost) instance.FS.unlink('/ghost_input.scad');
+            if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad');
+            if (instance.FS.analyzePath('/ghost_input.scad').exists) instance.FS.unlink('/ghost_input.scad');
             
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
