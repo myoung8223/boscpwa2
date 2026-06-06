@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "120"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "121"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1871,7 +1871,6 @@ function update3DModelViewer(raw3mfData) {
         }
     }
 }
-*/
 
 function update3DModelViewer(raw3mfData) {
     if (!workspaceInitialized) init3DWorkspace();
@@ -1988,6 +1987,177 @@ function update3DModelViewer(raw3mfData) {
                     } else {
                         // 🎨 PIPELINE B: Absolute unstyled mesh (No vertex colors and solid opacity).
                         // Force it to match your workspace settings panel picker color completely!
+                        mat.vertexColors = false;
+                        mat.color.set(fallbackHexColor);
+                        mat.transparent = false;
+                        mat.depthWrite = true;
+                        mat.side = THREE.FrontSide;
+                        mat.opacity = 1.0; 
+                    }
+
+                    // Polished physical shading attributes
+                    mat.roughness = 0.5;
+                    mat.metalness = 0.1;
+                    
+                    if (typeof wireframeMode !== 'undefined') {
+                        mat.wireframe = wireframeMode;
+                    }
+                    
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+
+        // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
+        currentMesh.rotation.x = -Math.PI / 2;
+
+        // Display the fully assembled scene hierarchy group
+        scene.add(currentMesh);
+
+        // Retain view camera positions
+        if (savedPosition && savedTarget) {
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+            controls.update();
+        } else {
+            frameModelInCamera(currentMesh);
+        }
+
+        if (typeof render === 'function') render(); 
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+        
+    } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
+        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
+    }
+}
+*/
+
+function update3DModelViewer(raw3mfData) {
+    if (!workspaceInitialized) init3DWorkspace();
+
+    let savedPosition = null;
+    let savedTarget = null;
+    if (currentMesh && camera && controls) {
+        savedPosition = camera.position.clone();
+        savedTarget = controls.target.clone();
+    }
+
+    // Safely remove the old mesh from the scene and free memory
+    if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+            }
+        });
+        currentMesh = null;
+    }
+
+    logToConsole("📥 Processing 3MF archive using fflate...");
+
+    try {
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
+        }
+
+        // THE COMPATIBILITY LAYER
+        window.JSZip = {
+            loadAsync: async function(data) {
+                const bytes = new Uint8Array(data);
+                const unzippedFiles = fflate.unzipSync(bytes);
+                return {
+                    file: function(relativePath) {
+                        const fileData = unzippedFiles[relativePath];
+                        if (!fileData) return null;
+                        return {
+                            async: async function(type) {
+                                if (type === 'string') return new TextDecoder().decode(fileData);
+                                return fileData.buffer;
+                            }
+                        };
+                    }
+                };
+            }
+        };
+
+        const loader = new THREE.ThreeMFLoader();
+        
+        // Isolate WASM memory buffer allocation space
+        const standaloneBytes = new Uint8Array(raw3mfData);
+        const bufferToParse = standaloneBytes.buffer;
+        
+        // Parse the 3MF package
+        const threemfGroup = loader.parse(bufferToParse);
+        if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
+        
+        currentMesh = threemfGroup;
+
+        // Pull the exact, active chosen hex value from your HTML color input box
+        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
+        const fallbackThreeColor = new THREE.Color(fallbackHexColor);
+
+        // Traverse the imported nodes to safely configure the hierarchy
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                // Ensure vertex normals are computed so lighting shaders calculate smoothly
+                if (child.geometry) {
+                    child.geometry.computeVertexNormals();
+                }
+
+                const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                
+                materials.forEach((mat) => {
+                    if (!mat) return;
+
+                    const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
+                    
+                    // 🔍 DETECT DEFAULT THEMES PRECISELY
+                    // OpenSCAD's unstyled shapes export as a yellowish preview color (High R and G, lower B)
+                    const isDefaultOpenSCADYellow = (mat.color && mat.color.r > 0.9 && mat.color.g > 0.8 && mat.color.b < 0.6);
+                    // Three.js baseline placeholders often initialize as blue hues
+                    const isPlaceholderBlue = (mat.color && mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
+                    // Catch fallback raw white/black models
+                    const isWhiteOrBlack = (mat.color && ((mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
+                                           (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0)));
+
+                    // 🚀 THE FIX: A mesh is a baseline fallback only if it matches one of the internal unstyled themes 
+                    // AND it does not carry any active custom geometry vertex color tags.
+                    const isBaselineFallbackMesh = (isDefaultOpenSCADYellow || isPlaceholderBlue || isWhiteOrBlack) && !hasGeometryVertexColors && !loaderFlaggedVertexColors;
+
+                    if (!isBaselineFallbackMesh) {
+                        // 🎨 PIPELINE A: Script has an explicit color() operation applied (Even at Alpha 1.0!)
+                        if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                            mat.vertexColors = true;
+                            mat.color.setRGB(1, 1, 1); // Keep vertex channels pristine
+                        }
+                        
+                        // Handle opacity rendering rules without polygon sorting glitches
+                        if (mat.opacity < 1.0) {
+                            mat.transparent = true;
+                            
+                            if (mat.opacity < 0.8) {
+                                mat.depthWrite = false; // Deep transparency handling
+                                mat.side = THREE.DoubleSide; 
+                            } else {
+                                mat.depthWrite = true;  // Solid sorting for high values like 0.999
+                                mat.side = THREE.FrontSide;  
+                            }
+                        } else {
+                            mat.transparent = false;
+                            mat.depthWrite = true;
+                            mat.side = THREE.FrontSide;
+                        }
+                    } else {
+                        // 🎨 PIPELINE B: Absolute unstyled background mesh.
+                        // Force it to render using your workspace settings layout color!
                         mat.vertexColors = false;
                         mat.color.set(fallbackHexColor);
                         mat.transparent = false;
