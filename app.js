@@ -1044,23 +1044,62 @@ btnPreview.addEventListener('click', async () => {
             } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
         }
 
-        // Write the code to the virtual filesystem
-        instance.FS.writeFile('/input.scad', scriptCode);
+// ---------------------------------------------------------
+        // 🚀 THE REGEX MACRO PIPELINE
+        // ---------------------------------------------------------
         
-        // 🚀 YOUR CORRECT MANIFOLD PIPELINE
-        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']);
+        // 1. Safely find `%` modifiers (ignoring math modulo operators)
+        const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
 
-        if (instance.FS.analyzePath('/output.3mf').exists) {
-            const outputData = instance.FS.readFile('/output.3mf');
+        const hasGhost = ghostRegex.test(scriptCode);
+
+        // PASS 1: Compile Solids (Replace % with * to disable ghosts)
+        const solidCode = scriptCode.replace(ghostRegex, '*');
+        instance.FS.writeFile('/solid_input.scad', solidCode);
+        
+        let solidData = null;
+        try {
+            instance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
+            if (instance.FS.analyzePath('/solid.3mf').exists) {
+                solidData = instance.FS.readFile('/solid.3mf');
+                
+                // 💾 Save ONLY the solid parts for the 3D Printer Export button
+                currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
+                btnExport.disabled = false;
+            }
+        } catch (err) {
+            logToConsole("Pass 1: No solid geometry detected.");
+        }
+
+        // PASS 2: Compile Ghosts (Replace % with ! to solo them)
+        let ghostData = null;
+        if (hasGhost) {
+            const ghostCode = scriptCode.replace(ghostRegex, '!');
+            instance.FS.writeFile('/ghost_input.scad', ghostCode);
             
-            update3DModelViewer(outputData);
-            
-            currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
-            
+            try {
+                instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
+                if (instance.FS.analyzePath('/ghost.3mf').exists) {
+                    ghostData = instance.FS.readFile('/ghost.3mf');
+                }
+            } catch (err) {
+                logToConsole("Pass 2: No transparent geometry detected.");
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 📦 ASSEMBLE & RENDER
+        // ---------------------------------------------------------
+        if (solidData || ghostData) {
+            update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
-            btnExport.disabled = false;
 
-            instance.FS.unlink('/output.3mf');            
+            // Clean up the virtual file system
+            if (solidData) instance.FS.unlink('/solid.3mf');
+            if (ghostData) instance.FS.unlink('/ghost.3mf');
+            instance.FS.unlink('/solid_input.scad');
+            if (hasGhost) instance.FS.unlink('/ghost_input.scad');
+            
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
@@ -1233,7 +1272,10 @@ function init3DWorkspace() {
     animate();
 }
 
-function update3DModelViewer(raw3mfData) {
+// ==========================================================================
+// 🎨 MULTI-PASS 3MF VIEWER (Solids + Translucent Ghosts)
+// ==========================================================================
+function update3DModelViewer(solidData, ghostData) {
     if (!workspaceInitialized) init3DWorkspace();
 
     let savedPosition = null;
@@ -1243,7 +1285,6 @@ function update3DModelViewer(raw3mfData) {
         savedTarget = controls.target.clone();
     }
 
-    // Safely remove the old mesh from the scene and free memory
     if (currentMesh) {
         scene.remove(currentMesh);
         currentMesh.traverse((child) => {
@@ -1256,14 +1297,11 @@ function update3DModelViewer(raw3mfData) {
         currentMesh = null;
     }
 
-    logToConsole("📥 Processing 3MF archive using fflate...");
+    logToConsole("📥 Processing Multi-Pass 3MF assembly...");
 
     try {
-        if (typeof fflate === 'undefined') {
-            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
-        }
+        if (typeof fflate === 'undefined') throw new Error("fflate.js missing.");
 
-        // THE COMPATIBILITY LAYER
         window.JSZip = {
             loadAsync: async function(data) {
                 const bytes = new Uint8Array(data);
@@ -1284,137 +1322,78 @@ function update3DModelViewer(raw3mfData) {
         };
 
         const loader = new THREE.ThreeMFLoader();
-        
-        // Isolate WASM memory buffer allocation space
-        const standaloneBytes = new Uint8Array(raw3mfData);
-        const bufferToParse = standaloneBytes.buffer;
-        
-        // Parse the 3MF package
-        const threemfGroup = loader.parse(bufferToParse);
-        if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
-        
-        currentMesh = threemfGroup;
+        currentMesh = new THREE.Group(); // We group the layers together!
 
-        // Pull the exact, active chosen hex value from your HTML color input box
-        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
+        const processPass = (rawData, isGhost) => {
+            const buffer = new Uint8Array(rawData).buffer;
+            const group = loader.parse(buffer);
+            if (!group) return;
 
-        // Traverse the imported nodes to safely configure the hierarchy
-        currentMesh.traverse((child) => {
-            if (child.isMesh) {
-                // Ensure vertex normals are computed so lighting shaders calculate smoothly
-                if (child.geometry) {
-                    child.geometry.computeVertexNormals();
-                }
+            group.traverse((child) => {
+                if (child.isMesh) {
+                    if (child.geometry) child.geometry.computeVertexNormals();
 
-                // Identify if the geometry contains embedded vertex color streams
-                const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
-                const materials = Array.isArray(child.material) ? child.material : [child.material];
-                
-                materials.forEach((mat) => {
-                    if (!mat) return;
-
-                    const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
+                    const materials = Array.isArray(child.material) ? child.material : [child.material];
                     
-                    // 🔍 SPACE-PROOF DEFAULT YELLOW DETECTION
-                    let isDefaultOpenSCADYellow = false;
-
-                    // 1. Inspect material-level base color
-                    if (mat.color) {
-                        const r = mat.color.r;
-                        const g = mat.color.g;
-                        const b = mat.color.b;
-                        // Yellow/Orange profile: Red & Green are high, Blue is consistently low
-                        if (r > 0.75 && g > 0.60 && b < 0.65 && (r - b) > 0.20) {
-                            isDefaultOpenSCADYellow = true;
-                        }
-                    }
-
-                    // 2. Inspect vertex color stream attributes (where unstyled shapes get painted)
-                    if (hasGeometryVertexColors) {
-                        const colorAttr = child.geometry.attributes.color;
-                        if (colorAttr && colorAttr.count > 0) {
-                            const vR = colorAttr.getX(0);
-                            const vG = colorAttr.getY(0);
-                            const vB = colorAttr.getZ(0);
-                            if (vR > 0.75 && vG > 0.60 && vB < 0.65 && (vR - vB) > 0.20) {
-                                isDefaultOpenSCADYellow = true;
-                            }
-                        }
-                    }
-
-                    // 🚀 THE FIXED ROUTER
-                    if (!isDefaultOpenSCADYellow) {
-                        // 🎨 PIPELINE A: Script has an explicit, custom color() configuration applied
-                        if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
-                            mat.vertexColors = true;
-                            mat.color.setRGB(1, 1, 1); // Reset base material multiplier
-                        }
+                    materials.forEach((mat) => {
+                        if (!mat) return;
                         
-                        // Smart opacity polygon sorting configuration
-                        if (mat.opacity < 1.0) {
-                            mat.transparent = true;
-                            
-                            if (mat.opacity < 0.8) {
-                                mat.depthWrite = false; 
-                                mat.side = THREE.DoubleSide; 
-                            } else {
-                                mat.depthWrite = true;  
-                                mat.side = THREE.FrontSide; // Eliminates transparent interior face clipping
-                            }
+                        // Strip OpenSCAD's default vertex colors
+                        if (mat.vertexColors) {
+                            mat.vertexColors = true;
+                            mat.color.setRGB(1, 1, 1);
+                        }
+
+                        if (isGhost) {
+                            // 💎 Apply flawless physical glass to the Ghost pass
+                            const glassMat = new THREE.MeshPhysicalMaterial({
+                                color: mat.color.getHex() === 0xffffff ? 0xaaaaaa : mat.color, 
+                                metalness: 0.1,
+                                roughness: 0.1,
+                                transmission: 1.0, 
+                                opacity: 1.0,      
+                                transparent: true,
+                                ior: 1.5,          
+                                side: THREE.DoubleSide,
+                                depthWrite: false  
+                            });
+                            child.material = glassMat;
+                            child.renderOrder = 999; 
                         } else {
+                            // 🧱 Apply standard solid settings
                             mat.transparent = false;
                             mat.depthWrite = true;
                             mat.side = THREE.FrontSide;
+                            child.renderOrder = 1; 
+                            if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                         }
-                    } else {
-                        // 🎨 PIPELINE B: Unstyled background mesh (Detected OpenSCAD default Yellow)
-                        // Setting vertexColors to false forces the shader to ignore the vertex stream arrays!
-                        mat.vertexColors = false; 
-                        mat.color.set(fallbackHexColor); // Force our workspace settings color choice
-                        mat.transparent = false;
-                        mat.depthWrite = true;
-                        mat.side = THREE.FrontSide;
-                        mat.opacity = 1.0; 
-                    }
+                        mat.needsUpdate = true;
+                    });
+                }
+            });
+            currentMesh.add(group);
+        };
 
-                    // Shading lighting attributes
-                    mat.roughness = 0.5;
-                    mat.metalness = 0.1;
-                    
-                    if (typeof wireframeMode !== 'undefined') {
-                        mat.wireframe = wireframeMode;
-                    }
-                    
-                    mat.needsUpdate = true;
-                });
-            }
-        });
+        // Process whichever files were successfully generated
+        if (solidData) processPass(solidData, false);
+        if (ghostData) processPass(ghostData, true);
 
-        // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
         currentMesh.rotation.x = -Math.PI / 2;
-
-        // Display the fully assembled scene hierarchy group
         scene.add(currentMesh);
 
-        // Retain view camera positions
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
             controls.update();
         } else {
-            frameModelInCamera(currentMesh);
+            if (typeof frameModelInCamera === 'function') frameModelInCamera(currentMesh);
         }
 
         if (typeof render === 'function') render(); 
         logToConsole("✨ 3D Render Canvas Updated Successfully.");
         
     } catch (err) {
-        console.error("3MF Parse Pipeline Failure via fflate:", err);
         logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
-        if (placeholderText) {
-            placeholderText.textContent = "❌ Render Error (Check Console)";
-            placeholderText.style.display = 'flex';
-        }
     }
 }
 
