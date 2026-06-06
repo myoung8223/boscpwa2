@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "183"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "184"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2506,10 +2506,36 @@ function isolateOpenSCADGhosts(code) {
             return `${expression}\n`;
         }
         
-        if (isWrapper) {
-            let childResult = parseComponent(effectiveGhost);
+		if (isWrapper) {
+            const normalizedExpr = expression.trim();
             
-            // Handle if the returned child data was a block context payload
+            // 💡 THE COMPLETE SOLUTION: Intercept BOTH subtraction and intersection operators!
+            const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
+            
+            // Peek ahead to see if the immediate next child of this CSG block is a ghost (%)
+            let isGhostCsgBase = false;
+            if (isCsgFilterOp) {
+                let peekIdx = i;
+                while (peekIdx < len) {
+                    if (/\s/.test(code[peekIdx])) { peekIdx++; }
+                    else if (code[peekIdx] === '/' && code[peekIdx+1] === '/') { while (peekIdx < len && code[peekIdx] !== '\n') peekIdx++; }
+                    else if (code[peekIdx] === '/' && code[peekIdx+1] === '*') { peekIdx += 2; while (peekIdx < len && !(code[peekIdx] === '*' && code[peekIdx+1] === '/')) peekIdx++; peekIdx += 2; }
+                    else break;
+                }
+                if (code[peekIdx] === '%') {
+                    isGhostCsgBase = true;
+                }
+            }
+
+            // If a ghost is used as the base of a difference or intersection, bypass the wrapper operator entirely
+            if (isGhostCsgBase) {
+                let childResult = parseComponent(effectiveGhost);
+                let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
+                return `\n${childContent}\n`;
+            }
+
+            // --- Standard Operator Wrapper Handling (union, translate, rotate, etc.) ---
+            let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
 
@@ -2519,14 +2545,11 @@ function isolateOpenSCADGhosts(code) {
                 }
                 return `${expression}\n${childContent}`;
             } else {
-                // 💡 CLEAN HULL CRASH PROTECTION: If the children under this operator are completely disabled,
-                // disable the entire upstream transformation chain automatically to keep the syntax clean.
                 if (shouldDisableWrapper) {
                     return `* ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
-            }
-        } else {
+        	} else {
             // Leaf Statement Execution (cube, cylinder, sphere, import, text)
             if (effectiveGhost) {
                 if (hasIgnoreModifier) return `* ${expression}\n`;
