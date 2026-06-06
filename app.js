@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "151"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "152"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1076,19 +1076,6 @@ btnPreview.addEventListener('click', async () => {
     }
 });
 
-// swapping this 3MF export feature with a STL export feature (below)
-/*
-btnExport.addEventListener('click', () => {
-    if (!currentStlBlob) return;
-    const link = document.createElement('a'); 
-    link.href = URL.createObjectURL(currentStlBlob);
-    const projectName = projectNameInput.value.trim() || "openscad_model"; 
-    link.download = `${projectName}.3mf`; // 🚀 Switch extension
-    link.click();
-    logToConsole(`Exported ${projectName}.3mf successfully.`);
-});
-*/
-
 // STL export feature
 btnExport.addEventListener('click', () => {
     if (!currentMesh) {
@@ -1117,6 +1104,14 @@ btnExport.addEventListener('click', () => {
         exportClone.rotation.x = 0;
         exportClone.rotation.y = 0;
         exportClone.rotation.z = Math.PI / 2;
+        
+        // 4. Force Three.js to completely rebuild and bake this absolute orientation
+        exportClone.updateMatrix();
+        exportClone.updateMatrixWorld(true);
+
+        exportClone.rotation.x = 0;
+        exportClone.rotation.y = Math.PI / 2;
+        exportClone.rotation.z = 0;
         
         // 4. Force Three.js to completely rebuild and bake this absolute orientation
         exportClone.updateMatrix();
