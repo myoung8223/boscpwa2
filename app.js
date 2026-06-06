@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "160"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "161"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1124,7 +1124,7 @@ exportClone.updateMatrixWorld(true);
 // Second: Rotate exactly 90 degrees around the slicer's Up Vector (Z-Axis)
 // Note: If it spins clockwise but you wanted counter-clockwise, change Math.PI / 2 to -Math.PI / 2
 const upAxis = new THREE.Vector3(0, 0, 1);
-const spinQuaternion = new THREE.Quaternion().setFromAxisAngle(upAxis, Math.PI / 4);
+const spinQuaternion = new THREE.Quaternion().setFromAxisAngle(upAxis, -Math.PI / 2);
 
 // Apply the spin directly to the object's combined matrix
 exportClone.applyQuaternion(spinQuaternion);
