@@ -994,6 +994,7 @@ btnPreview.addEventListener('click', async () => {
     const errorLogs = [];
 
     try {
+        // Create a single compilation instance to handle the multi-pass layout safely
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
@@ -1017,14 +1018,10 @@ btnPreview.addEventListener('click', async () => {
         for (const stlName of Object.keys(stlCache)) { try { instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {} }
         for (const svgName of Object.keys(svgCache)) { try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {} }
 
-        // ---------------------------------------------------------
-        // 🚀 THE REGEX INVERSION PIPELINE
-        // ---------------------------------------------------------
-        
         const hasGhost = scriptCode.includes('%');
 
         // --- PASS 1: COMPILE PURE SOLIDS ---
-        // Turn off anything with %
+        // Natively disable any background objects with standard '*' prefixing
         const solidCode = scriptCode.replace(/%/g, '*'); 
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
@@ -1040,54 +1037,26 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: INVERTED GHOST COMPILER ---
+        // --- PASS 2: TARGETED GHOST TRACKING PASS ---
         let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Processing Multi-Pass Ghosts via Regex Inversion...");
+            logToConsole("📥 Processing Multi-Pass Ghosts via Color-Signature Tracking...");
             
-            let ghostCode = scriptCode;
+            // Inject a tracker module using an unmistakable signature color
+            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
             
-            // Step 1: Protect the user's requested ghost objects with a temporary text tag
-            ghostCode = ghostCode.replace(/%/g, '___GHOST___');
-            
-            // Step 2: Disable ALL base geometric shapes across the file by prefixing them with a '*'
-            const shapeRegex = /\b(cube|sphere|cylinder|polyhedron|square|circle|polygon|linear_extrude|rotate_extrude|surface|projection|text|import)\b/g;
-            ghostCode = ghostCode.replace(shapeRegex, '*$1');
-            
-            // Step 3: Re-enable only the shapes that were protected. 
-            // (e.g. '___GHOST___*cube' becomes 'cube')
-            ghostCode = ghostCode.replace(/___GHOST___\*/g, '');
-            
-            // Step 4: Clean up any leftover tags just in case they were placed on non-base shapes
-            ghostCode = ghostCode.replace(/___GHOST___/g, '');
+            // Match '%' followed by any character, command wrapper, or block brace safely
+            const ghostCode = ghostModuleHeader + scriptCode.replace(/%\s*(?=\b[a-zA-Z_]|\{)/g, '__GHOST__() ');
             
             try {
-                const ghostInstance = await openSCADFactory({
-                    noInitialRun: true,
-                    locateFile: (path) => `./libs/openscad.wasm`,
-                    ENV: { HOME: '/home/web_user' },
-                    preRun: [
-                        function(Module) {
-                            try { Module.FS.mkdir('/home'); Module.FS.mkdir('/home/web_user'); Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
-                            for (const fontName of Object.keys(fontCache)) { try { Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName])); } catch (e) {} }
-                        }
-                    ],
-                    print: () => {}, printErr: () => {}
-                });
-
-                for (const stlName of Object.keys(stlCache)) { try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {} }
-                for (const svgName of Object.keys(svgCache)) { try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {} }
-
-                ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
+                instance.FS.writeFile('/ghost_input.scad', ghostCode);
+                instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
                 
-                // Match the Manifold backend so both layers compile perfectly
-                ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
-                
-                if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
-                    ghostData = ghostInstance.FS.readFile('/ghost.3mf');
+                if (instance.FS.analyzePath('/ghost.3mf').exists) {
+                    ghostData = instance.FS.readFile('/ghost.3mf');
                 }
             } catch (err) {
-                logToConsole("⚠️ Notice: Ghost compilation dropped by engine core.");
+                logToConsole("Pass 2: Ghost tracking encountered an execution notice.");
             }
         }
 
@@ -1097,8 +1066,11 @@ btnPreview.addEventListener('click', async () => {
             if (placeholderText) placeholderText.style.display = 'none';
             logToConsole("✨ 3D Render Canvas Updated Successfully.");
 
+            // Cleanup workspace files
             try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
+            try { if (ghostData) instance.FS.unlink('/ghost.3mf'); } catch(e){}
             try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
+            try { if (instance.FS.analyzePath('/ghost_input.scad').exists) instance.FS.unlink('/ghost_input.scad'); } catch(e){}
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
@@ -1320,7 +1292,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
         // ---------------------------------------------------------
-        // 🟨 PASS 1: CORE SOLID GEOMETRY (Standard Styling)
+        // 🟨 PASS 1: CORE SOLID GEOMETRY (Preserves True Trees)
         // ---------------------------------------------------------
         if (solidData) {
             const solidBytes = new Uint8Array(solidData);
@@ -1363,14 +1335,14 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
-                        masterGroup.add(child.clone());
                     }
                 });
+                masterGroup.add(solidGroup); // Crucial fix: Add group directly to retain 3D positioning!
             }
         }
 
         // ---------------------------------------------------------
-        // 🧊 PASS 2: GHOST GEOMETRY (Blindly apply glass to everything!)
+        // 🧊 PASS 2: GHOST GEOMETRY (Filtered via Tolerant Epsilon Checks)
         // ---------------------------------------------------------
         if (ghostData) {
             const ghostBytes = new Uint8Array(ghostData);
@@ -1382,26 +1354,40 @@ function update3DModelViewer(solidData, ghostData = null) {
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
                         const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        let isGhostMesh = false;
 
-                        // ⭐ We know for an absolute fact this entire file is ghost geometry. 
-                        // Strip out whatever color it had, and turn it into glass!
+                        // Verify against our unique color signature with conversion tolerance checks
                         materials.forEach((mat) => {
-                            if (!mat) return;
-                            mat.vertexColors = false;   
-                            mat.color.set('#a5f3fc');     // Ice glass cyan
-                            mat.transparent = true;
-                            mat.opacity = 0.35;           
-                            mat.depthWrite = false;       
-                            mat.side = THREE.DoubleSide;  
-                            mat.roughness = 0.15;         
-                            mat.metalness = 0.0;
-                            if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
-                            mat.needsUpdate = true;
+                            if (!mat || !mat.color) return;
+                            const rDiff = Math.abs(mat.color.r - 0.987);
+                            const gDiff = Math.abs(mat.color.g - 0.012);
+                            const bDiff = Math.abs(mat.color.b - 0.876);
+                            if (rDiff < 0.05 && gDiff < 0.05 && bDiff < 0.05) {
+                                isGhostMesh = true;
+                            }
                         });
 
-                        masterGroup.add(child.clone());
+                        if (isGhostMesh) {
+                            materials.forEach((mat) => {
+                                if (!mat) return;
+                                mat.vertexColors = false;   
+                                mat.color.set('#a5f3fc');     // Premium Ice Cyan Glass tint
+                                mat.transparent = true;
+                                mat.opacity = 0.35;           
+                                mat.depthWrite = false;       
+                                mat.side = THREE.DoubleSide;  
+                                mat.roughness = 0.15;         
+                                mat.metalness = 0.0;
+                                if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
+                                mat.needsUpdate = true;
+                            });
+                        } else {
+                            // Turn off regular elements in this pass to prevent duplicate solid renderings
+                            child.visible = false;
+                        }
                     }
                 });
+                masterGroup.add(ghostGroup); // Crucial fix: Add group directly to retain 3D positioning!
             }
         }
 
@@ -1414,7 +1400,8 @@ function update3DModelViewer(solidData, ghostData = null) {
             controls.target.copy(savedTarget);
             controls.update();
         } else {
-            resetCameraView(); // Make sure this matches your camera reset function name!
+            if (typeof resetCameraView === 'function') resetCameraView();
+            else if (typeof btnCameraReset !== 'undefined' && btnCameraReset) btnCameraReset.click();
         }
 
     } catch (error) {
