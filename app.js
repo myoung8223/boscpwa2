@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "171"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "172"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1045,18 +1045,24 @@ btnPreview.addEventListener('click', async () => {
         }
 
         // ---------------------------------------------------------
-        // 🚀 THE REGEX MACRO PIPELINE
+        // 🚀 THE REGEX & SCOPE MODIFIER PIPELINE
         // ---------------------------------------------------------
         
-        // 1. Safely isolate % modifiers (ignoring math modulo operations)
+        // Isolate % modifiers (ignoring math modulo operations)
         const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
 
-        // Reset the search index immediately after testing
         const hasGhost = ghostRegex.test(scriptCode);
         ghostRegex.lastIndex = 0; 
 
         // --- PASS 1: COMPILE SOLIDS ---
-        const solidCode = scriptCode.replace(ghostRegex, '*'); // Turn off ghosts
+        // Strip out items prefixed with ghost flags using the token-matched lookahead configuration 
+        const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
+        
+        // 🪲 [DEBUG LOG] Check exactly what solid segments look like
+        logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
+        logToConsole(solidCode);
+        logToConsole("🪲 -----------------------------------------\n");
+
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
         let solidData = null;
@@ -1073,30 +1079,34 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-		// --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
-		let ghostData = null;
-		if (hasGhost) {
-		    logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
-		    
-		    // 1. Structural scanner cleanly strips pure solids by turning them into ignored nodes (*) 
-		    // while fully preserving hulls, extrusions, and transform pipelines containing ghosts.
-		    const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-		    
-		    // 2. Inject tracking signature header
-		    const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
-		    const ghostCode = ghostModuleHeader + cleanGhostCode;
-		    
-		    try {
-		        instance.FS.writeFile('/ghost_input.scad', ghostCode);
-		        instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
-		        
-		        if (instance.FS.analyzePath('/ghost.3mf').exists) {
-		            ghostData = instance.FS.readFile('/ghost.3mf');
-		        }
-		    } catch (err) {
-		        logToConsole("Pass 2: Ghost compilation completed.");
-		    }
-		}
+        // --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
+        let ghostData = null;
+        if (hasGhost) {
+            logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
+            
+            // 1. Process script through our scope-aware pointer parser
+            const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
+            
+            // 2. Inject tracking signature header
+            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
+            const ghostCode = ghostModuleHeader + cleanGhostCode;
+            
+            // 🪲 [DEBUG LOG] Inspect the AST modification tree fed into Pass 2
+            logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
+            logToConsole(ghostCode);
+            logToConsole("🪲 -----------------------------------------\n");
+            
+            try {
+                instance.FS.writeFile('/ghost_input.scad', ghostCode);
+                instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
+                
+                if (instance.FS.analyzePath('/ghost.3mf').exists) {
+                    ghostData = instance.FS.readFile('/ghost.3mf');
+                }
+            } catch (err) {
+                logToConsole("Pass 2: Ghost compilation completed.");
+            }
+        }
 
         // ---------------------------------------------------------
         // 📦 ASSEMBLE & RENDER DISPATCH
@@ -1108,7 +1118,9 @@ btnPreview.addEventListener('click', async () => {
 
             // Clean up the virtual core filesystem to prevent browser leaks
             try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
+            try { if (ghostData) instance.FS.unlink('/ghost.3mf'); } catch(e){}
             try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
+            try { if (instance.FS.analyzePath('/ghost_input.scad').exists) instance.FS.unlink('/ghost_input.scad'); } catch(e){}
             
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
