@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "184"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "185"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2377,7 +2377,7 @@ if (leftPaneContainer && panelSplitGutter) {
     });
 }
 
-function isolateOpenSCADGhosts(code) {
+function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     let i = 0;
     const len = code.length;
     
@@ -2431,7 +2431,6 @@ function isolateOpenSCADGhosts(code) {
                 skipWhitespaceAndComments();
                 if (i >= len || code[i] === '}') break;
                 
-                // Track children to determine if this whole block becomes empty
                 totalChildren++;
                 let parsedChild = parseComponent(effectiveGhost);
                 if (parsedChild.trim().startsWith('*')) {
@@ -2453,7 +2452,6 @@ function isolateOpenSCADGhosts(code) {
         let endedWithSemicolon = false;
         let isVariableAssignment = false;
         
-        // Peek to check if this expression is a variable definition (e.g., $fn =)
         let peekIdx = i;
         let peekString = "";
         while (peekIdx < len && peekIdx < i + 50 && code[peekIdx] !== ';' && code[peekIdx] !== '{') {
@@ -2492,7 +2490,6 @@ function isolateOpenSCADGhosts(code) {
         
         skipWhitespaceAndComments();
         
-        // Determine structural relationship (Is it an operating wrapper or terminal statement?)
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nextChar = code[i];
@@ -2502,17 +2499,13 @@ function isolateOpenSCADGhosts(code) {
         }
         
         if (isVariableAssignment) {
-            // 💡 SAFEKEEPING: Pass variables raw without prepending any modifier operators
             return `${expression}\n`;
         }
         
         if (isWrapper) {
             const normalizedExpr = expression.trim();
-            
-            // 💡 THE COMPLETE SOLUTION: Intercept BOTH subtraction and intersection operators!
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
-            // Peek ahead to see if the immediate next child of this CSG block is a ghost (%)
             let isGhostCsgBase = false;
             if (isCsgFilterOp) {
                 let peekIdx = i;
@@ -2527,31 +2520,43 @@ function isolateOpenSCADGhosts(code) {
                 }
             }
 
-            // If a ghost is used as the base of a difference or intersection, bypass the wrapper operator entirely
-            if (isGhostCsgBase) {
+            // 💡 PASS 2 ADJUSTMENT: If evaluating ghost scaffold tree layout, bypass the CSG operation
+            if (isGhostCsgBase && !stripAllGhostsMode) {
                 let childResult = parseComponent(effectiveGhost);
                 let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
                 return `\n${childContent}\n`;
             }
 
-            // --- Standard Operator Wrapper Handling (union, translate, rotate, etc.) ---
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
 
-            if (effectiveGhost) {
+            // 🛑 PASS 1 CONTEXT ROUTING (STRIP ALL GHOSTS MODE)
+            if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
-                    return `__GHOST__() ${expression}\n${childContent}`;
-                }
-                return `${expression}\n${childContent}`;
-            } else {
-                if (shouldDisableWrapper) {
-                    return `* ${expression}\n${childContent}`;
+                    // Replace the removed ghost frame with a safe base-node micro cube placeholder
+                    return `cube([0.001, 0.001, 0.001], center=true);\n`;
                 }
                 return `${expression}\n${childContent}`;
             }
+
+            // Standard Pass 2 Processing
+            if (effectiveGhost) {
+                if (hasGhostModifier) return `__GHOST__() ${expression}\n${childContent}`;
+                return `${expression}\n${childContent}`;
+            } else {
+                if (shouldDisableWrapper) return `* ${expression}\n${childContent}`;
+                return `${expression}\n${childContent}`;
+            }
         } else {
-            // --- Leaf Statement Execution (cube, cylinder, sphere, import, text) ---
+            // Leaf Statement Parsing Context
+            if (stripAllGhostsMode) {
+                if (hasGhostModifier) {
+                    return `cube([0.001, 0.001, 0.001], center=true);\n`;
+                }
+                return `${expression}\n`;
+            }
+
             if (effectiveGhost) {
                 if (hasIgnoreModifier) return `* ${expression}\n`;
                 return hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`;
