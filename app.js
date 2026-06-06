@@ -2353,12 +2353,12 @@ function isolateOpenSCADGhosts(code) {
         let hasGhostModifier = false;
         let hasIgnoreModifier = false;
         
-        // Clear and match modifier prefixes sequentially
+        // Match modifier prefixes sequentially
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
             else if (ch === '*') { hasIgnoreModifier = true; i++; }
-            else if (ch === '!' || ch === '#') { i++; } // absorb other prefixes cleanly
+            else if (ch === '!' || ch === '#') { i++; } 
             else break;
             skipWhitespaceAndComments();
         }
@@ -2401,26 +2401,36 @@ function isolateOpenSCADGhosts(code) {
                 endedWithSemicolon = true;
                 break;
             }
+            
+            // Fix: If we just closed a parenthesis loop, check if a semicolon follows immediately 
+            // (skipping spaces) and consume it as part of this exact node context!
             if (parensCount === 0 && char === ')') {
-                // Break to re-evaluate structural look-aheads immediately after configuration signatures
+                let peek = i;
+                while (peek < len && /\s/.test(code[peek])) peek++;
+                if (peek < len && code[peek] === ';') {
+                    // Consume everything up to and including that semicolon
+                    while (i <= peek) {
+                        expression += code[i];
+                        i++;
+                    }
+                    endedWithSemicolon = true;
+                }
                 break;
             }
         }
         
         skipWhitespaceAndComments();
         
-        // Identify if this statement acts as a wrapper context or a closed geometry node
+        // Identify if this statement acts as an operation wrapper or a final leaf geometry node
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nextChar = code[i];
-            // If immediately followed by a block bracket or module name, it is a wrapper rule
             if (nextChar === '{' || nextChar === '%' || nextChar === '*' || /[a-zA-Z0-9_$]/.test(nextChar)) {
                 isWrapper = true;
             }
         }
         
         if (isWrapper) {
-            // Process attached downstream nodes recursively
             let childContent = parseComponent(effectiveGhost);
             if (effectiveGhost) {
                 return hasGhostModifier ? `__GHOST__() ${expression} ${childContent}` : `${expression} ${childContent}`;
@@ -2430,11 +2440,10 @@ function isolateOpenSCADGhosts(code) {
         } else {
             // Standalone Leaf Node (e.g. cube(10);)
             if (effectiveGhost) {
-                // Keep the active item; ignore pre-existing root operators if explicitly bypassed
                 if (hasIgnoreModifier) return `* ${expression} `;
                 return hasGhostModifier ? `__GHOST__() ${expression} ` : `${expression} `;
             } else {
-                // Completely solid code segment: Disable safely for our separate Ghost Pass geometry pass
+                // Safely disable solids for our ghost pass
                 return `* ${expression} `;
             }
         }
