@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "132"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "133"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -705,15 +705,34 @@ btnWireframe.addEventListener('click', () => {
     btnWireframe.style.background = wireframeMode ? '#444' : '#007acc';  
     
     if (currentMesh) {
-        // Traverse through the 3MF Group and target every individual mesh
         currentMesh.traverse((child) => {
             if (child.isMesh && child.material) {
-                // Handle cases where a single mesh has multiple materials (an array)
+                
+                // Handle cases where a mesh has multiple materials
                 if (Array.isArray(child.material)) {
-                    child.material.forEach(mat => mat.wireframe = wireframeMode);
+                    child.material.forEach((mat, index) => {
+                        // Create and cache a basic, unlit material for this specific part
+                        if (!child.userData[`origMat_${index}`]) {
+                            child.userData[`origMat_${index}`] = mat;
+                            child.userData[`wireMat_${index}`] = new THREE.MeshBasicMaterial({
+                                color: mat.color, 
+                                wireframe: true
+                            });
+                        }
+                        // Swap between the original lit material and the unlit wireframe
+                        child.material[index] = wireframeMode ? child.userData[`wireMat_${index}`] : child.userData[`origMat_${index}`];
+                    });
                 } else {
-                    // Handle standard single materials
-                    child.material.wireframe = wireframeMode;
+                    // Handle standard single material
+                    if (!child.userData.originalMaterial) {
+                        child.userData.originalMaterial = child.material;
+                        child.userData.wireframeMaterial = new THREE.MeshBasicMaterial({
+                            color: child.material.color || 0x007acc, // Fallback color just in case
+                            wireframe: true
+                        });
+                    }
+                    // Swap the materials
+                    child.material = wireframeMode ? child.userData.wireframeMaterial : child.userData.originalMaterial;
                 }
             }
         });
