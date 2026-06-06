@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "118"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "119"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1546,7 +1546,6 @@ function update3DModelViewer(raw3mfData) {
         }
     }
 }
-*/
 
 function update3DModelViewer(raw3mfData) {
     if (!workspaceInitialized) init3DWorkspace();
@@ -1671,6 +1670,176 @@ function update3DModelViewer(raw3mfData) {
                     }
                     
                     // Signal the WebGL context renderer to compile shaders for these property changes
+                    mat.needsUpdate = true;
+                });
+            }
+        });
+
+        // Re-orient OpenSCAD Z-up orientation matrices for Three.js coordinates
+        currentMesh.rotation.x = -Math.PI / 2;
+
+        // Display the fully assembled scene hierarchy group
+        scene.add(currentMesh);
+
+        // Retain view camera positions
+        if (savedPosition && savedTarget) {
+            camera.position.copy(savedPosition);
+            controls.target.copy(savedTarget);
+            controls.update();
+        } else {
+            frameModelInCamera(currentMesh);
+        }
+
+        if (typeof render === 'function') render(); 
+        logToConsole("✨ 3D Render Canvas Updated Successfully.");
+        
+    } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
+        logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
+    }
+}
+*/
+
+function update3DModelViewer(raw3mfData) {
+    if (!workspaceInitialized) init3DWorkspace();
+
+    let savedPosition = null;
+    let savedTarget = null;
+    if (currentMesh && camera && controls) {
+        savedPosition = camera.position.clone();
+        savedTarget = controls.target.clone();
+    }
+
+    // Safely remove the old mesh from the scene and free memory
+    if (currentMesh) {
+        scene.remove(currentMesh);
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                child.geometry.dispose();
+                if (Array.isArray(child.material)) child.material.forEach(m => m.dispose());
+                else child.material.dispose();
+            }
+        });
+        currentMesh = null;
+    }
+
+    logToConsole("📥 Processing 3MF archive using fflate...");
+
+    try {
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
+        }
+
+        // THE COMPATIBILITY LAYER
+        window.JSZip = {
+            loadAsync: async function(data) {
+                const bytes = new Uint8Array(data);
+                const unzippedFiles = fflate.unzipSync(bytes);
+                return {
+                    file: function(relativePath) {
+                        const fileData = unzippedFiles[relativePath];
+                        if (!fileData) return null;
+                        return {
+                            async: async function(type) {
+                                if (type === 'string') return new TextDecoder().decode(fileData);
+                                return fileData.buffer;
+                            }
+                        };
+                    }
+                };
+            }
+        };
+
+        const loader = new THREE.ThreeMFLoader();
+        
+        // Isolate WASM memory buffer allocation space
+        const standaloneBytes = new Uint8Array(raw3mfData);
+        const bufferToParse = standaloneBytes.buffer;
+        
+        // Parse the 3MF package
+        const threemfGroup = loader.parse(bufferToParse);
+        if (!threemfGroup) throw new Error("Loader returned an empty scene group.");
+        
+        currentMesh = threemfGroup;
+
+        // Pull the exact, active chosen hex value from your HTML color input box
+        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
+
+        // Traverse the imported nodes to safely configure the hierarchy
+        currentMesh.traverse((child) => {
+            if (child.isMesh) {
+                // Ensure vertex normals are computed so lighting shaders calculate smoothly
+                if (child.geometry) {
+                    child.geometry.computeVertexNormals();
+                }
+
+                const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                const materials = Array.isArray(child.material) ? child.material : [child.material];
+                
+                materials.forEach((mat) => {
+                    if (!mat) return;
+
+                    const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
+                    
+                    // Detect default engine fallback styling signatures precisely
+                    const isDefaultOpenSCADYellow = (mat.color && mat.color.r > 0.9 && mat.color.g > 0.8 && mat.color.b < 0.6);
+                    const isPlaceholderBlue = (mat.color && mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
+                    const isWhiteOrBlack = (mat.color && ((mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
+                                           (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0)));
+
+                    // 🚀 FIXED ROUTER: Only drop back to the workspace settings color if no explicit script-side 
+                    // modifications were made, or if it matched the uncolored native fallback templates.
+                    const isBaselineFallbackMesh = (isDefaultOpenSCADYellow || isPlaceholderBlue || isWhiteOrBlack) && !hasGeometryVertexColors && !loaderFlaggedVertexColors && mat.opacity === 1.0;
+
+                    if (!isBaselineFallbackMesh) {
+                        // 🎨 PIPELINE A: Script has an explicit color() operation applied!
+                        if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                            mat.vertexColors = true;
+                            mat.color.setRGB(1, 1, 1); 
+                        }
+                        
+                        // 🚀 POLYGON RENDERING FIX:
+                        // If the object is fully opaque or mostly solid (Alpha >= 0.8), keep transparent false 
+                        // and depthWrite true to completely eliminate the transparent "inside-out" glitch!
+                        if (mat.opacity < 1.0) {
+                            mat.transparent = true;
+                            
+                            if (mat.opacity < 0.8) {
+                                // For truly ghosted parts, turn off depth mapping to allow stacked viewing
+                                mat.depthWrite = false;
+                                mat.side = THREE.DoubleSide; // Render back walls cleanly
+                            } else {
+                                // For mostly solid items (like 0.999), keep standard depth mapping active
+                                mat.depthWrite = true;
+                                mat.side = THREE.FrontSide;  // Fixes the camera polygon transparency clip!
+                            }
+                        } else {
+                            mat.transparent = false;
+                            mat.depthWrite = true;
+                            mat.side = THREE.FrontSide;
+                        }
+                    } else {
+                        // 🎨 PIPELINE B: Baseline unstyled geometry wrapper.
+                        mat.vertexColors = false;
+                        mat.color.set(fallbackHexColor);
+                        mat.transparent = false;
+                        mat.depthWrite = true;
+                        mat.side = THREE.FrontSide;
+                        mat.opacity = 1.0; 
+                    }
+
+                    // Polished physical shading attributes
+                    mat.roughness = 0.5;
+                    mat.metalness = 0.1;
+                    
+                    if (typeof wireframeMode !== 'undefined') {
+                        mat.wireframe = wireframeMode;
+                    }
+                    
                     mat.needsUpdate = true;
                 });
             }
