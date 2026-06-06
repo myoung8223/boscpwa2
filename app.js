@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "149"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "150"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1158,32 +1158,42 @@ btnExport.addEventListener('click', () => {
     }
     
     try {
-        logToConsole(`⚙️ Creating wrapper environment for seamless STL alignment...`);
+        logToConsole(`⚙️ Aligning assembly orientation for STL export...`);
         
         const exporter = new THREE.STLExporter();
         
-        // 1. Structural clone of the model (preserving all internal loader rotations)
+        // 1. Create a clean structural clone of the model
         const exportClone = currentMesh.clone();
         
-        // 2. 🔥 THE FIX: Create an empty parent wrapper group
-        const exportWrapper = new THREE.Group();
-        exportWrapper.add(exportClone); // The model is now safely inside the wrapper
+        // 2. Tier 1 Wrapper: Apply the exact tilt you found that gets it upright
+        const tiltWrapper = new THREE.Group();
+        tiltWrapper.add(exportClone);
+        tiltWrapper.rotation.z = Math.PI / 2; // Keeps the model standing upright
         
-        // 3. Rotate the outer wrapper to match your slicer's coordinate system
-        // This tilts the Three.js Y-up world into the Slicer's Z-up world and spins it.
-        exportWrapper.rotation.x = -Math.PI / 2; // Tilts the assembly flat onto the bed
-        exportWrapper.rotation.z = Math.PI / 2;  // Spins the assembly 90 degrees horizontally
-        exportWrapper.rotation.y = 0;
+        // 3. Tier 2 Wrapper: Acts as a turntable spin around your print bed
+        const spinWrapper = new THREE.Group();
+        spinWrapper.add(tiltWrapper);
         
-        // 4. Force Three.js to compute the nested transforms down through the wrapper
-        exportWrapper.updateMatrixWorld(true);
+        // 💡 TUNING POINT: Change this axis to find your slicer's turntable direction
+        spinWrapper.rotation.x = Math.PI / 2; 
+        spinWrapper.rotation.y = 0;
+        spinWrapper.rotation.z = 0;
         
-        logToConsole(`📦 Packaging coordinate arrays into binary STL...`);
+        // 4. 🔥 THE SEAMLESS PASSTHROUGH: Temporarily hook to the active scene graph
+        // This forces Three.js to calculate the nested world matrices flawlessly with zero layout drift.
+        exportClone.visible = false; // Hide it so it doesn't flash visually on screen
+        currentMesh.parent.add(spinWrapper);
+        spinWrapper.updateMatrixWorld(true);
         
-        // 5. Pass the wrapper group to the exporter
-        const stlResult = exporter.parse(exportWrapper, { binary: true });
+        logToConsole(`📦 Packaging nested coordinate arrays into binary STL...`);
         
-        // 6. Package and Download
+        // 5. Parse the outermost wrapper group
+        const stlResult = exporter.parse(spinWrapper, { binary: true });
+        
+        // 6. Housekeeping: Immediately detach the temporary wrappers from your live scene
+        currentMesh.parent.remove(spinWrapper);
+        
+        // 7. Package and Download
         const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(stlBlob);
