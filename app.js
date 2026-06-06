@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "136"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "137"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1076,6 +1076,8 @@ btnPreview.addEventListener('click', async () => {
     }
 });
 
+// swapping this 3MF export feature with a STL export feature (below)
+/*
 btnExport.addEventListener('click', () => {
     if (!currentStlBlob) return;
     const link = document.createElement('a'); 
@@ -1084,6 +1086,42 @@ btnExport.addEventListener('click', () => {
     link.download = `${projectName}.3mf`; // 🚀 Switch extension
     link.click();
     logToConsole(`Exported ${projectName}.3mf successfully.`);
+});
+*/
+
+// STL export feature
+btnExport.addEventListener('click', () => {
+    // 🛡️ Ensure there is a model actively rendered on screen
+    if (!currentMesh) {
+        logToConsole(`[ERROR]: No model loaded to export.`);
+        return;
+    }
+    
+    try {
+        logToConsole(`⚙️ Packaging geometry via Three.js STLExporter...`);
+        
+        // 🚀 Initialize the Exporter
+        const exporter = new THREE.STLExporter();
+        
+        // Parse the current active group/mesh structure out into a raw Binary STL Array
+        const stlResult = exporter.parse(currentMesh, { binary: true });
+        
+        // Turn the raw array data into an actual downloadable STL File Blob
+        const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
+        
+        // Trigger a clean browser anchor download
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(stlBlob);
+        
+        const projectName = projectNameInput.value.trim() || "openscad_model";
+        link.download = `${projectName}.stl`; 
+        link.click();
+        
+        logToConsole(`✔ Exported ${projectName}.stl successfully!`);
+    } catch (exportErr) {
+        logToConsole(`[ERROR]: Failed to export STL geometry: ${exportErr.message}`);
+        console.error(exportErr);
+    }
 });
 
 if ('serviceWorker' in navigator) {
