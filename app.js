@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "148"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "149"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1158,29 +1158,32 @@ btnExport.addEventListener('click', () => {
     }
     
     try {
-        logToConsole(`⚙️ Aligning assembly orientation for STL export...`);
+        logToConsole(`⚙️ Creating wrapper environment for seamless STL alignment...`);
         
         const exporter = new THREE.STLExporter();
         
-        // 1. Create a structural clone of the visual group container
+        // 1. Structural clone of the model (preserving all internal loader rotations)
         const exportClone = currentMesh.clone();
         
-        // 2. 🔥 CLEAN ROTATION: Adjust these simple angles to lay it flat.
-        // Since we are rotating the parent group, nothing will explode!
-        // Swap these numbers based on the tuning guide below.
-        exportClone.rotation.x = 0;
-        exportClone.rotation.y = Math.PI / 2; 
-        exportClone.rotation.z = 0;
+        // 2. 🔥 THE FIX: Create an empty parent wrapper group
+        const exportWrapper = new THREE.Group();
+        exportWrapper.add(exportClone); // The model is now safely inside the wrapper
         
-        // 3. Force Three.js to calculate the changes down through the group hierarchy
-        exportClone.updateMatrixWorld(true);
+        // 3. Rotate the outer wrapper to match your slicer's coordinate system
+        // This tilts the Three.js Y-up world into the Slicer's Z-up world and spins it.
+        exportWrapper.rotation.x = -Math.PI / 2; // Tilts the assembly flat onto the bed
+        exportWrapper.rotation.z = Math.PI / 2;  // Spins the assembly 90 degrees horizontally
+        exportWrapper.rotation.y = 0;
+        
+        // 4. Force Three.js to compute the nested transforms down through the wrapper
+        exportWrapper.updateMatrixWorld(true);
         
         logToConsole(`📦 Packaging coordinate arrays into binary STL...`);
         
-        // 4. Parse the oriented group clone
-        const stlResult = exporter.parse(exportClone, { binary: true });
+        // 5. Pass the wrapper group to the exporter
+        const stlResult = exporter.parse(exportWrapper, { binary: true });
         
-        // 5. Package and Download
+        // 6. Package and Download
         const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(stlBlob);
