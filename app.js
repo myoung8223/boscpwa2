@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "192"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "193"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1076,7 +1076,7 @@ btnPreview.addEventListener('click', async () => {
 
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
             const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
+            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876, 0.4]) children(); }\n\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
             logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
@@ -2531,14 +2531,13 @@ if (isWrapper) {
                 }
             }
 
-            // Let children evaluate their own scope naturally
+// Let children evaluate their own scope naturally
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             
-            // THE FIX: If this is a difference cutting into a ghost base, 
-            // reactivate the cutting tools by stripping the comment asterisks!
+            // Safely strip asterisks whether they start on a new line or after a bracket
             if (containsGhost && !stripAllGhostsMode) {
-                childContent = childContent.replace(/^\*\s*/gm, '');
+                childContent = childContent.replace(/(^|[{}]\s*)\*\s+/gm, '$1');
             }
 
             let shouldDisableWrapper = false;
@@ -2546,29 +2545,37 @@ if (isWrapper) {
                 shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
             }
 
-            // Pass 1 Routing (Solid Geometry / Strip All Ghosts)
+            // --- PASS 1 ROUTING (Solid Geometry) ---
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
+                    // Replace the ghosted base with a tiny invisible cube to keep the CSG math valid
                     return `cube([0.001, 0.001, 0.001], center=true);\n`;
                 }
+                // Keep differences as differences!
                 return `${expression}\n${childContent}`;
             }
 
-            // Pass 2 Routing (Ghost / Glass Geometry Layout)
+            // --- PASS 2 ROUTING (Ghost / X-Ray Layout) ---
+            
+            // THE FIX: If this block contains a ghost, swap the difference operator to a union
+            let pass2Expression = expression;
+            if (containsGhost && pass2Expression.startsWith('difference')) {
+                pass2Expression = pass2Expression.replace('difference', 'union');
+            }
+
             if (effectiveGhost) {
                 if (hasGhostModifier && !isInsideGhostScope) {
-                    return `__GHOST__() ${expression}\n${childContent}`;
+                    return `__GHOST__() ${pass2Expression}\n${childContent}`;
                 }
-                return `${expression}\n${childContent}`;
+                return `${pass2Expression}\n${childContent}`;
             } else {
                 if (containsGhost) {
-                    // KEEP the operator as a difference so it cuts holes!
-                    return `${expression}\n${childContent}`;
+                    return `${pass2Expression}\n${childContent}`;
                 }
                 if (shouldDisableWrapper) {
-                    return `* ${expression}\n${childContent}`;
+                    return `* ${pass2Expression}\n${childContent}`;
                 }
-                return `${expression}\n${childContent}`;
+                return `${pass2Expression}\n${childContent}`;
             }
         } else {
             if (stripAllGhostsMode) {
