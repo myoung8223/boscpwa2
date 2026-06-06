@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "169"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -984,108 +984,156 @@ btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) return;
     
     if (placeholderText) {
-        placeholderText.textContent = "🛠️ Building Multi-Pass Preview...";
+        placeholderText.textContent = "🛠️ Building Preview...";
         placeholderText.style.display = 'flex';
     }
 
     clearErrorHighlights();
-    logToConsole('--- Generating Multi-Pass Preview ---');
-    
-    const rawScriptCode = jar.toString(); 
+    logToConsole('--- Generating Preview ---');
+    const scriptCode = jar.toString(); 
     const errorLogs = [];
 
-    // =========================================================================
-    // ⚙️ PRE-PROCESSOR: SPLIT CODE INTO SOLID vs GHOST pipelines
-    // =========================================================================
-    
-    // Pass A: Build the code for solid objects (Remove anything marked with %)
-    // This strips out lines modifying a piece of geometry with %
-    let solidScript = rawScriptCode.replace(/^.*%.*$/gm, "");
-
-    // Pass B: Build the code for ghost objects
-    // We locate items marked with % and make them normal elements, dropping the rest
-    let ghostScript = "";
-    if (rawScriptCode.includes('%')) {
-        // Simple but highly effective strategy for ghost isolation:
-        // We look for module definitions or variables, but strip out non-ghost geometries.
-        // A robust approach is to clone the script, and swap % with nothing, but we need
-        // to strip out the items that were meant to be exclusively solid. 
-        // For a seamless PWA experience, we convert the script to render ONLY the background items:
-        
-        // Let's create an elegant map where % objects are made concrete:
-        ghostScript = rawScriptCode.split('\n').map(line => {
-            if (line.includes('%')) {
-                return line.replace('%', ''); // Unmask it so it renders solid in this instance
-            }
-            // Keep variables, functions, and modules, but neutralize pure solid actions
-            if (line.trim().startsWith('cube') || line.trim().startsWith('cylinder') || 
-                line.trim().startsWith('sphere') || line.trim().startsWith('difference') || 
-                line.trim().startsWith('union') || line.trim().startsWith('intersection')) {
-                return "// " + line; // Comment out non-ghost geometry base lines
-            }
-            return line;
-        }).join('\n');
-    }
-
     try {
-        // --- INSTANCE 1: COMPILING THE SOLID OBJECTS ---
-        const solidInstance = await openSCADFactory({
+        // --- INSTANCE 1: CORE SOLID COMPILER ---
+        const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
-            ENV: { HOME: '/home/web_user' },
-            print: (text) => logToConsole(`[OpenSCAD Solid]: ${text}`),
-            printErr: (text) => { errorLogs.push(text); logToConsole(`[ERROR]: ${text}`); }
+            
+            // 💡 Tell Fontconfig exactly where the "user" home folder is
+            ENV: {
+                HOME: '/home/web_user' 
+            },
+            
+            // 🔥 DROP FONTS INTO THE LINUX USER FONT FOLDER BEFORE BOOT!
+            preRun: [
+                function(Module) {
+                    // Recreate the standard Linux user fonts directory
+                    try { Module.FS.mkdir('/home'); } catch(e) {}
+                    try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
+                    try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
+
+                    for (const fontName of Object.keys(fontCache)) {
+                        try { 
+                            // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
+                            const fontData = new Uint8Array(fontCache[fontName]);
+                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
+                        } 
+                        catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
+                    }
+                }
+            ],
+
+            print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
+            printErr: (text) => {
+                errorLogs.push(text);
+                logToConsole(`[ERROR]: ${text}`);
+            }
         });
 
-        // Map Environment Files (Fonts/STLs/SVGs)
-        const mountFiles = (inst) => {
-            for (const name of Object.keys(stlCache)) { try { inst.FS.writeFile(`/${name}`, new Uint8Array(stlCache[name])); } catch(e){} }
-            for (const name of Object.keys(svgCache)) { try { inst.FS.writeFile(`/${name}`, new Uint8Array(svgCache[name])); } catch(e){} }
-        };
+        // 📝 Map custom STLs and SVGs as strict Uint8Arrays to the main instance
+        for (const stlName of Object.keys(stlCache)) {
+            try { 
+                instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
+                logToConsole(`Mounted STL: /${stlName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
+        }
+        for (const svgName of Object.keys(svgCache)) {
+            try { 
+                instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); 
+                logToConsole(`Mounted SVG: /${svgName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
+        }
+
+        // ---------------------------------------------------------
+        // 🚀 THE REGEX MACRO PIPELINE
+        // ---------------------------------------------------------
         
-        mountFiles(solidInstance);
-        solidInstance.FS.writeFile('/input.scad', solidScript);
-        solidInstance.callMain(['/input.scad', '--backend=manifold', '-o', '/solid.3mf']);
+        // 1. Safely isolate % modifiers (ignoring math modulo operations)
+        const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
 
+        // Reset the search index immediately after testing
+        const hasGhost = ghostRegex.test(scriptCode);
+        ghostRegex.lastIndex = 0; 
+
+        // --- PASS 1: COMPILE SOLIDS ---
+        const solidCode = scriptCode.replace(ghostRegex, '*'); // Turn off ghosts
+        instance.FS.writeFile('/solid_input.scad', solidCode);
+        
         let solidData = null;
-        if (solidInstance.FS.analyzePath('/solid.3mf').exists) {
-            solidData = solidInstance.FS.readFile('/solid.3mf');
-            solidInstance.FS.unlink('/solid.3mf');
-        }
-
-        // --- INSTANCE 2: COMPILING THE GHOST OBJECTS (IF ANY EXIST) ---
-        let ghostData = null;
-        if (rawScriptCode.includes('%')) {
-            const ghostInstance = await openSCADFactory({
-                noInitialRun: true,
-                locateFile: (path) => `./libs/openscad.wasm`,
-                ENV: { HOME: '/home/web_user' },
-                print: (text) => logToConsole(`[OpenSCAD Ghost]: ${text}`),
-                printErr: (text) => {}
-            });
-            
-            mountFiles(ghostInstance);
-            ghostInstance.FS.writeFile('/input.scad', ghostScript);
-            ghostInstance.callMain(['/input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
-
-            if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
-                ghostData = ghostInstance.FS.readFile('/ghost.3mf');
-                ghostInstance.FS.unlink('/ghost.3mf');
-            }
-        }
-
-        // --- RENDER PASS ---
-        if (solidData || ghostData) {
-            // Hand off BOTH data packages to your updated multi-pass viewer!
-            update3DModelViewer(solidData, ghostData);
-            
-            // Keep export blob assigned to solid geometry for clean printing exports
-            if (solidData) {
+        try {
+            instance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
+            if (instance.FS.analyzePath('/solid.3mf').exists) {
+                solidData = instance.FS.readFile('/solid.3mf');
+                
+                // 💾 Save ONLY the solid parts for the 3D Printer Export button
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
+        } catch (err) {
+            logToConsole("Pass 1: No solid geometry detected.");
+        }
+
+        // --- PASS 2: COMPILE GHOSTS (Fresh companion instance to prevent closed context drops) ---
+        let ghostData = null;
+        if (hasGhost) {
+            logToConsole("📥 Processing Multi-Pass 3MF assembly...");
+            ghostRegex.lastIndex = 0; 
+            const ghostCode = scriptCode.replace(ghostRegex, '!'); // Solo the ghost elements
             
+            try {
+                const ghostInstance = await openSCADFactory({
+                    noInitialRun: true,
+                    locateFile: (path) => `./libs/openscad.wasm`,
+                    ENV: { HOME: '/home/web_user' },
+                    preRun: [
+                        function(Module) {
+                            try { Module.FS.mkdir('/home'); } catch(e) {}
+                            try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
+                            try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
+                            for (const fontName of Object.keys(fontCache)) {
+                                try {
+                                    Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName]));
+                                } catch (fsErr) {}
+                            }
+                        }
+                    ],
+                    print: () => {}, // Quiet logs for the ghost evaluator
+                    printErr: () => {}
+                });
+
+                // Mirror custom assets to the temporary ghost environment 
+                for (const stlName of Object.keys(stlCache)) {
+                    try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
+                }
+                for (const svgName of Object.keys(svgCache)) {
+                    try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
+                }
+
+                ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
+                
+                // Run execution WITHOUT Manifold backend to bypass root assertion errors on solitary '!' rules
+                ghostInstance.callMain(['/ghost_input.scad', '-o', '/ghost.3mf']);
+                
+                if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
+                    ghostData = ghostInstance.FS.readFile('/ghost.3mf');
+                }
+            } catch (err) {
+                logToConsole("⚠️ Notice: Ghost evaluation skipped or dropped by engine core.");
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 📦 ASSEMBLE & RENDER DISPATCH
+        // ---------------------------------------------------------
+        if (solidData || ghostData) {
+            update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
+            logToConsole("✨ 3D Render Canvas Updated Successfully.");
+
+            // Clean up the virtual core filesystem to prevent browser leaks
+            try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
+            try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
+            
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
@@ -1096,8 +1144,8 @@ btnPreview.addEventListener('click', async () => {
             if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
     } catch (error) {
-        if (placeholderText) placeholderText.textContent = "❌ Execution Crash";
-        console.error(error);
+        if (placeholderText) placeholderText.textContent = "⚠️ Engine Crash";
+        logToConsole(`Execution error: ${error.message || error}`);
     }
 });
 
