@@ -2506,7 +2506,7 @@ function isolateOpenSCADGhosts(code) {
             return `${expression}\n`;
         }
         
-		if (isWrapper) {
+        if (isWrapper) {
             const normalizedExpr = expression.trim();
             
             // 💡 THE COMPLETE SOLUTION: Intercept BOTH subtraction and intersection operators!
@@ -2549,8 +2549,9 @@ function isolateOpenSCADGhosts(code) {
                     return `* ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
-        	} else {
-            // Leaf Statement Execution (cube, cylinder, sphere, import, text)
+            }
+        } else {
+            // --- Leaf Statement Execution (cube, cylinder, sphere, import, text) ---
             if (effectiveGhost) {
                 if (hasIgnoreModifier) return `* ${expression}\n`;
                 return hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`;
