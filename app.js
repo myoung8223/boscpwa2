@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "167"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "168"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1344,44 +1344,47 @@ function update3DModelViewer(raw3mfData) {
 
 					// 🚀 THE FIXED ROUTER
                     if (!isDefaultOpenSCADYellow) {
-                        // 🎨 PIPELINE A: Script has an explicit, custom color() configuration applied
                         if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                             mat.vertexColors = true;
-                            mat.color.setRGB(1, 1, 1); // Reset base material multiplier
+                            mat.color.setRGB(1, 1, 1); 
                         }
                         
-                        // Smart opacity polygon sorting configuration
-                        // (Checking < 0.99 catches OpenSCAD's occasional 0.999 alpha math quirks)
+                        // 💎 THE PHYSICAL GLASS UPGRADE
                         if (mat.opacity < 0.99) {
-                            mat.transparent = true;
+                            // Create a brand new physically-based glass material
+                            const glassMat = new THREE.MeshPhysicalMaterial({
+                                color: mat.color,
+                                metalness: 0.1,
+                                roughness: 0.1,
+                                transmission: 1.0, // Force light to transmit through the object
+                                opacity: 1.0,      // Keep opacity at 1.0 so standard alpha-blending doesn't interfere
+                                transparent: true,
+                                ior: 1.5,          // Index of Refraction (1.5 = Standard Glass)
+                                side: THREE.DoubleSide,
+                                depthWrite: false  // Prevent glass-on-glass Z-fighting
+                            });
                             
-                            // Push translucent shapes to the very back of the draw queue
+                            // Replace the loader's basic material with our new glass
+                            child.material = glassMat;
+                            
+                            // Push glass to the back of the render queue
                             child.renderOrder = 999; 
                             
-                            // 🔥 THE FINAL COMBINATION
-                            // false: stops transparent polygons from slicing each other up
-                            // FrontSide: permanently stops the "inside-out" optical illusion
-                            mat.depthWrite = false;  
-                            mat.side = THREE.FrontSide; 
-                            
                         } else {
+                            // Solid objects stay exactly the same
                             mat.transparent = false;
                             mat.depthWrite = true;
                             mat.side = THREE.FrontSide;
-                            
-                            // Force opaque inner shapes to draw FIRST
                             child.renderOrder = 1; 
                         }
                     } else {
-                        // 🎨 PIPELINE B: Unstyled background mesh
+                        // Unstyled background mesh
                         mat.vertexColors = false; 
                         mat.color.set(fallbackHexColor); 
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.side = THREE.FrontSide;
                         mat.opacity = 1.0; 
-                        
-                        // Unstyled solid shapes should also render FIRST
                         child.renderOrder = 1; 
                     }
 
