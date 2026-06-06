@@ -997,27 +997,19 @@ btnPreview.addEventListener('click', async () => {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
-            
-            ENV: {
-                HOME: '/home/web_user' 
-            },
-            
+            ENV: { HOME: '/home/web_user' },
             preRun: [
                 function(Module) {
                     try { Module.FS.mkdir('/home'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
-
                     for (const fontName of Object.keys(fontCache)) {
                         try { 
-                            const fontData = new Uint8Array(fontCache[fontName]);
-                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
-                        } 
-                        catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
+                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName])); 
+                        } catch (e) {}
                     }
                 }
             ],
-
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -1025,34 +1017,18 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // Map custom STLs and SVGs as strict Uint8Arrays to the main instance
-        for (const stlName of Object.keys(stlCache)) {
-            try { 
-                instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
-                logToConsole(`Mounted STL: /${stlName}`); 
-            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
-        }
-        for (const svgName of Object.keys(svgCache)) {
-            try { 
-                instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); 
-                logToConsole(`Mounted SVG: /${svgName}`); 
-            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
-        }
+        // Map asset caches
+        for (const stlName of Object.keys(stlCache)) { try { instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e){} }
+        for (const svgName of Object.keys(svgCache)) { try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
 
-        // ---------------------------------------------------------
-        // 🚀 THE INVERSION MACRO PIPELINE
-        // ---------------------------------------------------------
-        
-        // Match OpenSCAD operators/actions safely ignoring math modulo operations
+        // Isolate % markers safely
         const targetKeywords = '(?:cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)';
-        
-        // 1. Ghost regex catches explicitly prefixed blocks
         const ghostRegex = new RegExp(`%\\s*(?=\\b${targetKeywords}\\b)`, 'g');
         const hasGhost = ghostRegex.test(scriptCode);
-        ghostRegex.lastIndex = 0; 
+        ghostRegex.lastIndex = 0;
 
         // --- PASS 1: COMPILE SOLIDS ---
-        // Turn off background shapes with '*' so only true solid elements compile
+        // Turn off all background elements using '*'
         const solidCode = scriptCode.replace(ghostRegex, '*'); 
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
@@ -1068,20 +1044,63 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: INVERTED GHOST COMPILER ---
+        // --- PASS 2: SANDBOXED GHOST COMPILER ---
         let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Inverting geometry structure for multi-ghost layout...");
-            
-            // 🔄 Step A: Target all objects WITHOUT a % modifier prefix
-            // Negative lookbehind ensures we don't pick up objects that already had a % modifier
-            const solidPickerRegex = new RegExp(`(?<!%\\s*)\\b(${targetKeywords})\\b`, 'g');
-            
-            // Disable all raw solid lines by sticking a '*' in front of them
-            let invertedCode = scriptCode.replace(solidPickerRegex, '*$1');
-            
-            // 🔄 Step B: Strip the '%' tags off our targeted ghosts to let them render fully
-            invertedCode = invertedCode.replace(ghostRegex, '');
+            logToConsole("📥 Compiling background elements via Ghost Sandbox...");
+
+            // 🎨 Step A: Paint all % objects with a clean tracking color signature
+            const ghostPaintedCode = scriptCode.replace(ghostRegex, 'color([0.123, 0.456, 0.789]) ');
+
+            // 🛡️ Step B: Prepend a sandbox header that intercept shapes.
+            // If they don't have our tracking color, they drop to an empty union(), making them vanish!
+            const sandboxHeader = `
+// 🧠 Ghost Sandbox Interceptor
+module cube(size=[1,1,1], center=false) { if ($children > 0) { children(); } else if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_cube(size=size, center=center); } }
+module sphere(r=1, d=undef) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_sphere(r=r, d=d); } }
+module cylinder(h=1, r=undef, r1=undef, r2=undef, d=undef, d1=undef, d2=undef, center=false) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_cylinder(h=h, r=r, r1=r1, r2=r2, d=d, d1=d1, d2=d2, center=center); } }
+module linear_extrude(height=undef, center=false, convexity=undef, twist=undef, slices=undef, scale=undef, fn=undef) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_linear_extrude(height=height, center=center, convexity=convexity, twist=twist, slices=slices, scale=scale, fn=fn) children(); } else { children(); } }
+module rotate_extrude(angle=undef, convexity=undef) { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_rotate_extrude(angle=angle, convexity=convexity) children(); } else { children(); } }
+module text(text, size=10, font=undef, halign="left", valign="baseline", spacing=1, direction="ltr", language="en", script="latin") { if ($color == [0.123, 0.456, 0.789]) { unset_color() typeof_text(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing, direction=direction, language=language, script=script); } }
+
+// Helper module to peel the tracking tint off so it renders cleanly in 3MF
+module unset_color() { color([1, 1, 1, 1]) children(); }
+
+// Map standard keywords to primitives aliases
+module typeof_cube(size, center) { OpenSCAD_cube(size, center); }
+module typeof_sphere(r, d) { OpenSCAD_sphere(r, d); }
+module typeof_cylinder(h, r, r1, r2, d, d1, d2, center) { OpenSCAD_cylinder(h, r, r1, r2, d, d1, d2, center); }
+module typeof_linear_extrude(height, center, convexity, twist, slices, scale, fn) { OpenSCAD_linear_extrude(height, center, convexity, twist, slices, scale, fn) children(); }
+module typeof_rotate_extrude(angle, convexity) { OpenSCAD_rotate_extrude(angle, convexity) children(); }
+module typeof_text(text, size, font, halign, valign, spacing, direction, language, script) { OpenSCAD_text(text, size, font, halign, valign, spacing, direction, language, script); }
+
+// Fix basic keyword mappings for runtime execution
+module OpenSCAD_cube(size, center) { let(s = is_list(size) ? size : [size, size, size]) translate(center ? -s/2 : [0,0,0]) builtin_cube(s); }
+module OpenSCAD_sphere(r, d) { builtin_sphere(r = is_undef(d) ? r : d/2); }
+module OpenSCAD_cylinder(h, r, r1, r2, d, d1, d2, center) { let(br = !is_undef(d) ? d/2 : (!is_undef(r) ? r : 1), tr1 = !is_undef(d1) ? d1/2 : (!is_undef(r1) ? r1 : br), tr2 = !is_undef(d2) ? d2/2 : (!is_undef(r2) ? r2 : br)) translate(center ? [0,0,-h/2] : [0,0,0]) builtin_cylinder(h=h, r1=tr1, r2=tr2); }
+module OpenSCAD_linear_extrude(height, center, convexity, twist, slices, scale, fn) { builtin_linear_extrude(height=height, center=center, twist=twist, scale=scale) children(); }
+module OpenSCAD_rotate_extrude(angle, convexity) { builtin_rotate_extrude(angle=angle) children(); }
+module OpenSCAD_text(text, size, font, halign, valign, spacing, direction, language, script) { builtin_text(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing); }
+
+// Native structural mappings to built-in tokens
+module builtin_cube(size) { math_cube(size); }
+module builtin_sphere(r) { math_sphere(r); }
+module builtin_cylinder(h, r1, r2) { math_cylinder(h=h, r1=r1, r2=r2); }
+module builtin_linear_extrude(height, center, twist, scale) { math_linear_extrude(height=height, center=center, twist=twist, scale=scale) children(); }
+module builtin_rotate_extrude(angle) { math_rotate_extrude(angle=angle) children(); }
+module builtin_text(text, size, font, halign, valign, spacing) { math_text(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing); }
+
+// Direct math definitions mapping straight to OpenSCAD Core
+module math_cube(size) { "cube"(size); }
+module math_sphere(r) { "sphere"(r); }
+module math_cylinder(h, r1, r2) { "cylinder"(h=h, r1=r1, r2=r2); }
+module math_linear_extrude(height, center, twist, scale) { "linear_extrude"(height=height, center=center, twist=twist, scale=scale) children(); }
+module math_rotate_extrude(angle) { "rotate_extrude"(angle=angle) children(); }
+module math_text(text, size, font, halign, valign, spacing) { "text"(text=text, size=size, font=font, halign=halign, valign=valign, spacing=spacing); }
+
+`;
+
+            const finalGhostInputCode = sandboxHeader + ghostPaintedCode;
 
             try {
                 const ghostInstance = await openSCADFactory({
@@ -1094,9 +1113,7 @@ btnPreview.addEventListener('click', async () => {
                             try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                             try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
                             for (const fontName of Object.keys(fontCache)) {
-                                try {
-                                    Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName]));
-                                } catch (fsErr) {}
+                                try { Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName])); } catch (e) {}
                             }
                         }
                     ],
@@ -1104,16 +1121,10 @@ btnPreview.addEventListener('click', async () => {
                     printErr: () => {}
                 });
 
-                for (const stlName of Object.keys(stlCache)) {
-                    try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
-                }
-                for (const svgName of Object.keys(svgCache)) {
-                    try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
-                }
+                for (const stlName of Object.keys(stlCache)) { try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e){} }
+                for (const svgName of Object.keys(svgCache)) { try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
 
-                ghostInstance.FS.writeFile('/ghost_input.scad', invertedCode);
-                
-                // Compile the isolated background geometry bundle
+                ghostInstance.FS.writeFile('/ghost_input.scad', finalGhostInputCode);
                 ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
                 
                 if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
