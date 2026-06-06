@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "140"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "141"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1097,36 +1097,35 @@ btnExport.addEventListener('click', () => {
     }
     
     try {
-        logToConsole(`⚙️ Isolating geometry and correcting export orientation...`);
+        logToConsole(`⚙️ Deep transforming clone and baking matrix for STL...`);
         
         const exporter = new THREE.STLExporter();
         
-        // 1. Create a top-level clone of the group structure
+        // 1. Structural clone of the visual group structure
         const exportClone = currentMesh.clone();
-        exportClone.updateMatrixWorld(true);
         
-        // 2. Define our Y-axis rotation correction matrix to flip Z-up CAD models correctly
-        // (If it's still sideways or upside down in your slicer, toggle between -Math.PI/2 and Math.PI/2)
-        const rotationMatrix = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
-        
-        // 3. Deep-clone the individual geometry data blocks so we don't bleed back into the preview canvas
+        // 2. Break the link to the live preview's sharing by deep-cloning inner geometries
         exportClone.traverse((child) => {
             if (child.isMesh && child.geometry) {
-                // FORCE a deep copy of the vertex attributes so it's a completely distinct memory layer
                 child.geometry = child.geometry.clone();
-                
-                // Bake the axis rotation strictly into this isolated, temporary geometry
-                child.geometry.applyMatrix4(rotationMatrix);
-                child.geometry.computeVertexNormals();
             }
         });
         
-        logToConsole(`📦 Compiling isolated vectors into binary STL structure...`);
+        // 3. Rotate the whole GROUP container around the Y axis
+        // Since you need a 90-degree adjustment in your slicer, this forces it onto the clone
+        exportClone.rotation.y += Math.PI / 2; // (Swap to -Math.PI / 2 if direction is inverted)
         
-        // 4. Parse our isolated clone
+        // 4. 🔥 CRITICAL: Force Three.js to recompute and bake the new rotations down 
+        // into every inner child node's world matrix right now!
+        exportClone.updateMatrix();
+        exportClone.updateMatrixWorld(true);
+        
+        logToConsole(`📦 Packaging corrected coordinate arrays into binary STL...`);
+        
+        // 5. Parse the fully updated and baked structural clone
         const stlResult = exporter.parse(exportClone, { binary: true });
         
-        // 5. Package and Download
+        // 6. Package and Download
         const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(stlBlob);
@@ -1135,12 +1134,12 @@ btnExport.addEventListener('click', () => {
         link.download = `${projectName}.stl`; 
         link.click();
         
-        // 6. Memory cleanup: explicitly dispose of the temporary geometry clone
+        // 7. Housekeeping: Free up memory from temporary cloned objects
         exportClone.traverse((child) => {
             if (child.isMesh && child.geometry) child.geometry.dispose();
         });
         
-        logToConsole(`✔ Exported ${projectName}.stl successfully without affecting live preview!`);
+        logToConsole(`✔ Exported ${projectName}.stl successfully!`);
     } catch (exportErr) {
         logToConsole(`[ERROR]: Failed to export STL geometry: ${exportErr.message}`);
         console.error(exportErr);
