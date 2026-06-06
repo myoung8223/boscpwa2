@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "171"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1061,8 +1061,8 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("📥 Processing Chroma-Key Ghost pass...");
             ghostRegex.lastIndex = 0; 
             
-            // 🎨 Magic! We paint every % object Pure Magenta so Three.js can find them all
-            const previewCode = scriptCode.replace(ghostRegex, 'color("#ff00fe") ');
+			// 🎨 Magic! We paint every % object with an impossible cryptographic float signature
+			const previewCode = scriptCode.replace(ghostRegex, 'color([0.98765, 0.01234, 0.87654]) ');
             
             try {
                 const previewInstance = await openSCADFactory({
@@ -1354,16 +1354,29 @@ function update3DModelViewer(previewData) {
                         
                         const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                         
-                        // 🔍 1. DETECT MAGIC CHROMA-KEY GHOST COLOR (#ff00fe)
+						// 🔍 1. DETECT CRYPTOGRAPHIC GHOST SIGNATURE (Impossible to trigger by accident)
                         let isGhost = false;
-                        if (mat.color && mat.color.getHexString() === "ff00fe") {
+                        
+                        // Look for the exact [0.98765, 0.01234, 0.87654] signature (allowing tiny WebGL rounding variance)
+                        const isMagicSignature = (r, g, b) => {
+                            return (r > 0.987 && r < 0.988) && 
+                                   (g > 0.012 && g < 0.013) && 
+                                   (b > 0.876 && b < 0.877);
+                        };
+
+                        if (mat.color && isMagicSignature(mat.color.r, mat.color.g, mat.color.b)) {
                             isGhost = true;
                         }
+                        
                         if (hasGeometryVertexColors && !isGhost) {
                             const colorAttr = child.geometry.attributes.color;
                             if (colorAttr && colorAttr.count > 0) {
-                                const tempColor = new THREE.Color().fromBufferAttribute(colorAttr, 0);
-                                if (tempColor.getHexString() === "ff00fe") isGhost = true;
+                                const vR = colorAttr.getX(0);
+                                const vG = colorAttr.getY(0);
+                                const vB = colorAttr.getZ(0);
+                                if (isMagicSignature(vR, vG, vB)) {
+                                    isGhost = true;
+                                }
                             }
                         }
 
