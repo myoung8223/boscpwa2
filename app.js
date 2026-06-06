@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "155"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "156"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1101,15 +1101,7 @@ btnExport.addEventListener('click', () => {
         // 3. 🔥 FIX: Force an ABSOLUTE rotation value instead of appending (+=) 
         // This strips away the viewer's custom tilt entirely.
         // Try Math.PI / 2 first. If it's still inverted, change it to -Math.PI / 2
-        exportClone.rotation.x = 0;
-        exportClone.rotation.y = Math.PI / 2;
-        exportClone.rotation.z = 0;
-        
-        // 4. Force Three.js to completely rebuild and bake this absolute orientation
-        exportClone.updateMatrix();
-        exportClone.updateMatrixWorld(true);
-
-        exportClone.rotation.x = 0;
+        exportClone.rotation.x = Math.PI / 2;
         exportClone.rotation.y = 0;
         exportClone.rotation.z = Math.PI / 2;
         
