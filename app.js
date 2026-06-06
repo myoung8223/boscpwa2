@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "186"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "187"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2504,29 +2504,42 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-if (isWrapper) {
+		if (isWrapper) {
             let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
-            // Peek ahead to see if the immediate next child of this CSG block is a ghost (%)
+            // 💡 REVISED PEEK LOGIC: Skip whitespace, comments, AND opening block braces
             let isGhostCsgBase = false;
             if (isCsgFilterOp && !stripAllGhostsMode) {
                 let peekIdx = i;
                 while (peekIdx < len) {
-                    if (/\s/.test(code[peekIdx])) { peekIdx++; }
-                    else if (code[peekIdx] === '/' && code[peekIdx+1] === '/') { while (peekIdx < len && code[peekIdx] !== '\n') peekIdx++; }
-                    else if (code[peekIdx] === '/' && code[peekIdx+1] === '*') { peekIdx += 2; while (peekIdx < len && !(code[peekIdx] === '*' && code[peekIdx+1] === '/')) peekIdx++; peekIdx += 2; }
-                    else break;
+                    const char = code[peekIdx];
+                    
+                    if (/\s/.test(char) || char === '{') { 
+                        // Skip whitespace and the opening block brace!
+                        peekIdx++; 
+                    }
+                    else if (char === '/' && code[peekIdx+1] === '/') { 
+                        while (peekIdx < len && code[peekIdx] !== '\n') peekIdx++; 
+                    }
+                    else if (char === '/' && code[peekIdx+1] === '*') { 
+                        peekIdx += 2; 
+                        while (peekIdx < len && !(code[peekIdx] === '*' && code[peekIdx+1] === '/')) peekIdx++; 
+                        peekIdx += 2; 
+                    }
+                    else {
+                        break; 
+                    }
                 }
+                
+                // If the first real geometry element we find starts with %, flag it!
                 if (code[peekIdx] === '%') {
                     isGhostCsgBase = true;
                 }
             }
 
             // 🚀 THE UNION REWRITE TRICK:
-            // If it's a difference/intersection with a ghost base, transform it into a union!
             if (isGhostCsgBase) {
-                // Swap the expression string to a union operator
                 expression = expression.replace(/difference|intersection/, 'union');
             }
 
@@ -2550,7 +2563,7 @@ if (isWrapper) {
                 }
                 return `${expression}\n${childContent}`;
             } else {
-                // 💡 CRITICAL: If we rewrote this operator to a union, we must NOT disable it with an asterisk!
+                // If we rewrote this operator to a union, do NOT disable it with an asterisk!
                 if (shouldDisableWrapper && !isGhostCsgBase) {
                     return `* ${expression}\n${childContent}`;
                 }
