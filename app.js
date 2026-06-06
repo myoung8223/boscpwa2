@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "157"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "158"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1097,7 +1097,8 @@ btnExport.addEventListener('click', () => {
                 child.geometry = child.geometry.clone();
             }
         });
-        
+
+		/*
         // 3. 🔥 FIX: Force an ABSOLUTE rotation value instead of appending (+=) 
         // This strips away the viewer's custom tilt entirely.
         // Try Math.PI / 2 first. If it's still inverted, change it to -Math.PI / 2
@@ -1108,6 +1109,29 @@ btnExport.addEventListener('click', () => {
         // 4. Force Three.js to completely rebuild and bake this absolute orientation
         exportClone.updateMatrix();
         exportClone.updateMatrixWorld(true);
+		*/
+
+// 3. 🔥 THE ULTIMATE FIX: Lay flat, then spin around the true vertical axis
+// Reset any broken Euler properties first
+exportClone.rotation.set(0, 0, 0); 
+
+// First: Lay it perfectly flat on the bed (this gave us the stable image_1e70e5 layout!)
+exportClone.rotation.z = Math.PI / 2;
+
+// Force Three.js to bake this flatness into the group's memory space
+exportClone.updateMatrix();
+exportClone.updateMatrixWorld(true);
+
+// Second: Pure spin around the print bed's vertical axis (Z-axis in the exporter context)
+// Change Math.PI / 2 to -Math.PI / 2 if it needs to spin the opposite direction!
+const upVector = new THREE.Vector3(0, 0, 1); 
+exportClone.rotateOnAxis(upVector, Math.PI / 2);
+
+// 4. Final bake before sending the coordinates to the STL parser
+exportClone.updateMatrix();
+exportClone.updateMatrixWorld(true);
+
+		
 		
         logToConsole(`📦 Packaging corrected coordinate arrays into binary STL...`);
         
