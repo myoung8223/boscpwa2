@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "193"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "194"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1443,36 +1443,63 @@ function update3DModelViewer(solidData, ghostData = null) {
                 // 💡 CRITICAL: Force the transparent layer to render AFTER all solid items
                 ghostGroup.renderOrder = 1;
 
-                ghostGroup.traverse((child) => {
-                    if (child.isMesh) {
-                        meshCount++;
-                        if (child.geometry) child.geometry.computeVertexNormals();
-                        
-                        // ✨ PREMIUM CYAN SMOKY ICE-GLASS MATERIAL
-                        const glassMaterial = new THREE.MeshStandardMaterial({
-                            color: 0xa5f3fc,          // 🧊 Light cyan/ice glass tint
-                            transparent: true,        // Enable alpha mapping channels
-                            opacity: 0.30,            // Smooth, subtle translucency density
-                            depthWrite: false,        // Prevents see-through faces from cutting out solids
-                            side: THREE.DoubleSide,   // Render both outer and inner interior walls
-                            roughness: 0.15,          // Glossy, polished glass surface finish
-                            metalness: 0.1            // Faint metallic edge sheen
-                        });
+ghostGroup.traverse((child) => {
+            if (child.isMesh) {
+                meshCount++;
+                if (child.geometry) child.geometry.computeVertexNormals();
 
-                        if (typeof wireframeMode !== 'undefined') {
-                            glassMaterial.wireframe = wireframeMode;
-                        }
-
-                        // Apply to single and multi-material assets uniformly
-                        if (Array.isArray(child.material)) {
-                            child.material = child.material.map(() => glassMaterial.clone());
-                        } else {
-                            child.material = glassMaterial;
-                        }
-                        
-                        child.material.needsUpdate = true;
+                // OpenSCAD 3MF materials can be arrays or single objects. 
+                // Let's check if the native material has an alpha < 1.0
+                let isTransparentBase = false;
+                const originalMats = Array.isArray(child.material) ? child.material : [child.material];
+                
+                originalMats.forEach(mat => {
+                    if (mat && mat.opacity < 0.9) {
+                        isTransparentBase = true;
                     }
                 });
+
+                if (isTransparentBase) {
+                    // ✨ THIS IS THE GHOST BASE: Apply your premium Glass Material
+                    const glassMaterial = new THREE.MeshPhysicalMaterial({
+                        color: 0xff4dff,         // Your pink tint
+                        transparent: true,
+                        opacity: 0.35,           // See-through
+                        roughness: 0.1,
+                        metalness: 0.1,
+                        transmission: 0.9,       // Glass-like light transmission
+                        thickness: 0.5,
+                        side: THREE.DoubleSide,
+                        depthWrite: false
+                    });
+                    
+                    if (typeof wireframeMode !== 'undefined') {
+                        glassMaterial.wireframe = wireframeMode;
+                    }
+                    
+                    child.material = glassMaterial;
+                } else {
+                    // 🪨 THIS IS A CUTTING TOOL: Render it as a solid, highly visible object!
+                    const toolMaterial = new THREE.MeshStandardMaterial({
+                        color: 0xebc815, // Highly visible OpenSCAD yellow/gold
+                        transparent: false,
+                        opacity: 1.0,
+                        roughness: 0.4,
+                        metalness: 0.2,
+                        side: THREE.FrontSide,
+                        depthWrite: true
+                    });
+
+                    if (typeof wireframeMode !== 'undefined') {
+                        toolMaterial.wireframe = wireframeMode;
+                    }
+
+                    child.material = toolMaterial;
+                }
+                
+                child.material.needsUpdate = true;
+            }
+        });
                 
                 logToConsole(`🪲 [DEBUG] Ghost Pass found and processed ${meshCount} glass meshes.`);
                 masterGroup.add(ghostGroup);
