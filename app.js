@@ -979,7 +979,6 @@ hull() {                                   // hull example (D6 die)
     } catch (err) { logToConsole(`Failed to initialize OpenSCAD: ${err.message}`); }
 }
 
-// ---- PREVIEW PIPELINE ----
 btnPreview.addEventListener('click', async () => {
     if (!openSCADFactory) return;
     
@@ -999,22 +998,18 @@ btnPreview.addEventListener('click', async () => {
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
             
-            // 💡 Tell Fontconfig exactly where the "user" home folder is
             ENV: {
                 HOME: '/home/web_user' 
             },
             
-            // 🔥 DROP FONTS INTO THE LINUX USER FONT FOLDER BEFORE BOOT!
             preRun: [
                 function(Module) {
-                    // Recreate the standard Linux user fonts directory
                     try { Module.FS.mkdir('/home'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
 
                     for (const fontName of Object.keys(fontCache)) {
                         try { 
-                            // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
                             const fontData = new Uint8Array(fontCache[fontName]);
                             Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
                         } 
@@ -1030,7 +1025,7 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 📝 Map custom STLs and SVGs as strict Uint8Arrays to the main instance
+        // Map custom STLs and SVGs as strict Uint8Arrays to the main instance
         for (const stlName of Object.keys(stlCache)) {
             try { 
                 instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
@@ -1045,18 +1040,20 @@ btnPreview.addEventListener('click', async () => {
         }
 
         // ---------------------------------------------------------
-        // 🚀 THE REGEX MACRO PIPELINE
+        // 🚀 THE INVERSION MACRO PIPELINE
         // ---------------------------------------------------------
         
-        // 1. Safely isolate % modifiers (ignoring math modulo operations)
-        const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
-
-        // Reset the search index immediately after testing
+        // Match OpenSCAD operators/actions safely ignoring math modulo operations
+        const targetKeywords = '(?:cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)';
+        
+        // 1. Ghost regex catches explicitly prefixed blocks
+        const ghostRegex = new RegExp(`%\\s*(?=\\b${targetKeywords}\\b)`, 'g');
         const hasGhost = ghostRegex.test(scriptCode);
         ghostRegex.lastIndex = 0; 
 
         // --- PASS 1: COMPILE SOLIDS ---
-        const solidCode = scriptCode.replace(ghostRegex, '*'); // Turn off ghosts
+        // Turn off background shapes with '*' so only true solid elements compile
+        const solidCode = scriptCode.replace(ghostRegex, '*'); 
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
         let solidData = null;
@@ -1064,8 +1061,6 @@ btnPreview.addEventListener('click', async () => {
             instance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
             if (instance.FS.analyzePath('/solid.3mf').exists) {
                 solidData = instance.FS.readFile('/solid.3mf');
-                
-                // 💾 Save ONLY the solid parts for the 3D Printer Export button
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
@@ -1073,13 +1068,21 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: COMPILE GHOSTS (Fresh companion instance to prevent closed context drops) ---
+        // --- PASS 2: INVERTED GHOST COMPILER ---
         let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Processing Multi-Pass 3MF assembly...");
-            ghostRegex.lastIndex = 0; 
-            const ghostCode = scriptCode.replace(ghostRegex, '!'); // Solo the ghost elements
+            logToConsole("📥 Inverting geometry structure for multi-ghost layout...");
             
+            // 🔄 Step A: Target all objects WITHOUT a % modifier prefix
+            // Negative lookbehind ensures we don't pick up objects that already had a % modifier
+            const solidPickerRegex = new RegExp(`(?<!%\\s*)\\b(${targetKeywords})\\b`, 'g');
+            
+            // Disable all raw solid lines by sticking a '*' in front of them
+            let invertedCode = scriptCode.replace(solidPickerRegex, '*$1');
+            
+            // 🔄 Step B: Strip the '%' tags off our targeted ghosts to let them render fully
+            invertedCode = invertedCode.replace(ghostRegex, '');
+
             try {
                 const ghostInstance = await openSCADFactory({
                     noInitialRun: true,
@@ -1097,11 +1100,10 @@ btnPreview.addEventListener('click', async () => {
                             }
                         }
                     ],
-                    print: () => {}, // Quiet logs for the ghost evaluator
+                    print: () => {}, 
                     printErr: () => {}
                 });
 
-                // Mirror custom assets to the temporary ghost environment 
                 for (const stlName of Object.keys(stlCache)) {
                     try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
                 }
@@ -1109,10 +1111,10 @@ btnPreview.addEventListener('click', async () => {
                     try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
                 }
 
-                ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
+                ghostInstance.FS.writeFile('/ghost_input.scad', invertedCode);
                 
-                // Run execution WITHOUT Manifold backend to bypass root assertion errors on solitary '!' rules
-                ghostInstance.callMain(['/ghost_input.scad', '-o', '/ghost.3mf']);
+                // Compile the isolated background geometry bundle
+                ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
                 
                 if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
                     ghostData = ghostInstance.FS.readFile('/ghost.3mf');
@@ -1130,7 +1132,6 @@ btnPreview.addEventListener('click', async () => {
             if (placeholderText) placeholderText.style.display = 'none';
             logToConsole("✨ 3D Render Canvas Updated Successfully.");
 
-            // Clean up the virtual core filesystem to prevent browser leaks
             try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
             try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
             
