@@ -1158,57 +1158,37 @@ btnExport.addEventListener('click', () => {
     }
     
     try {
-        logToConsole(`⚙️ Forcing absolute orientation matrices for STL export...`);
+        logToConsole(`⚙️ Aligning assembly orientation for STL export...`);
         
         const exporter = new THREE.STLExporter();
         
-        // 1. Structural clone of the visual group structure
+        // 1. Create a structural clone of the visual group container
         const exportClone = currentMesh.clone();
         
-        // 2. Break the link to the live preview's sharing by deep-cloning inner geometries
-        exportClone.traverse((child) => {
-            if (child.isMesh && child.geometry) {
-                child.geometry = child.geometry.clone();
-            }
-        });
+        // 2. 🔥 FIX: Rotate the WHOLE assembly together as one solid unit using Quaternions
+        // This keeps all parts glued perfectly in their respective locations.
+        const quaternionZ = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2); // Upright Tilt
+        const quaternionY = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2); // Horizontal Spin
         
-		// 3. 🔥 CORRECTED SEQUENCE: Tilt first, then Spin
-        // Operation 1: The 90-degree tilt that gets it standing upright
-        const rotateZMatrix = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
+        // Combine them sequentially into a single absolute orientation matrix
+        const finalQuaternion = new THREE.Quaternion();
+        finalQuaternion.multiplyQuaternions(quaternionY, quaternionZ);
         
-        // Operation 2: The 90-degree horizontal spin around the new vertical axis
-        // (Toggle between Math.PI / 2 and -Math.PI / 2 depending on your slicer's direction)
-        const rotateXMatrix = new THREE.Matrix4().makeRotationX(Math.PI / 2);
+        // Apply the combined rotation strictly to the parent container
+        exportClone.quaternion.copy(finalQuaternion);
         
-        // 💡 CRITICAL CHANGE: Multiply as (X * Z). 
-        // This forces the Z-tilt to happen FIRST, and the X-spin to happen SECOND.
-        const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(rotateXMatrix, rotateZMatrix);
-        
-        // Traverse the clone and bake this compound transformation directly into the geometry vertices
-        exportClone.traverse((child) => {
-            if (child.isMesh && child.geometry) {
-                // Clear out any local object-level rotation properties to avoid double-transformation
-                child.rotation.set(0, 0, 0);
-                
-                // Physically alter the underlying coordinate vertex arrays
-                child.geometry.applyMatrix4(finalExportMatrix);
-                child.geometry.computeVertexNormals(); // Recalculate face normals for clean shading in slicers
-            }
-        });
-        
-        // Clear container transformations so they don't multiply against the newly baked child arrays
-        exportClone.rotation.set(0, 0, 0);
-        
-        // 4. Force Three.js to completely rebuild and bake this absolute orientation
+        // 3. 🔥 CRITICAL: Force Three.js to compute and push the group rotation down 
+        // to the world matrices so the STLExporter reads it correctly.
         exportClone.updateMatrix();
         exportClone.updateMatrixWorld(true);
         
-        logToConsole(`📦 Packaging corrected coordinate arrays into binary STL...`);
+        logToConsole(`📦 Packaging nested coordinate arrays into binary STL...`);
         
-        // 5. Parse the fully updated and baked structural clone
+        // 4. Parse the fully updated and oriented structural clone
+        // (STLExporter automatically processes the parent transforms down to the output file)
         const stlResult = exporter.parse(exportClone, { binary: true });
         
-        // 6. Package and Download
+        // 5. Package and Download
         const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(stlBlob);
@@ -1216,11 +1196,6 @@ btnExport.addEventListener('click', () => {
         const projectName = projectNameInput.value.trim() || "openscad_model";
         link.download = `${projectName}.stl`; 
         link.click();
-        
-        // 7. Housekeeping: Free up memory from temporary cloned objects
-        exportClone.traverse((child) => {
-            if (child.isMesh && child.geometry) child.geometry.dispose();
-        });
         
         logToConsole(`✔ Exported ${projectName}.stl successfully!`);
     } catch (exportErr) {
