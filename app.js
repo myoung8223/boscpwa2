@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "192"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "193"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2504,7 +2504,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-if (isWrapper) {
+		if (isWrapper) {
             let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
@@ -2531,14 +2531,14 @@ if (isWrapper) {
                 }
             }
 
-            // Let children evaluate their own scope naturally
+// Let children evaluate their own scope naturally
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             
-            // THE FIX: If this is a difference cutting into a ghost base, 
-            // reactivate the cutting tools by stripping the comment asterisks!
+            // THE FIX: Safely strip asterisks whether they start on a new line 
+            // or are hiding immediately after an open/close block bracket!
             if (containsGhost && !stripAllGhostsMode) {
-                childContent = childContent.replace(/^\*\s*/gm, '');
+                childContent = childContent.replace(/(^|[{}]\s*)\*\s+/gm, '$1');
             }
 
             let shouldDisableWrapper = false;
