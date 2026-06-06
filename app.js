@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "185"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "186"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2504,12 +2504,13 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-        if (isWrapper) {
-            const normalizedExpr = expression.trim();
+if (isWrapper) {
+            let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
+            // Peek ahead to see if the immediate next child of this CSG block is a ghost (%)
             let isGhostCsgBase = false;
-            if (isCsgFilterOp) {
+            if (isCsgFilterOp && !stripAllGhostsMode) {
                 let peekIdx = i;
                 while (peekIdx < len) {
                     if (/\s/.test(code[peekIdx])) { peekIdx++; }
@@ -2522,32 +2523,37 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 }
             }
 
-            // 💡 PASS 2 ADJUSTMENT: If evaluating ghost scaffold tree layout, bypass the CSG operation
-            if (isGhostCsgBase && !stripAllGhostsMode) {
-                let childResult = parseComponent(effectiveGhost);
-                let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
-                return `\n${childContent}\n`;
+            // 🚀 THE UNION REWRITE TRICK:
+            // If it's a difference/intersection with a ghost base, transform it into a union!
+            if (isGhostCsgBase) {
+                // Swap the expression string to a union operator
+                expression = expression.replace(/difference|intersection/, 'union');
             }
 
+            // Now parse the children normally
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
 
-            // 🛑 PASS 1 CONTEXT ROUTING (STRIP ALL GHOSTS MODE)
+            // Pass 1 Routing (Strip All Ghosts Mode)
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
-                    // Replace the removed ghost frame with a safe base-node micro cube placeholder
                     return `cube([0.001, 0.001, 0.001], center=true);\n`;
                 }
                 return `${expression}\n${childContent}`;
             }
 
-            // Standard Pass 2 Processing
+            // Pass 2 Routing (Standard Layout Execution)
             if (effectiveGhost) {
-                if (hasGhostModifier) return `__GHOST__() ${expression}\n${childContent}`;
+                if (hasGhostModifier) {
+                    return `__GHOST__() ${expression}\n${childContent}`;
+                }
                 return `${expression}\n${childContent}`;
             } else {
-                if (shouldDisableWrapper) return `* ${expression}\n${childContent}`;
+                // 💡 CRITICAL: If we rewrote this operator to a union, we must NOT disable it with an asterisk!
+                if (shouldDisableWrapper && !isGhostCsgBase) {
+                    return `* ${expression}\n${childContent}`;
+                }
                 return `${expression}\n${childContent}`;
             }
         } else {
