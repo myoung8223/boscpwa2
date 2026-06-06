@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "171"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2338,30 +2338,33 @@ function isolateOpenSCADGhosts(code) {
         skipWhitespaceAndComments();
         if (i >= len) return "";
         
-        let ch = code[i];
         let hasGhostModifier = false;
+        let hasIgnoreModifier = false;
         
-        // Extract up-front modifiers
-        while (ch === '%' || ch === '*' || ch === '!' || ch === '#') {
-            if (ch === '%') hasGhostModifier = true;
-            i++;
+        // Clear and match modifier prefixes sequentially
+        while (i < len) {
+            let ch = code[i];
+            if (ch === '%') { hasGhostModifier = true; i++; }
+            else if (ch === '*') { hasIgnoreModifier = true; i++; }
+            else if (ch === '!' || ch === '#') { i++; } // absorb other prefixes cleanly
+            else break;
             skipWhitespaceAndComments();
-            if (i >= len) break;
-            ch = code[i];
         }
         
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
-        
-        // Handle structural code blocks { ... }
-        if (ch === '{') {
+        skipWhitespaceAndComments();
+        if (i >= len) return "";
+
+        // Context 1: Block Scope Content encapsulated via Braces { ... }
+        if (code[i] === '{') {
             i++; // consume '{'
             let blockContent = "";
-            skipWhitespaceAndComments();
-            while (i < len && code[i] !== '}') {
-                blockContent += parseComponent(effectiveGhost);
+            while (true) {
                 skipWhitespaceAndComments();
+                if (i >= len || code[i] === '}') break;
+                blockContent += parseComponent(effectiveGhost);
             }
-            if (i < len) i++; // consume '}'
+            if (i < len && code[i] === '}') i++; // consume '}'
             
             if (effectiveGhost) {
                 return hasGhostModifier ? `__GHOST__() { ${blockContent} } ` : `{ ${blockContent} } `;
@@ -2370,10 +2373,10 @@ function isolateOpenSCADGhosts(code) {
             }
         }
         
-        // Handle statements, transformations, and primitives
+        // Context 2: Structural Expression Strings (Parameters & Call Signatures)
         let expression = "";
         let parensCount = 0;
-        let isLeafStatement = false;
+        let endedWithSemicolon = false;
         
         while (i < len) {
             let char = code[i];
@@ -2383,37 +2386,44 @@ function isolateOpenSCADGhosts(code) {
             i++;
             
             if (char === ';' && parensCount === 0) {
-                isLeafStatement = true;
+                endedWithSemicolon = true;
                 break;
             }
-            
-            // Look ahead outside parens to see if this wraps a child item next
-            if (parensCount === 0) {
-                let peek = i;
-                while (peek < len && /\s/.test(code[peek])) peek++;
-                // If followed by an opening brace or another code token, it's a wrapper operator
-                if (peek < len && (code[peek] === '{' || code[peek] === '%' || code[peek] === '*' || /[a-zA-Z0-9_]/.test(code[peek]))) {
-                    isLeafStatement = false;
-                    break;
-                }
+            if (parensCount === 0 && char === ')') {
+                // Break to re-evaluate structural look-aheads immediately after configuration signatures
+                break;
             }
         }
         
-        if (isLeafStatement) {
-            // Leaf node geometry (cube();, square();, etc.)
-            if (effectiveGhost) {
-                return hasGhostModifier ? `__GHOST__() ${expression} ` : `${expression} `;
-            } else {
-                // Pure solid node: cleanly disable it for the ghost pass
-                return `* ${expression} `;
+        skipWhitespaceAndComments();
+        
+        // Identify if this statement acts as a wrapper context or a closed geometry node
+        let isWrapper = false;
+        if (!endedWithSemicolon && i < len) {
+            let nextChar = code[i];
+            // If immediately followed by a block bracket or module name, it is a wrapper rule
+            if (nextChar === '{' || nextChar === '%' || nextChar === '*' || /[a-zA-Z0-9_$]/.test(nextChar)) {
+                isWrapper = true;
             }
-        } else {
-            // Operator wrapper node (hull(), linear_extrude(), translate(), for())
+        }
+        
+        if (isWrapper) {
+            // Process attached downstream nodes recursively
             let childContent = parseComponent(effectiveGhost);
             if (effectiveGhost) {
                 return hasGhostModifier ? `__GHOST__() ${expression} ${childContent}` : `${expression} ${childContent}`;
             } else {
                 return `${expression} ${childContent}`;
+            }
+        } else {
+            // Standalone Leaf Node (e.g. cube(10);)
+            if (effectiveGhost) {
+                // Keep the active item; ignore pre-existing root operators if explicitly bypassed
+                if (hasIgnoreModifier) return `* ${expression} `;
+                return hasGhostModifier ? `__GHOST__() ${expression} ` : `${expression} `;
+            } else {
+                // Completely solid code segment: Disable safely for our separate Ghost Pass geometry pass
+                return `* ${expression} `;
             }
         }
     }
