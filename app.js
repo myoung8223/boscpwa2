@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "138"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "139"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1101,21 +1101,29 @@ btnExport.addEventListener('click', () => {
         
         const exporter = new THREE.STLExporter();
         
-        // 1. Clone the current mesh hierarchy so we don't mess up the visual screen layout
+        // 1. Create a deep clone of the model hierarchy so we don't affect what's on screen
         const exportClone = currentMesh.clone();
         
-        // 2. Clear any transformations or parent matrices that Three.js 3MFLoader forced
+        // 2. FORCE a matrix calculation pass to settle the 3MFLoader defaults
         exportClone.updateMatrixWorld(true);
         
-        // 3. Counter-rotate it by 90 degrees around the Y axis to restore OpenSCAD alignment
-        // (If it's rotated the wrong direction, change -Math.PI/2 to Math.PI/2)
-        exportClone.rotation.y += -Math.PI / 2; 
-        exportClone.updateMatrixWorld(true);
+        // 3. Create a rigid rotation matrix to flip the mesh back to OpenSCAD's native Z-up alignment.
+        // If it rotates the wrong way in your slicer, swap this to Math.PI / 2
+        const rotationMatrix = new THREE.Matrix4().makeRotationY(-Math.PI / 2);
         
-        // 4. Parse the corrected clone instead of the visual screen mesh
+        // 4. Traverse the clone and bake the transformation directly into the vertices
+        exportClone.traverse((child) => {
+            if (child.isMesh && child.geometry) {
+                // Apply the matrix directly to the underlying buffer geometry coordinates
+                child.geometry.applyMatrix4(rotationMatrix);
+                child.geometry.computeVertexNormals(); // Re-align shadows and face normals
+            }
+        });
+        
+        // 5. Parse the baked clone
         const stlResult = exporter.parse(exportClone, { binary: true });
         
-        // 5. Package and Download
+        // 6. Download the final standard binary STL file
         const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
         const link = document.createElement('a');
         link.href = URL.createObjectURL(stlBlob);
