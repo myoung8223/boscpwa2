@@ -1083,7 +1083,8 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
             
             const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
+            //const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
+			const ghostModuleHeader = `module __GHOST__() { union() { scale([1.0001, 1.0001, 1.0001]) children(); } }\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
             logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
