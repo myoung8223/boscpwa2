@@ -1037,14 +1037,16 @@ btnPreview.addEventListener('click', async () => {
             }
         };
 
-        // ---------------------------------------------------------
+// ---------------------------------------------------------
         // 🚀 PASS 1: CORE SOLID COMPILER (INSTANCE 1)
         // ---------------------------------------------------------
         logToConsole("⚡ Initializing Solid Geometry Compiler Instance...");
         const solidInstance = await createWasmInstance();
         mapExternalResources(solidInstance);
 
-        const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
+        // 💡 THE FIX: Use our token parser with 'true' to safely swap ghosts for micro-cubes
+        const solidCode = isolateOpenSCADGhosts(scriptCode, true);
+        
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
