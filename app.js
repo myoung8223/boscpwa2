@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "173"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "174"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1054,11 +1054,9 @@ btnPreview.addEventListener('click', async () => {
         const hasGhost = ghostRegex.test(scriptCode);
         ghostRegex.lastIndex = 0; 
 
-        // --- PASS 1: COMPILE SOLIDS ---
-        // Strip out items prefixed with ghost flags using the token-matched lookahead configuration 
+// --- PASS 1: COMPILE SOLIDS ---
         const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
         
-        // 🪲 [DEBUG LOG] Check exactly what solid segments look like
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
@@ -1071,12 +1069,12 @@ btnPreview.addEventListener('click', async () => {
             if (instance.FS.analyzePath('/solid.3mf').exists) {
                 solidData = instance.FS.readFile('/solid.3mf');
                 
-                // 💾 Save ONLY the solid parts for the 3D Printer Export button
+                // Save solid bytes for export functionality
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
         } catch (err) {
-            logToConsole("Pass 1: No solid geometry detected.");
+            logToConsole("Pass 1: Geometry processing notice.");
         }
 
         // --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
@@ -1084,14 +1082,10 @@ btnPreview.addEventListener('click', async () => {
         if (hasGhost) {
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
             
-            // 1. Process script through our scope-aware pointer parser
             const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            
-            // 2. Inject tracking signature header
             const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
-            // 🪲 [DEBUG LOG] Inspect the AST modification tree fed into Pass 2
             logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
             logToConsole(ghostCode);
             logToConsole("🪲 -----------------------------------------\n");
@@ -1104,19 +1098,19 @@ btnPreview.addEventListener('click', async () => {
                     ghostData = instance.FS.readFile('/ghost.3mf');
                 }
             } catch (err) {
-                logToConsole("Pass 2: Ghost compilation completed.");
+                logToConsole("Pass 2: Ghost processing notice.");
             }
         }
 
         // ---------------------------------------------------------
-        // 📦 ASSEMBLE & RENDER DISPATCH
+        // 📦 ASSEMBLE & RENDER DISPATCH (Both buffers now safely collected)
         // ---------------------------------------------------------
         if (solidData || ghostData) {
+            // Send both completed datasets together so they render in a single frame update
             update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
-            logToConsole("✨ 3D Render Canvas Updated Successfully.");
 
-            // Clean up the virtual core filesystem to prevent browser leaks
+            // Clean up the virtual core filesystem safely after rendering completes
             try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
             try { if (ghostData) instance.FS.unlink('/ghost.3mf'); } catch(e){}
             try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
@@ -1442,20 +1436,26 @@ function update3DModelViewer(solidData, ghostData = null) {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
-                        // 💡 CRITICAL FIX: Decouple from shared material trees by generating 
-                        // a totally fresh, isolated material unique to this ghost node.
-                        child.material = new THREE.MeshStandardMaterial({
-                            color: 0xa5f3fc,          // 🧊 Vibrant light cyan / ice glass
-                            transparent: true,        // Enable alpha channels natively
+                        // 🧊 Create a distinct, completely isolated transparent material instance
+                        const ghostGlassMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xa5f3fc,          // Light cyan / ice glass
+                            transparent: true,        // Force alpha channels on
                             opacity: 0.35,            // Clean overlay opacity density
                             depthWrite: false,        // Prevents ghost planes from masking objects behind them
-                            side: THREE.DoubleSide,    // Render backfaces for interior hull/casing views
+                            side: THREE.DoubleSide,   // Render backfaces for interior hull/casing views
                             roughness: 0.2,           // Sleek surface finish
                             metalness: 0.1
                         });
 
                         if (typeof wireframeMode !== 'undefined') {
-                            child.material.wireframe = wireframeMode;
+                            ghostGlassMaterial.wireframe = wireframeMode;
+                        }
+
+                        // Assign directly to both single and multi-material configurations
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => ghostGlassMaterial.clone());
+                        } else {
+                            child.material = ghostGlassMaterial;
                         }
                         
                         child.material.needsUpdate = true;
