@@ -1460,7 +1460,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                             
                             // 🛠️ TRANSFORM INTO CLEAN SMOKY GLASS
                             mat.vertexColors = false;   // Strip out unstyled background yellows
-                            mat.color.set('#222222');     // Dark, premium charcoal glass tint
+                            mat.color.set('#ffffff');     // Dark, premium charcoal glass tint, was '#222222'
                             mat.transparent = true;
                             mat.opacity = 0.55;           // Darkened and thickened (up from faint translucent levels)
                             mat.depthWrite = false;       // Eliminates transparent layer clipping artifacts
