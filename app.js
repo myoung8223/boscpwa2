@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "190"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "191"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2504,7 +2504,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-if (isWrapper) {
+		if (isWrapper) {
             let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
@@ -2514,7 +2514,6 @@ if (isWrapper) {
                 let openBraces = 0;
                 let endSearchIdx = i;
                 
-                // Track matching braces ahead to find the boundaries of this CSG operation
                 while (endSearchIdx < len) {
                     if (code[endSearchIdx] === '{') openBraces++;
                     if (code[endSearchIdx] === '}') {
@@ -2524,24 +2523,25 @@ if (isWrapper) {
                     endSearchIdx++;
                 }
                 
-                // Extract the raw text slice inside this block component container
                 let blockSlice = code.slice(i, endSearchIdx);
                 
-                // If a ghost modifier is hiding anywhere inside, flag this container for mutation!
+                // Flag mutation if a ghost modifier is hidden inside
                 if (blockSlice.includes('%')) {
                     isGhostCsgBase = true;
-                    expression = expression.replace(/difference|intersection/, 'union');
-                    // Elevate tree scope immediately so children aren't stripped or commented out
-                    effectiveGhost = true; 
                 }
             }
 
-            // Now parse the child components with the correct ghost context established!
+            // DYNAMIC FIX: Do NOT force effectiveGhost = true here.
+            // Let child blocks naturally evaluate their own modifiers!
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
-            let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
+            
+            // If we are an active ghost csg base, our children shouldn't count as disabled
+            let shouldDisableWrapper = false;
+            if (!isGhostCsgBase) {
+                shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
+            }
 
-            // Pass 1 Routing (Strip All Ghosts Mode)
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
                     return `cube([0.001, 0.001, 0.001], center=true);\n`;
@@ -2549,14 +2549,22 @@ if (isWrapper) {
                 return `${expression}\n${childContent}`;
             }
 
-            // Pass 2 Routing (Standard Layout Execution)
+            // Apply operator transformation text updates if flagged
+            if (isGhostCsgBase) {
+                expression = expression.replace(/difference|intersection/, 'union');
+            }
+
             if (effectiveGhost) {
                 if (hasGhostModifier && !isInsideGhostScope) {
                     return `__GHOST__() ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
             } else {
-                if (shouldDisableWrapper && !isGhostCsgBase) {
+                // If this is a mutated CSG base tool container, keep it completely visible!
+                if (isGhostCsgBase) {
+                    return `${expression}\n${childContent}`;
+                }
+                if (shouldDisableWrapper) {
                     return `* ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
