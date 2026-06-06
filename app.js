@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "171"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "172"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1046,12 +1046,12 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: COMPILE TRACKED GHOSTS ---
+		// --- PASS 2: COMPILE TRACKED GHOSTS ---
         let ghostData = null;
         if (hasGhost) {
             logToConsole("📥 Injecting tracking signature into background layers...");
-            // Paint every single '%' object with an impossible cryptographic floating-point color
-            const ghostCode = scriptCode.replace(ghostRegex, 'color([0.987, 0.012, 0.876]) ');
+            // Paint every single '%' object with an impossible cryptographic color
+            const ghostCode = scriptCode.replace(ghostRegex, 'color([0.98, 0.01, 0.87]) ');
             
             try {
                 const ghostInstance = await openSCADFactory({
@@ -1076,6 +1076,8 @@ btnPreview.addEventListener('click', async () => {
                 for (const svgName of Object.keys(svgCache)) { try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e){} }
 
                 ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
+                
+                // 🔑 CRITICAL FIX: Explicitly match the Manifold backend used in Pass 1!
                 ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
                 
                 if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
@@ -1326,7 +1328,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         const masterGroup = new THREE.Group();
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
-        // ---------------------------------------------------------
+		// ---------------------------------------------------------
         // 🟨 PASS 1: CORE SOLID GEOMETRY PROCESSING
         // ---------------------------------------------------------
         if (solidData) {
@@ -1345,7 +1347,6 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (!mat) return;
                             const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                             
-                            // Check if color is the default yellow/orange variant OpenSCAD exports
                             let isDefaultOpenSCADYellow = false;
                             if (mat.color) {
                                 const r = mat.color.r, g = mat.color.g, b = mat.color.b;
@@ -1363,9 +1364,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                                 }
                             }
 
-                            // 🚀 MATERIAL COLOR ROUTER
                             if (!isDefaultOpenSCADYellow) {
-                                // Script has an explicit, custom color() rule applied
                                 if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                                     mat.vertexColors = true;
                                     mat.color.setRGB(1, 1, 1);
@@ -1385,7 +1384,6 @@ function update3DModelViewer(solidData, ghostData = null) {
                                     mat.side = THREE.FrontSide;
                                 }
                             } else {
-                                // Unstyled geometry -> Force your custom workspace color picker setting
                                 mat.vertexColors = false;
                                 mat.color.set(fallbackHexColor);
                                 mat.transparent = false;
@@ -1399,8 +1397,6 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
-                        
-                        // We clone the mesh into our fresh tracking group structure
                         masterGroup.add(child.clone());
                     }
                 });
@@ -1408,7 +1404,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         }
 
         // ---------------------------------------------------------
-        // 🧊 PASS 2: SIGNATURE GHOST FILTER (SMOKY ICE GLASS)
+        // 🧊 PASS 2: SIGNATURE GHOST FILTER (ICE GLASS)
         // ---------------------------------------------------------
         if (ghostData) {
             const ghostBytes = new Uint8Array(ghostData);
@@ -1424,9 +1420,9 @@ function update3DModelViewer(solidData, ghostData = null) {
                         
                         let isTargetGhost = false;
 
-                        // Check if color matches our signature signature tracking token: [0.987, 0.012, 0.876]
+                        // 🔍 Wide bounds comparison to avoid float-to-byte compression drops
                         const matchSignature = (r, g, b) => {
-                            return (r > 0.95 && r < 0.99) && (g >= 0.0 && g < 0.05) && (b > 0.84 && b < 0.90);
+                            return (r > 0.90 && r < 1.0) && (g >= 0.0 && g < 0.05) && (b > 0.80 && b < 0.95);
                         };
 
                         materials.forEach((mat) => {
@@ -1445,20 +1441,20 @@ function update3DModelViewer(solidData, ghostData = null) {
                             }
                         }
 
-                        // ⭐ THE GATEKEEPER: If this object does NOT contain our secret ghost color signature, drop it!
+                        // ⭐ If this element doesn't carry the tracking signature color, toss it!
                         if (!isTargetGhost) return;
 
-                        // It IS an intended ghost background object -> Transform it into sleek cyan glass
+                        // It IS background geometry -> Style it into semi-translucent blue ice glass
                         materials.forEach((mat) => {
                             if (!mat) return;
 
-                            mat.vertexColors = false;   // Clear out vertex colors so material works cleanly
-                            mat.color.set('#a5f3fc');     // 🧊 Vibrant light cyan / ice glass
+                            mat.vertexColors = false;   
+                            mat.color.set('#a5f3fc');     // Light icy cyan
                             mat.transparent = true;
-                            mat.opacity = 0.35;           // High visibility transparency overlay
-                            mat.depthWrite = false;       // Fixes nested depth-sorting layer clipping box artifacts
-                            mat.side = THREE.DoubleSide;  // Draw inside and outside faces
-                            mat.roughness = 0.15;         // Premium, shiny gloss
+                            mat.opacity = 0.35;           
+                            mat.depthWrite = false;       // Stops layered geometry flashing artifacts
+                            mat.side = THREE.DoubleSide;  // Render front and back faces
+                            mat.roughness = 0.15;         
                             mat.metalness = 0.0;
                             
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
