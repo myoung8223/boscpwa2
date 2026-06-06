@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "117"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "118"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1611,11 +1611,14 @@ function update3DModelViewer(raw3mfData) {
         currentMesh = threemfGroup;
 
         // Pull the exact, active chosen hex value from your HTML color input box
-        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#ff007f";
+        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
         // Traverse the imported nodes to safely configure the hierarchy
         currentMesh.traverse((child) => {
             if (child.isMesh) {
+                // Look for explicit vertex streams embedded in the mesh geometry attributes
+                const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 
                 materials.forEach((mat) => {
@@ -1623,29 +1626,22 @@ function update3DModelViewer(raw3mfData) {
 
                     mat.side = THREE.DoubleSide; 
 
-                    // 🔍 RE-ENGINEERED COLOR DETECTOR:
-                    // Check if ThreeMFLoader natively flagged this material for vertex coloring,
-                    // OR if the color attributes match OpenSCAD's default preview yellow.
+                    // Check if the material properties suggest an explicit script injection
                     const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                     
-                    const isDefaultOpenSCADYellow = (mat.color && mat.color.r > 0.9 && mat.color.g > 0.8 && mat.color.b < 0.6);
-                    const isPlaceholderBlue = (mat.color && mat.color.b > mat.color.r && mat.color.b > mat.color.g && mat.color.b > 0.8);
-                    const isWhiteOrBlack = (mat.color && ((mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1) || 
-                                           (mat.color.r === 0 && mat.color.g === 0 && mat.color.b === 0)));
+                    // Comprehensive test: Did the script write explicit styling properties?
+                    const isScriptDefinedMesh = hasGeometryVertexColors || loaderFlaggedVertexColors || mat.opacity < 1.0;
 
-                    // If the loader explicitly specified vertex colors, OR if the color is NOT one of the default templates,
-                    // it means an inline color() command was declared in the script code!
-                    const hasInlineScriptColor = loaderFlaggedVertexColors || (!isDefaultOpenSCADYellow && !isPlaceholderBlue && !isWhiteOrBlack);
-
-                    if (hasInlineScriptColor) {
-                        // 🎨 PIPELINE A: Keep your custom script-defined color parameters untouched!
-                        // If it used a vertex color map, ensure Three.js is rendering it relative to white
-                        if (loaderFlaggedVertexColors) {
+                    if (isScriptDefinedMesh) {
+                        // 🎨 PIPELINE A: The script contains an explicit color() command block.
+                        // Keep your custom script-defined color parameters completely untouched!
+                        if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                             mat.vertexColors = true;
+                            // Reset material base color to full white so it doesn't color-bleed into vertex textures
                             mat.color.setRGB(1, 1, 1); 
                         }
                         
-                        // Configure Alpha Sorting rules for transparent custom code blocks
+                        // Handle translucent depth pipeline rendering
                         if (mat.opacity < 1.0) {
                             mat.transparent = true;
                             mat.depthWrite = false; 
@@ -1654,11 +1650,12 @@ function update3DModelViewer(raw3mfData) {
                             mat.depthWrite = true;
                         }
                     } else {
-                        // 🎨 PIPELINE B: Fall back to your workspace layout settings panel picker color!
+                        // 🎨 PIPELINE B: Baseline unstyled geometry (The third sphere fallback).
+                        // Force it to render using your workspace settings layout color!
                         mat.vertexColors = false;
                         mat.color.set(fallbackHexColor);
 
-                        // If the object didn't have an inline color block, make it solid
+                        // Ensure it behaves as a perfectly solid object
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.opacity = 1.0; 
