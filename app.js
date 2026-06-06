@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "124"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "125"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -923,6 +923,11 @@ btnPreview.addEventListener('click', async () => {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
+            // 🔥 FIX 1: Pass correct environment paths so Fontconfig initializes correctly early on
+            ENV: {
+                OPENSCAD_FONT_PATH: '/fonts',
+                HOME: '/home/web_user'
+            },
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -930,9 +935,20 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
+        // 🔥 FIX 2: Create standard sandboxed font paths before writing files
+        try { instance.FS.mkdir('/fonts'); } catch(e) {}
+        try { instance.FS.mkdir('/home'); } catch(e) {}
+        try { instance.FS.mkdir('/home/web_user'); } catch(e) {}
+        try { instance.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
+
         // 📝 Map custom fonts, STLs, and SVGs (Keeping your exact mapping loops intact)
         for (const fontName of Object.keys(fontCache)) {
-            try { instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); } 
+            try { 
+                // 🔥 FIX 3: Mirror the font cache across root, /fonts, and Fontconfig's home profile
+                instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); 
+                instance.FS.writeFile(`/fonts/${fontName}`, fontCache[fontName]); 
+                instance.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontCache[fontName]); 
+            } 
             catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /${fontName}`); }
         }
         for (const stlName of Object.keys(stlCache)) {
@@ -947,8 +963,8 @@ btnPreview.addEventListener('click', async () => {
         // Write the code to the virtual filesystem
         instance.FS.writeFile('/input.scad', scriptCode);
         
-        // 🚀 THE MAGIC: Target .3mf and enable the blistering fast Manifold kernel!
-        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']); 
+        // 🚀 YOUR CORRECT MANIFOLD PIPELINE (Kept untouched!)
+        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']);
 
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
