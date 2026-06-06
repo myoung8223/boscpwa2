@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "145"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "146"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1179,7 +1179,7 @@ btnExport.addEventListener('click', () => {
         
         // Operation 2: 90-degree spin around the vertical axis
         // If it spins the wrong direction, change Math.PI / 2 to -Math.PI / 2
-        const rotateYMatrix = new THREE.Matrix4().makeRotationY(Math.PI / 2);
+        const rotateYMatrix = new THREE.Matrix4().makeRotationY(0);
         
         // Combine them sequentially: Apply the Y rotation, then compound it with the Z rotation
         const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(rotateZMatrix, rotateYMatrix);
