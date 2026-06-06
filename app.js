@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "189"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "190"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2504,21 +2504,42 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-		if (isWrapper) {
+if (isWrapper) {
             let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
-            // Step 1: Parse the internal child blocks first 
+            let isGhostCsgBase = false;
+            if (isCsgFilterOp && !stripAllGhostsMode) {
+                // Find where this block ends to limit our peek window safely
+                let openBraces = 0;
+                let endSearchIdx = i;
+                
+                // Track matching braces ahead to find the boundaries of this CSG operation
+                while (endSearchIdx < len) {
+                    if (code[endSearchIdx] === '{') openBraces++;
+                    if (code[endSearchIdx] === '}') {
+                        openBraces--;
+                        if (openBraces <= 0) break;
+                    }
+                    endSearchIdx++;
+                }
+                
+                // Extract the raw text slice inside this block component container
+                let blockSlice = code.slice(i, endSearchIdx);
+                
+                // If a ghost modifier is hiding anywhere inside, flag this container for mutation!
+                if (blockSlice.includes('%')) {
+                    isGhostCsgBase = true;
+                    expression = expression.replace(/difference|intersection/, 'union');
+                    // Elevate tree scope immediately so children aren't stripped or commented out
+                    effectiveGhost = true; 
+                }
+            }
+
+            // Now parse the child components with the correct ghost context established!
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
-
-            // Step 2: If a child contains a ghost element, mutate this filter to a union!
-            let isGhostCsgBase = false;
-            if (isCsgFilterOp && !stripAllGhostsMode && childContent.includes('__GHOST__()')) {
-                isGhostCsgBase = true;
-                expression = expression.replace(/difference|intersection/, 'union');
-            }
 
             // Pass 1 Routing (Strip All Ghosts Mode)
             if (stripAllGhostsMode) {
@@ -2530,13 +2551,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
             // Pass 2 Routing (Standard Layout Execution)
             if (effectiveGhost) {
-                // If this is a child inside an already active ghost tree, don't double-wrap it
                 if (hasGhostModifier && !isInsideGhostScope) {
                     return `__GHOST__() ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
             } else {
-                // If we mutated to a union to show internal cuts, DO NOT comment it out!
                 if (shouldDisableWrapper && !isGhostCsgBase) {
                     return `* ${expression}\n${childContent}`;
                 }
