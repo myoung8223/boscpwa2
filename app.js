@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "178"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "179"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -993,136 +993,112 @@ btnPreview.addEventListener('click', async () => {
     const scriptCode = jar.toString(); 
     const errorLogs = [];
 
+    // Isolate % modifiers (ignoring math modulo operations)
+    const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
+    const hasGhost = ghostRegex.test(scriptCode);
+    ghostRegex.lastIndex = 0; 
+
     try {
-        // --- INSTANCE 1: CORE SOLID COMPILER ---
-        const instance = await openSCADFactory({
-            noInitialRun: true,
-            locateFile: (path) => `./libs/openscad.wasm`,
-            
-            // 💡 Tell Fontconfig exactly where the "user" home folder is
-            ENV: {
-                HOME: '/home/web_user' 
-            },
-            
-            // 🔥 DROP FONTS INTO THE LINUX USER FONT FOLDER BEFORE BOOT!
-            preRun: [
-                function(Module) {
-                    // Recreate the standard Linux user fonts directory
-                    try { Module.FS.mkdir('/home'); } catch(e) {}
-                    try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
-                    try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
+        // --- INSTANCE SETTINGS BUILDER FUNCTION ---
+        const createWasmInstance = async () => {
+            return await openSCADFactory({
+                noInitialRun: true,
+                locateFile: (path) => `./libs/openscad.wasm`,
+                ENV: { HOME: '/home/web_user' },
+                preRun: [
+                    function(Module) {
+                        try { Module.FS.mkdir('/home'); } catch(e) {}
+                        try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
+                        try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
 
-                    for (const fontName of Object.keys(fontCache)) {
-                        try { 
-                            // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
-                            const fontData = new Uint8Array(fontCache[fontName]);
-                            Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
-                        } 
-                        catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
+                        for (const fontName of Object.keys(fontCache)) {
+                            try { 
+                                const fontData = new Uint8Array(fontCache[fontName]);
+                                Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
+                            } catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
+                        }
                     }
+                ],
+                print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
+                printErr: (text) => {
+                    errorLogs.push(text);
+                    logToConsole(`[ERROR]: ${text}`);
                 }
-            ],
+            });
+        };
 
-            print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
-            printErr: (text) => {
-                errorLogs.push(text);
-                logToConsole(`[ERROR]: ${text}`);
+        // 📝 Pre-map external resources helper
+        const mapExternalResources = (instance) => {
+            for (const stlName of Object.keys(stlCache)) {
+                try { instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
             }
-        });
-
-        // 📝 Map custom STLs and SVGs as strict Uint8Arrays to the main instance
-        for (const stlName of Object.keys(stlCache)) {
-            try { 
-                instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
-                logToConsole(`Mounted STL: /${stlName}`); 
-            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
-        }
-        for (const svgName of Object.keys(svgCache)) {
-            try { 
-                instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); 
-                logToConsole(`Mounted SVG: /${svgName}`); 
-            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
-        }
+            for (const svgName of Object.keys(svgCache)) {
+                try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
+            }
+        };
 
         // ---------------------------------------------------------
-        // 🚀 THE REGEX & SCOPE MODIFIER PIPELINE
+        // 🚀 PASS 1: CORE SOLID COMPILER (INSTANCE 1)
         // ---------------------------------------------------------
-        
-        // Isolate % modifiers (ignoring math modulo operations)
-        const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
+        logToConsole("⚡ Initializing Solid Geometry Compiler Instance...");
+        const solidInstance = await createWasmInstance();
+        mapExternalResources(solidInstance);
 
-        const hasGhost = ghostRegex.test(scriptCode);
-        ghostRegex.lastIndex = 0; 
-
-// --- PASS 1: COMPILE SOLIDS ---
         const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
-        
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
 
-        instance.FS.writeFile('/solid_input.scad', solidCode);
+        solidInstance.FS.writeFile('/solid_input.scad', solidCode);
         
         let solidData = null;
         try {
-            instance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
-            if (instance.FS.analyzePath('/solid.3mf').exists) {
-                solidData = instance.FS.readFile('/solid.3mf');
-                
-                // Save solid bytes for export functionality
+            solidInstance.callMain(['/solid_input.scad', '--backend=manifold', '-o', '/solid.3mf']);
+            if (solidInstance.FS.analyzePath('/solid.3mf').exists) {
+                solidData = solidInstance.FS.readFile('/solid.3mf');
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
         } catch (err) {
-            logToConsole("Pass 1: Geometry processing notice.");
+            logToConsole("Pass 1 execution finished.");
         }
-
-// --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
-let ghostData = null;
-if (hasGhost) {
-    logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
-    
-    const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-    
-    // 💡 THE FIX: Add double trailing newlines (\n\n) to isolate the module header!
-    const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
-    const ghostCode = ghostModuleHeader + cleanGhostCode;
-    
-    logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
-    logToConsole(ghostCode);
-    logToConsole("🪲 -----------------------------------------\n");
-    
-    try {
-        // Clear out any old /ghost.3mf remnant to guarantee true state tracking
-        try { if (instance.FS.analyzePath('/ghost.3mf').exists) instance.FS.unlink('/ghost.3mf'); } catch(e){}
-        
-        instance.FS.writeFile('/ghost_input.scad', ghostCode);
-        instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
-        
-        if (instance.FS.analyzePath('/ghost.3mf').exists) {
-            ghostData = instance.FS.readFile('/ghost.3mf');
-        } else {
-            logToConsole("🪲 [DEBUG ALERT] OpenSCAD finished, but /ghost.3mf was not generated.");
-        }
-    } catch (err) {
-        logToConsole("Pass 2 execution notice.");
-    }
-}
 
         // ---------------------------------------------------------
-        // 📦 ASSEMBLE & RENDER DISPATCH (Both buffers now safely collected)
+        // 🚀 PASS 2: ISOLATED GHOST COMPILER (INSTANCE 2)
+        // ---------------------------------------------------------
+        let ghostData = null;
+        if (hasGhost) {
+            logToConsole("⚡ Initializing Dedicated Ghost Geometry Compiler Instance...");
+            const ghostInstance = await createWasmInstance();
+            mapExternalResources(ghostInstance);
+
+            logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
+            const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
+            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
+            const ghostCode = ghostModuleHeader + cleanGhostCode;
+            
+            logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
+            logToConsole(ghostCode);
+            logToConsole("🪲 -----------------------------------------\n");
+            
+            ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
+            
+            try {
+                ghostInstance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
+                if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
+                    ghostData = ghostInstance.FS.readFile('/ghost.3mf');
+                }
+            } catch (err) {
+                logToConsole("Pass 2 execution finished.");
+            }
+        }
+
+        // ---------------------------------------------------------
+        // 📦 ASSEMBLE & RENDER DISPATCH
         // ---------------------------------------------------------
         if (solidData || ghostData) {
-            // Send both completed datasets together so they render in a single frame update
             update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
-
-            // Clean up the virtual core filesystem safely after rendering completes
-            try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
-            try { if (ghostData) instance.FS.unlink('/ghost.3mf'); } catch(e){}
-            try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
-            try { if (instance.FS.analyzePath('/ghost_input.scad').exists) instance.FS.unlink('/ghost_input.scad'); } catch(e){}
-            
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
             let detectedErrorLine = null;
