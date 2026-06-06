@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "152"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "153"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1110,8 +1110,8 @@ btnExport.addEventListener('click', () => {
         exportClone.updateMatrixWorld(true);
 
         exportClone.rotation.x = 0;
-        exportClone.rotation.y = Math.PI / 2;
-        exportClone.rotation.z = 0;
+        exportClone.rotation.y = 0;
+        exportClone.rotation.z = Math.PI / 2;
         
         // 4. Force Three.js to completely rebuild and bake this absolute orientation
         exportClone.updateMatrix();
