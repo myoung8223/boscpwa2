@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "129"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "130"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -922,23 +922,25 @@ btnPreview.addEventListener('click', async () => {
         // 🚀 Initialize the engine and point it directly to the local WASM file
         const instance = await openSCADFactory({
             noInitialRun: true,
-            locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
+            locateFile: (path) => `./libs/openscad.wasm`,
             ENV: {
                 OPENSCAD_FONT_PATH: '/fonts', // Tells Fontconfig exactly where to look
                 HOME: '/home/web_user'
             },
             
-            // 🔥 THE FIX: Setup the fonts folder and inject files BEFORE boot!
+            // 🔥 THE FIX: Setup the fonts folder and inject BINARY files BEFORE boot!
             preRun: [
                 function(Module) {
-                    // 1. Create the fonts directory in the virtual filesystem
                     try { Module.FS.mkdir('/fonts'); } catch(e) {}
 
-                    // 2. Write the custom fonts into it so Fontconfig sees them on boot
                     for (const fontName of Object.keys(fontCache)) {
                         try { 
-                            Module.FS.writeFile(`/fonts/${fontName}`, fontCache[fontName]); 
-                            console.log(`[preRun] Mounted Font: /fonts/${fontName}`);
+                            // 💡 CRITICAL FIX: Force the ArrayBuffer into a strict Uint8Array
+                            const fontData = new Uint8Array(fontCache[fontName]);
+                            Module.FS.writeFile(`/fonts/${fontName}`, fontData); 
+                            
+                            // Log the byte size so we can prove it's not a string!
+                            console.log(`[preRun] Mounted Font: /fonts/${fontName} (${fontData.length} bytes)`);
                         } 
                         catch (fsErr) { console.error(`[ERROR] Failed to map: /fonts/${fontName}`); }
                     }
@@ -952,14 +954,18 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 📝 Map custom STLs and SVGs AFTER boot (These don't need Fontconfig)
+        // 📝 Map custom STLs and SVGs as strict Uint8Arrays!
         for (const stlName of Object.keys(stlCache)) {
-            try { instance.FS.writeFile(`/${stlName}`, stlCache[stlName]); logToConsole(`Mounted STL: /${stlName}`); } 
-            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
+            try { 
+                instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
+                logToConsole(`Mounted STL: /${stlName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
         }
         for (const svgName of Object.keys(svgCache)) {
-            try { instance.FS.writeFile(`/${svgName}`, svgCache[svgName]); logToConsole(`Mounted SVG: /${svgName}`); } 
-            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
+            try { 
+                instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); 
+                logToConsole(`Mounted SVG: /${svgName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
         }
 
         // Write the code to the virtual filesystem
@@ -971,10 +977,8 @@ btnPreview.addEventListener('click', async () => {
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
             
-            // 🚀 Pass the raw Uint8Array data array directly to the viewer
             update3DModelViewer(outputData);
             
-            // 💾 Keep this intact for standalone downloads
             currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
             
             if (placeholderText) placeholderText.style.display = 'none';
