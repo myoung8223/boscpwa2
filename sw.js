@@ -26,6 +26,7 @@ const ASSETS_TO_CACHE = [
   './libs/3MFLoader.js',
   './libs/fflate.js',
   './libs/OrbitControls.js',
+  './libs/STLExporter.js',
   './libs/openscad.js',
   './libs/openscad.wasm',
 
