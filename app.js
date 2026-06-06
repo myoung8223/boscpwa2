@@ -703,7 +703,21 @@ btnWireframe.addEventListener('click', () => {
     wireframeMode = !wireframeMode; 
     btnWireframe.textContent = wireframeMode ? 'Wireframe' : 'Solid';
     btnWireframe.style.background = wireframeMode ? '#444' : '#007acc';  
-    if (currentMesh && currentMesh.material) currentMesh.material.wireframe = wireframeMode;
+    
+    if (currentMesh) {
+        // Traverse through the 3MF Group and target every individual mesh
+        currentMesh.traverse((child) => {
+            if (child.isMesh && child.material) {
+                // Handle cases where a single mesh has multiple materials (an array)
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(mat => mat.wireframe = wireframeMode);
+                } else {
+                    // Handle standard single materials
+                    child.material.wireframe = wireframeMode;
+                }
+            }
+        });
+    }
 });
 
 window.addEventListener('keydown', (event) => {
