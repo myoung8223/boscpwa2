@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "127"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "128"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -924,7 +924,7 @@ btnPreview.addEventListener('click', async () => {
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
             ENV: {
-                OPENSCAD_FONT_PATH: '/fonts',
+                OPENSCAD_FONT_PATH: '/fonts', // Tells Fontconfig exactly where to look!
                 HOME: '/home/web_user'
             },
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
@@ -934,14 +934,19 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 📝 Map custom Fonts, STLs, and SVGs to the root directory
+        // 📁 Create the /fonts directory in the virtual filesystem
+        try { instance.FS.mkdir('/fonts'); } catch(e) {}
+
+        // 📝 Map custom Fonts EXACTLY into the /fonts directory
         for (const fontName of Object.keys(fontCache)) {
             try { 
-                instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); 
-                logToConsole(`Mounted Font: /${fontName}`);
+                instance.FS.writeFile(`/fonts/${fontName}`, fontCache[fontName]); 
+                logToConsole(`Mounted Font: /fonts/${fontName}`);
             } 
-            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /${fontName}`); }
+            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /fonts/${fontName}`); }
         }
+
+        // 📝 Map custom STLs and SVGs to the root directory
         for (const stlName of Object.keys(stlCache)) {
             try { instance.FS.writeFile(`/${stlName}`, stlCache[stlName]); logToConsole(`Mounted STL: /${stlName}`); } 
             catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
