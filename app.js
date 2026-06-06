@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "163"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "164"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1098,50 +1098,28 @@ btnExport.addEventListener('click', () => {
             }
         });
 
-		/*
-        // 3. 🔥 FIX: Force an ABSOLUTE rotation value instead of appending (+=) 
-        // This strips away the viewer's custom tilt entirely.
-        // Try Math.PI / 2 first. If it's still inverted, change it to -Math.PI / 2
-        exportClone.rotation.x = 0;
-        exportClone.rotation.y = Math.PI / 2;
-        exportClone.rotation.z = Math.PI / 2;
-        
-        // 4. Force Three.js to completely rebuild and bake this absolute orientation
-        exportClone.updateMatrix();
-        exportClone.updateMatrixWorld(true);
-		*/
-
-// 3. 🔥 THE FINAL PIECE: Lay flat, then apply a pure quaternion spin on the up-vector
-exportClone.rotation.set(0, 0, 0); 
-
-// First: Lay it perfectly flat on the bed (the stable layout we established)
-exportClone.rotation.z = Math.PI / 2;
-
-// Force Three.js to process and bake the horizontal orientation first
-exportClone.updateMatrix();
-exportClone.updateMatrixWorld(true);
-
-// Second: Rotate exactly 90 degrees around the slicer's Up Vector (Z-Axis)
-// Note: If it spins clockwise but you wanted counter-clockwise, change Math.PI / 2 to -Math.PI / 2
-const upAxis = new THREE.Vector3(0, 0, 1);
-const spinQuaternion = new THREE.Quaternion().setFromAxisAngle(upAxis, -Math.PI / 4);   // -Math.PI / 2
-
-// Apply the spin directly to the object's combined matrix
-exportClone.applyQuaternion(spinQuaternion);
-
-// Second: Rotate exactly 90 degrees around the slicer's Up Vector (Z-Axis)
-// Note: If it spins clockwise but you wanted counter-clockwise, change Math.PI / 2 to -Math.PI / 2
-const upAxis2 = new THREE.Vector3(0, 0, 1);
-const spinQuaternion2 = new THREE.Quaternion().setFromAxisAngle(upAxis, Math.PI / 4);   // -Math.PI / 2
-
-// Apply the spin directly to the object's combined matrix
-exportClone.applyQuaternion(spinQuaternion2);
-
-// 4. Final bake before sending the stable coordinates to the STL exporter
-exportClone.updateMatrix();
-exportClone.updateMatrixWorld(true);
-
+		// 3. 🔥 THE FINAL PIECE: Lay flat, then apply a pure quaternion spin on the up-vector
+		exportClone.rotation.set(0, 0, 0); 
 		
+		// First: Lay it perfectly flat on the bed (the stable layout we established)
+		exportClone.rotation.z = Math.PI / 2;
+		
+		// Force Three.js to process and bake the horizontal orientation first
+		exportClone.updateMatrix();
+		exportClone.updateMatrixWorld(true);
+		
+		// problem with this!
+		// Second: Rotate exactly 90 degrees around the slicer's Up Vector (Z-Axis)
+		// Note: If it spins clockwise but you wanted counter-clockwise, change Math.PI / 2 to -Math.PI / 2
+		const upAxis = new THREE.Vector3(0, 0, 1);
+		const spinQuaternion = new THREE.Quaternion().setFromAxisAngle(upAxis, 0);   // -Math.PI / 2
+		
+		// Apply the spin directly to the object's combined matrix
+		exportClone.applyQuaternion(spinQuaternion);
+		
+		// 4. Final bake before sending the stable coordinates to the STL exporter
+		exportClone.updateMatrix();
+		exportClone.updateMatrixWorld(true);
 		
         logToConsole(`📦 Packaging corrected coordinate arrays into binary STL...`);
         
