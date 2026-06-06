@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "141"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "142"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1097,7 +1097,7 @@ btnExport.addEventListener('click', () => {
     }
     
     try {
-        logToConsole(`⚙️ Deep transforming clone and baking matrix for STL...`);
+        logToConsole(`⚙️ Forcing absolute orientation matrices for STL export...`);
         
         const exporter = new THREE.STLExporter();
         
@@ -1111,12 +1111,14 @@ btnExport.addEventListener('click', () => {
             }
         });
         
-        // 3. Rotate the whole GROUP container around the Y axis
-        // Since you need a 90-degree adjustment in your slicer, this forces it onto the clone
-        exportClone.rotation.y += Math.PI / 2; // (Swap to -Math.PI / 2 if direction is inverted)
+        // 3. 🔥 FIX: Force an ABSOLUTE rotation value instead of appending (+=) 
+        // This strips away the viewer's custom tilt entirely.
+        // Try Math.PI / 2 first. If it's still inverted, change it to -Math.PI / 2
+        exportClone.rotation.x = 0;
+        exportClone.rotation.y = Math.PI / 2; 
+        exportClone.rotation.z = 0;
         
-        // 4. 🔥 CRITICAL: Force Three.js to recompute and bake the new rotations down 
-        // into every inner child node's world matrix right now!
+        // 4. Force Three.js to completely rebuild and bake this absolute orientation
         exportClone.updateMatrix();
         exportClone.updateMatrixWorld(true);
         
