@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "180"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "181"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2384,13 +2384,14 @@ function isolateOpenSCADGhosts(code) {
         
         let hasGhostModifier = false;
         let hasIgnoreModifier = false;
+        let hasOtherModifier = false;
         
-        // Match modifier prefixes sequentially
+        // Sequential prefix modifier tracking
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
             else if (ch === '*') { hasIgnoreModifier = true; i++; }
-            else if (ch === '!' || ch === '#') { i++; } 
+            else if (ch === '!' || ch === '#') { hasOtherModifier = true; i++; } 
             else break;
             skipWhitespaceAndComments();
         }
@@ -2399,29 +2400,50 @@ function isolateOpenSCADGhosts(code) {
         skipWhitespaceAndComments();
         if (i >= len) return "";
 
-        // Context 1: Block Scope Content encapsulated via Braces { ... }
+        // Context 1: Block Group Braces { ... }
         if (code[i] === '{') {
             i++; // consume '{'
             let blockContent = "";
+            let totalChildren = 0;
+            let disabledChildren = 0;
+
             while (true) {
                 skipWhitespaceAndComments();
                 if (i >= len || code[i] === '}') break;
-                blockContent += parseComponent(effectiveGhost);
+                
+                // Track children to determine if this whole block becomes empty
+                totalChildren++;
+                let parsedChild = parseComponent(effectiveGhost);
+                if (parsedChild.trim().startsWith('*')) {
+                    disabledChildren++;
+                }
+                blockContent += parsedChild;
             }
             if (i < len && code[i] === '}') i++; // consume '}'
             
-            if (effectiveGhost) {
-                return hasGhostModifier ? `__GHOST__() { ${blockContent} } ` : `{ ${blockContent} } `;
-            } else {
-                return `{ ${blockContent} } `;
-            }
+            return {
+                content: `{ ${blockContent} } `,
+                allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren)
+            };
         }
         
-        // Context 2: Structural Expression Strings (Parameters & Call Signatures)
+        // Context 2: Read Token Signatures (Expressions / Parameters)
         let expression = "";
         let parensCount = 0;
         let endedWithSemicolon = false;
+        let isVariableAssignment = false;
         
+        // Peek to check if this expression is a variable definition (e.g., $fn =)
+        let peekIdx = i;
+        let peekString = "";
+        while (peekIdx < len && peekIdx < i + 50 && code[peekIdx] !== ';' && code[peekIdx] !== '{') {
+            peekString += code[peekIdx];
+            peekIdx++;
+        }
+        if (peekString.includes('=') && !peekString.trim().startsWith('module') && !peekString.includes('(')) {
+            isVariableAssignment = true;
+        }
+
         while (i < len) {
             let char = code[i];
             expression += char;
@@ -2434,13 +2456,10 @@ function isolateOpenSCADGhosts(code) {
                 break;
             }
             
-            // Fix: If we just closed a parenthesis loop, check if a semicolon follows immediately 
-            // (skipping spaces) and consume it as part of this exact node context!
             if (parensCount === 0 && char === ')') {
                 let peek = i;
                 while (peek < len && /\s/.test(code[peek])) peek++;
                 if (peek < len && code[peek] === ';') {
-                    // Consume everything up to and including that semicolon
                     while (i <= peek) {
                         expression += code[i];
                         i++;
@@ -2453,37 +2472,55 @@ function isolateOpenSCADGhosts(code) {
         
         skipWhitespaceAndComments();
         
-        // Identify if this statement acts as an operation wrapper or a final leaf geometry node
+        // Determine structural relationship (Is it an operating wrapper or terminal statement?)
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nextChar = code[i];
-            if (nextChar === '{' || nextChar === '%' || nextChar === '*' || /[a-zA-Z0-9_$]/.test(nextChar)) {
+            if (nextChar === '{' || nextChar === '%' || nextChar === '*' || nextChar === '!' || nextChar === '#' || /[a-zA-Z0-9_$]/.test(nextChar)) {
                 isWrapper = true;
             }
         }
         
+        if (isVariableAssignment) {
+            // 💡 SAFEKEEPING: Pass variables raw without prepending any modifier operators
+            return `${expression}\n`;
+        }
+        
         if (isWrapper) {
-            let childContent = parseComponent(effectiveGhost);
+            let childResult = parseComponent(effectiveGhost);
+            
+            // Handle if the returned child data was a block context payload
+            let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
+            let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
+
             if (effectiveGhost) {
-                return hasGhostModifier ? `__GHOST__() ${expression} ${childContent}` : `${expression} ${childContent}`;
+                if (hasGhostModifier) {
+                    return `__GHOST__() ${expression}\n${childContent}`;
+                }
+                return `${expression}\n${childContent}`;
             } else {
-                return `${expression} ${childContent}`;
+                // 💡 CLEAN HULL CRASH PROTECTION: If the children under this operator are completely disabled,
+                // disable the entire upstream transformation chain automatically to keep the syntax clean.
+                if (shouldDisableWrapper) {
+                    return `* ${expression}\n${childContent}`;
+                }
+                return `${expression}\n${childContent}`;
             }
         } else {
-            // Standalone Leaf Node (e.g. cube(10);)
+            // Leaf Statement Execution (cube, cylinder, sphere, import, text)
             if (effectiveGhost) {
-                if (hasIgnoreModifier) return `* ${expression} `;
-                return hasGhostModifier ? `__GHOST__() ${expression} ` : `${expression} `;
+                if (hasIgnoreModifier) return `* ${expression}\n`;
+                return hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`;
             } else {
-                // Safely disable solids for our ghost pass
-                return `* ${expression} `;
+                return `* ${expression}\n`;
             }
         }
     }
     
     let output = "";
     while (i < len) {
-        output += parseComponent(false);
+        let res = parseComponent(false);
+        output += (typeof res === 'object') ? res.content : res;
         skipWhitespaceAndComments();
     }
     return output;
