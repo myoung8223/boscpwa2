@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "167"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "168"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1309,7 +1309,7 @@ function init3DWorkspace() {
 // ==========================================================================
 // 🎨 MULTI-PASS 3MF VIEWER (Solids + Translucent Ghosts)
 // ==========================================================================
-function update3DModelViewer(solidData, ghostData) {
+function update3DModelViewer(solidData, ghostData = null) {
     if (!workspaceInitialized) init3DWorkspace();
 
     let savedPosition = null;
@@ -1319,6 +1319,7 @@ function update3DModelViewer(solidData, ghostData) {
         savedTarget = controls.target.clone();
     }
 
+    // Safely remove the old mesh from the scene and free memory
     if (currentMesh) {
         scene.remove(currentMesh);
         currentMesh.traverse((child) => {
@@ -1331,11 +1332,14 @@ function update3DModelViewer(solidData, ghostData) {
         currentMesh = null;
     }
 
-    logToConsole("📥 Processing Multi-Pass 3MF assembly...");
+    logToConsole("📥 Processing 3MF multi-pass graphics layout...");
 
     try {
-        if (typeof fflate === 'undefined') throw new Error("fflate.js missing.");
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
+        }
 
+        // THE COMPATIBILITY LAYER FOR THREE.JS 3MF LOADER
         window.JSZip = {
             loadAsync: async function(data) {
                 const bytes = new Uint8Array(data);
@@ -1356,78 +1360,147 @@ function update3DModelViewer(solidData, ghostData) {
         };
 
         const loader = new THREE.ThreeMFLoader();
-        currentMesh = new THREE.Group(); // We group the layers together!
+        const masterGroup = new THREE.Group();
+        const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
-        const processPass = (rawData, isGhost) => {
-            const buffer = new Uint8Array(rawData).buffer;
-            const group = loader.parse(buffer);
-            if (!group) return;
+        // ---------------------------------------------------------
+        // 🎨 PASS 1: CORE SOLID GEOMETRY PROCESSING
+        // ---------------------------------------------------------
+        if (solidData) {
+            const solidBytes = new Uint8Array(solidData);
+            const solidGroup = loader.parse(solidBytes.buffer);
+            
+            if (solidGroup) {
+                solidGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.computeVertexNormals();
 
-            group.traverse((child) => {
-                if (child.isMesh) {
-                    if (child.geometry) child.geometry.computeVertexNormals();
+                        const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
 
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
-                    
-                    materials.forEach((mat) => {
-                        if (!mat) return;
-                        
-                        // Strip OpenSCAD's default vertex colors
-                        if (mat.vertexColors) {
-                            mat.vertexColors = true;
-                            mat.color.setRGB(1, 1, 1);
-                        }
+                        materials.forEach((mat) => {
+                            if (!mat) return;
+                            const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
+                            
+                            // 🔍 WIDENED DETECTOR: Catch variant default OpenSCAD yellows/oranges safely
+                            let isDefaultOpenSCADYellow = false;
+                            if (mat.color) {
+                                const r = mat.color.r, g = mat.color.g, b = mat.color.b;
+                                if (r > 0.70 && g > 0.55 && b < 0.50 && (r - b) > 0.15) {
+                                    isDefaultOpenSCADYellow = true;
+                                }
+                            }
+                            if (hasGeometryVertexColors) {
+                                const colorAttr = child.geometry.attributes.color;
+                                if (colorAttr && colorAttr.count > 0) {
+                                    const vR = colorAttr.getX(0), vG = colorAttr.getY(0), vB = colorAttr.getZ(0);
+                                    if (vR > 0.70 && vG > 0.55 && vB < 0.50 && (vR - vB) > 0.15) {
+                                        isDefaultOpenSCADYellow = true;
+                                    }
+                                }
+                            }
 
-                        if (isGhost) {
-                            // 💎 Apply flawless physical glass to the Ghost pass
-                            const glassMat = new THREE.MeshPhysicalMaterial({
-                                color: mat.color.getHex() === 0xffffff ? 0xaaaaaa : mat.color, 
-                                metalness: 0.1,
-                                roughness: 0.1,
-                                transmission: 1.0, 
-                                opacity: 1.0,      
-                                transparent: true,
-                                ior: 1.5,          
-                                side: THREE.DoubleSide,
-                                depthWrite: false  
-                            });
-                            child.material = glassMat;
-                            child.renderOrder = 999; 
-                        } else {
-                            // 🧱 Apply standard solid settings
-                            mat.transparent = false;
-                            mat.depthWrite = true;
-                            mat.side = THREE.FrontSide;
-                            child.renderOrder = 1; 
+                            // 🚀 MATERIAL COLOR ROUTER
+                            if (!isDefaultOpenSCADYellow) {
+                                // Script has an explicit, custom color() rule applied
+                                if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                                    mat.vertexColors = true;
+                                    mat.color.setRGB(1, 1, 1);
+                                }
+                                if (mat.opacity < 1.0) {
+                                    mat.transparent = true;
+                                    if (mat.opacity < 0.8) {
+                                        mat.depthWrite = false;
+                                        mat.side = THREE.DoubleSide;
+                                    } else {
+                                        mat.depthWrite = true;
+                                        mat.side = THREE.FrontSide;
+                                    }
+                                } else {
+                                    mat.transparent = false;
+                                    mat.depthWrite = true;
+                                    mat.side = THREE.FrontSide;
+                                }
+                            } else {
+                                // Unstyled geometry -> Force your custom workspace color picker setting
+                                mat.vertexColors = false;
+                                mat.color.set(fallbackHexColor);
+                                mat.transparent = false;
+                                mat.depthWrite = true;
+                                mat.side = THREE.FrontSide;
+                                mat.opacity = 1.0;
+                            }
+
+                            mat.roughness = 0.5;
+                            mat.metalness = 0.1;
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
-                        }
-                        mat.needsUpdate = true;
-                    });
-                }
-            });
-            currentMesh.add(group);
-        };
+                            mat.needsUpdate = true;
+                        });
+                    }
+                });
+                masterGroup.add(solidGroup);
+            }
+        }
 
-        // Process whichever files were successfully generated
-        if (solidData) processPass(solidData, false);
-        if (ghostData) processPass(ghostData, true);
+        // ---------------------------------------------------------
+        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
+        // ---------------------------------------------------------
+        if (ghostData) {
+            const ghostBytes = new Uint8Array(ghostData);
+            const ghostGroup = loader.parse(ghostBytes.buffer);
+            
+            if (ghostGroup) {
+                ghostGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.computeVertexNormals();
+                        
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        materials.forEach((mat) => {
+                            if (!mat) return;
+                            
+                            // 🛠️ TRANSFORM INTO CLEAN SMOKY GLASS
+                            mat.vertexColors = false;   // Strip out unstyled background yellows
+                            mat.color.set('#222222');     // Dark, premium charcoal glass tint
+                            mat.transparent = true;
+                            mat.opacity = 0.55;           // Darkened and thickened (up from faint translucent levels)
+                            mat.depthWrite = false;       // Eliminates transparent layer clipping artifacts
+                            mat.side = THREE.DoubleSide;  // Draw both sides of the window panes
+                            mat.roughness = 0.15;         // Sleek, glossy surface finish
+                            mat.metalness = 0.1;
+                            
+                            if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
+                            mat.needsUpdate = true;
+                        });
+                    }
+                });
+                masterGroup.add(ghostGroup);
+            }
+        }
 
-        currentMesh.rotation.x = -Math.PI / 2;
+        // Complete compilation group assignment
+        currentMesh = masterGroup;
+        currentMesh.rotation.x = -Math.PI / 2; // Correct OpenSCAD coordinate system to Three.js space
         scene.add(currentMesh);
 
+        // Retain view camera positions smoothly
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
             controls.update();
         } else {
-            if (typeof frameModelInCamera === 'function') frameModelInCamera(currentMesh);
+            frameModelInCamera(currentMesh);
         }
 
-        if (typeof render === 'function') render(); 
+        if (typeof render === 'function') render();
         logToConsole("✨ 3D Render Canvas Updated Successfully.");
-        
+
     } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
         logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
     }
 }
 
