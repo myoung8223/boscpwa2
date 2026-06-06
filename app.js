@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "164"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "165"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1342,7 +1342,7 @@ function update3DModelViewer(raw3mfData) {
                         }
                     }
 
-                    // 🚀 THE FIXED ROUTER
+// 🚀 THE FIXED ROUTER
                     if (!isDefaultOpenSCADYellow) {
                         // 🎨 PIPELINE A: Script has an explicit, custom color() configuration applied
                         if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
@@ -1353,6 +1353,9 @@ function update3DModelViewer(raw3mfData) {
                         // Smart opacity polygon sorting configuration
                         if (mat.opacity < 1.0) {
                             mat.transparent = true;
+                            
+                            // 🔥 THE FIX: Push translucent shapes to the very back of the draw queue
+                            child.renderOrder = 999; 
                             
                             if (mat.opacity < 0.8) {
                                 mat.depthWrite = false; 
@@ -1365,16 +1368,21 @@ function update3DModelViewer(raw3mfData) {
                             mat.transparent = false;
                             mat.depthWrite = true;
                             mat.side = THREE.FrontSide;
+                            
+                            // 🔥 THE FIX: Force opaque inner shapes (like the red cube) to draw FIRST
+                            child.renderOrder = 1; 
                         }
                     } else {
                         // 🎨 PIPELINE B: Unstyled background mesh (Detected OpenSCAD default Yellow)
-                        // Setting vertexColors to false forces the shader to ignore the vertex stream arrays!
                         mat.vertexColors = false; 
                         mat.color.set(fallbackHexColor); // Force our workspace settings color choice
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.side = THREE.FrontSide;
                         mat.opacity = 1.0; 
+                        
+                        // 🔥 THE FIX: Unstyled solid shapes should also render FIRST
+                        child.renderOrder = 1; 
                     }
 
                     // Shading lighting attributes
