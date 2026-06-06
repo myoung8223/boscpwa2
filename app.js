@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "150"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "151"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1089,7 +1089,6 @@ btnExport.addEventListener('click', () => {
 });
 */
 
-/*
 // STL export feature
 btnExport.addEventListener('click', () => {
     if (!currentMesh) {
@@ -1116,7 +1115,7 @@ btnExport.addEventListener('click', () => {
         // This strips away the viewer's custom tilt entirely.
         // Try Math.PI / 2 first. If it's still inverted, change it to -Math.PI / 2
         exportClone.rotation.x = 0;
-        exportClone.rotation.y = -Math.PI / 2;
+        exportClone.rotation.y = 0;
         exportClone.rotation.z = Math.PI / 2;
         
         // 4. Force Three.js to completely rebuild and bake this absolute orientation
@@ -1141,66 +1140,6 @@ btnExport.addEventListener('click', () => {
         exportClone.traverse((child) => {
             if (child.isMesh && child.geometry) child.geometry.dispose();
         });
-        
-        logToConsole(`✔ Exported ${projectName}.stl successfully!`);
-    } catch (exportErr) {
-        logToConsole(`[ERROR]: Failed to export STL geometry: ${exportErr.message}`);
-        console.error(exportErr);
-    }
-});
-*/
-
-// STL export feature
-btnExport.addEventListener('click', () => {
-    if (!currentMesh) {
-        logToConsole(`[ERROR]: No model loaded to export.`);
-        return;
-    }
-    
-    try {
-        logToConsole(`⚙️ Aligning assembly orientation for STL export...`);
-        
-        const exporter = new THREE.STLExporter();
-        
-        // 1. Create a clean structural clone of the model
-        const exportClone = currentMesh.clone();
-        
-        // 2. Tier 1 Wrapper: Apply the exact tilt you found that gets it upright
-        const tiltWrapper = new THREE.Group();
-        tiltWrapper.add(exportClone);
-        tiltWrapper.rotation.z = Math.PI / 2; // Keeps the model standing upright
-        
-        // 3. Tier 2 Wrapper: Acts as a turntable spin around your print bed
-        const spinWrapper = new THREE.Group();
-        spinWrapper.add(tiltWrapper);
-        
-        // 💡 TUNING POINT: Change this axis to find your slicer's turntable direction
-        spinWrapper.rotation.x = Math.PI / 2; 
-        spinWrapper.rotation.y = 0;
-        spinWrapper.rotation.z = 0;
-        
-        // 4. 🔥 THE SEAMLESS PASSTHROUGH: Temporarily hook to the active scene graph
-        // This forces Three.js to calculate the nested world matrices flawlessly with zero layout drift.
-        exportClone.visible = false; // Hide it so it doesn't flash visually on screen
-        currentMesh.parent.add(spinWrapper);
-        spinWrapper.updateMatrixWorld(true);
-        
-        logToConsole(`📦 Packaging nested coordinate arrays into binary STL...`);
-        
-        // 5. Parse the outermost wrapper group
-        const stlResult = exporter.parse(spinWrapper, { binary: true });
-        
-        // 6. Housekeeping: Immediately detach the temporary wrappers from your live scene
-        currentMesh.parent.remove(spinWrapper);
-        
-        // 7. Package and Download
-        const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(stlBlob);
-        
-        const projectName = projectNameInput.value.trim() || "openscad_model";
-        link.download = `${projectName}.stl`; 
-        link.click();
         
         logToConsole(`✔ Exported ${projectName}.stl successfully!`);
     } catch (exportErr) {
