@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "182"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "183"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1364,36 +1364,33 @@ function update3DModelViewer(solidData, ghostData = null) {
                                     }
                                 }
                             }
+// 🚀 MATERIAL COLOR ROUTER (REVISED)
+                            let isCustomColor = false;
 
-							// 🚀 UPGRADED MATERIAL COLOR ROUTER
-                            let hasExplicitCustomColor = false;
-                            
-                            // Check if the vertex colors have been customized away from standard OpenSCAD defaults
-                            if (hasGeometryVertexColors) {
-                                const colorAttr = child.geometry.attributes.color;
-                                if (colorAttr && colorAttr.count > 0) {
-                                    const vR = colorAttr.getX(0), vG = colorAttr.getY(0), vB = colorAttr.getZ(0);
-                                    
-                                    // Check if it's the default OpenSCAD yellow scheme
-                                    const isDefaultYellow = (vR > 0.70 && vG > 0.55 && vB < 0.50 && (vR - vB) > 0.15);
-                                    
-                                    if (!isDefaultYellow) {
-                                        // Not default yellow! An explicit custom color statement (even pure white!) was run
-                                        hasExplicitCustomColor = true;
-                                    }
-                                }
-                            } else if (loaderFlaggedVertexColors) {
-                                // Fallback to check if the loader's materials internally flagged vertex profiles
+                            if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                                // If OpenSCAD packed colors into the geometry or material layers,
+                                // and it escaped our yellow detector, it's an explicit custom color!
                                 if (!isDefaultOpenSCADYellow) {
-                                    hasExplicitCustomColor = true;
+                                    isCustomColor = true;
+                                }
+                            } else if (mat.color) {
+                                // Double check if a custom color (like white) is explicitly on the material,
+                                // while ensuring it isn't the default OpenSCAD GUI yellow.
+                                const isWhite = (mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1);
+                                if (!isDefaultOpenSCADYellow || isWhite) {
+                                    isCustomColor = true;
                                 }
                             }
 
-                            // Enforce the color routing path based on explicit presence rules
-                            if (hasExplicitCustomColor) {
-                                // Script has an explicit, custom color() rule applied
-                                mat.vertexColors = true;
-                                mat.color.setRGB(1, 1, 1); // Keep base neutral so vertex layers pass cleanly
+                            // Route the rendering properties based on our findings
+                            if (isCustomColor) {
+                                // Keep the script's color configuration intact
+                                if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                                    mat.vertexColors = true;
+                                    mat.color.setRGB(1, 1, 1); // Neutralize base so vertex colors show perfectly
+                                } else {
+                                    mat.vertexColors = false; // Use the direct material color property
+                                }
                                 
                                 if (mat.opacity < 1.0) {
                                     mat.transparent = true;
