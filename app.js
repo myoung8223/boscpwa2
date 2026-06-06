@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "146"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "147"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1172,17 +1172,17 @@ btnExport.addEventListener('click', () => {
             }
         });
         
-		// 3. 🔥 FIX: Apply explicit 90-degree rotations around both the Y and Z axes
-        // Operation 1: 90-degree tilt (adjusting what maps to your slicer's layout)
-        // If it tilts the wrong way, change Math.PI / 2 to -Math.PI / 2
+		// 3. 🔥 CORRECTED SEQUENCE: Tilt first, then Spin
+        // Operation 1: The 90-degree tilt that gets it standing upright
         const rotateZMatrix = new THREE.Matrix4().makeRotationZ(Math.PI / 2);
         
-        // Operation 2: 90-degree spin around the vertical axis
-        // If it spins the wrong direction, change Math.PI / 2 to -Math.PI / 2
-        const rotateYMatrix = new THREE.Matrix4().makeRotationY(0);
+        // Operation 2: The 90-degree horizontal spin around the new vertical axis
+        // (Toggle between Math.PI / 2 and -Math.PI / 2 depending on your slicer's direction)
+        const rotateXMatrix = new THREE.Matrix4().makeRotationX(Math.PI / 2);
         
-        // Combine them sequentially: Apply the Y rotation, then compound it with the Z rotation
-        const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(rotateZMatrix, rotateYMatrix);
+        // 💡 CRITICAL CHANGE: Multiply as (X * Z). 
+        // This forces the Z-tilt to happen FIRST, and the X-spin to happen SECOND.
+        const finalExportMatrix = new THREE.Matrix4().multiplyMatrices(rotateXMatrix, rotateZMatrix);
         
         // Traverse the clone and bake this compound transformation directly into the geometry vertices
         exportClone.traverse((child) => {
