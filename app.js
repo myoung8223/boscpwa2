@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "187"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "188"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2418,7 +2418,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             skipWhitespaceAndComments();
         }
         
-        const effectiveGhost = isInsideGhostScope || hasGhostModifier;
+        let effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
         if (i >= len) return "";
 
@@ -2504,19 +2504,16 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return `${expression}\n`;
         }
         
-		if (isWrapper) {
+        if (isWrapper) {
             let normalizedExpr = expression.trim();
             const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
             
-            // 💡 REVISED PEEK LOGIC: Skip whitespace, comments, AND opening block braces
             let isGhostCsgBase = false;
             if (isCsgFilterOp && !stripAllGhostsMode) {
                 let peekIdx = i;
                 while (peekIdx < len) {
                     const char = code[peekIdx];
-                    
                     if (/\s/.test(char) || char === '{') { 
-                        // Skip whitespace and the opening block brace!
                         peekIdx++; 
                     }
                     else if (char === '/' && code[peekIdx+1] === '/') { 
@@ -2531,24 +2528,21 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                         break; 
                     }
                 }
-                
-                // If the first real geometry element we find starts with %, flag it!
                 if (code[peekIdx] === '%') {
                     isGhostCsgBase = true;
                 }
             }
 
-            // 🚀 THE UNION REWRITE TRICK:
             if (isGhostCsgBase) {
                 expression = expression.replace(/difference|intersection/, 'union');
+                // 💡 THE CURE: Elevate child parsing into ghost scope so they aren't turned into '*' solids!
+                effectiveGhost = true;
             }
 
-            // Now parse the children normally
             let childResult = parseComponent(effectiveGhost);
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
             let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
 
-            // Pass 1 Routing (Strip All Ghosts Mode)
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
                     return `cube([0.001, 0.001, 0.001], center=true);\n`;
@@ -2556,21 +2550,18 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 return `${expression}\n${childContent}`;
             }
 
-            // Pass 2 Routing (Standard Layout Execution)
             if (effectiveGhost) {
                 if (hasGhostModifier) {
                     return `__GHOST__() ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
             } else {
-                // If we rewrote this operator to a union, do NOT disable it with an asterisk!
                 if (shouldDisableWrapper && !isGhostCsgBase) {
                     return `* ${expression}\n${childContent}`;
                 }
                 return `${expression}\n${childContent}`;
             }
         } else {
-            // Leaf Statement Parsing Context
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
                     return `cube([0.001, 0.001, 0.001], center=true);\n`;
