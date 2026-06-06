@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "125"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "126"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -923,11 +923,28 @@ btnPreview.addEventListener('click', async () => {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
-            // 🔥 FIX 1: Pass correct environment paths so Fontconfig initializes correctly early on
+            
+            // 🔥 FIX 1: Pass correct environment paths
             ENV: {
                 OPENSCAD_FONT_PATH: '/fonts',
                 HOME: '/home/web_user'
             },
+            
+            // 🔥 FIX 2: Emscripten's preRun hook. 
+            // We map the fonts to the root directory BEFORE the engine wakes up!
+            preRun: [
+                function(inst) {
+                    for (const fontName of Object.keys(fontCache)) {
+                        try { 
+                            // Write directly to the root so 'use <font.ttf>' works perfectly
+                            inst.FS.writeFile(`/${fontName}`, fontCache[fontName]); 
+                        } catch (fsErr) { 
+                            console.error(`[ERROR] WASM FS failed to map font: /${fontName}`); 
+                        }
+                    }
+                }
+            ],
+
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -935,22 +952,7 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 🔥 FIX 2: Create standard sandboxed font paths before writing files
-        try { instance.FS.mkdir('/fonts'); } catch(e) {}
-        try { instance.FS.mkdir('/home'); } catch(e) {}
-        try { instance.FS.mkdir('/home/web_user'); } catch(e) {}
-        try { instance.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
-
-        // 📝 Map custom fonts, STLs, and SVGs (Keeping your exact mapping loops intact)
-        for (const fontName of Object.keys(fontCache)) {
-            try { 
-                // 🔥 FIX 3: Mirror the font cache across root, /fonts, and Fontconfig's home profile
-                instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); 
-                instance.FS.writeFile(`/fonts/${fontName}`, fontCache[fontName]); 
-                instance.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontCache[fontName]); 
-            } 
-            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /${fontName}`); }
-        }
+        // 📝 Map custom STLs and SVGs AFTER initialization (These are fine here!)
         for (const stlName of Object.keys(stlCache)) {
             try { instance.FS.writeFile(`/${stlName}`, stlCache[stlName]); logToConsole(`Mounted STL: /${stlName}`); } 
             catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
