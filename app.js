@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "169"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1073,54 +1073,30 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: COMPILE GHOSTS (Fresh companion instance to prevent closed context drops) ---
-        let ghostData = null;
-        if (hasGhost) {
-            logToConsole("📥 Processing Multi-Pass 3MF assembly...");
-            ghostRegex.lastIndex = 0; 
-            const ghostCode = scriptCode.replace(ghostRegex, '!'); // Solo the ghost elements
-            
-            try {
-                const ghostInstance = await openSCADFactory({
-                    noInitialRun: true,
-                    locateFile: (path) => `./libs/openscad.wasm`,
-                    ENV: { HOME: '/home/web_user' },
-                    preRun: [
-                        function(Module) {
-                            try { Module.FS.mkdir('/home'); } catch(e) {}
-                            try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
-                            try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
-                            for (const fontName of Object.keys(fontCache)) {
-                                try {
-                                    Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName]));
-                                } catch (fsErr) {}
-                            }
-                        }
-                    ],
-                    print: () => {}, // Quiet logs for the ghost evaluator
-                    printErr: () => {}
-                });
-
-                // Mirror custom assets to the temporary ghost environment 
-                for (const stlName of Object.keys(stlCache)) {
-                    try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
-                }
-                for (const svgName of Object.keys(svgCache)) {
-                    try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
-                }
-
-                ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
-                
-                // Run execution WITHOUT Manifold backend to bypass root assertion errors on solitary '!' rules
-                ghostInstance.callMain(['/ghost_input.scad', '-o', '/ghost.3mf']);
-                
-                if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
-                    ghostData = ghostInstance.FS.readFile('/ghost.3mf');
-                }
-            } catch (err) {
-                logToConsole("⚠️ Notice: Ghost evaluation skipped or dropped by engine core.");
-            }
-        }
+		// --- PASS 2: SOURCE-ISOLATED GHOST PASS ---
+		let ghostData = null;
+		if (hasGhost) {
+		    logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
+		    
+		    // 1. Structural scanner cleanly strips pure solids by turning them into ignored nodes (*) 
+		    // while fully preserving hulls, extrusions, and transform pipelines containing ghosts.
+		    const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
+		    
+		    // 2. Inject tracking signature header
+		    const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
+		    const ghostCode = ghostModuleHeader + cleanGhostCode;
+		    
+		    try {
+		        instance.FS.writeFile('/ghost_input.scad', ghostCode);
+		        instance.callMain(['/ghost_input.scad', '--backend=manifold', '-o', '/ghost.3mf']);
+		        
+		        if (instance.FS.analyzePath('/ghost.3mf').exists) {
+		            ghostData = instance.FS.readFile('/ghost.3mf');
+		        }
+		    } catch (err) {
+		        logToConsole("Pass 2: Ghost compilation completed.");
+		    }
+		}
 
         // ---------------------------------------------------------
         // 📦 ASSEMBLE & RENDER DISPATCH
@@ -2335,4 +2311,117 @@ if (leftPaneContainer && panelSplitGutter) {
         }
         document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
     });
+}
+
+function isolateOpenSCADGhosts(code) {
+    let i = 0;
+    const len = code.length;
+    
+    function skipWhitespaceAndComments() {
+        while (i < len) {
+            const ch = code[i];
+            if (/\s/.test(ch)) {
+                i++;
+            } else if (ch === '/' && code[i+1] === '/') {
+                while (i < len && code[i] !== '\n') i++;
+            } else if (ch === '/' && code[i+1] === '*') {
+                i += 2;
+                while (i < len && !(code[i] === '*' && code[i+1] === '/')) i++;
+                i += 2;
+            } else {
+                break;
+            }
+        }
+    }
+    
+    function parseComponent(isInsideGhostScope) {
+        skipWhitespaceAndComments();
+        if (i >= len) return "";
+        
+        let ch = code[i];
+        let hasGhostModifier = false;
+        
+        // Extract up-front modifiers
+        while (ch === '%' || ch === '*' || ch === '!' || ch === '#') {
+            if (ch === '%') hasGhostModifier = true;
+            i++;
+            skipWhitespaceAndComments();
+            if (i >= len) break;
+            ch = code[i];
+        }
+        
+        const effectiveGhost = isInsideGhostScope || hasGhostModifier;
+        
+        // Handle structural code blocks { ... }
+        if (ch === '{') {
+            i++; // consume '{'
+            let blockContent = "";
+            skipWhitespaceAndComments();
+            while (i < len && code[i] !== '}') {
+                blockContent += parseComponent(effectiveGhost);
+                skipWhitespaceAndComments();
+            }
+            if (i < len) i++; // consume '}'
+            
+            if (effectiveGhost) {
+                return hasGhostModifier ? `__GHOST__() { ${blockContent} } ` : `{ ${blockContent} } `;
+            } else {
+                return `{ ${blockContent} } `;
+            }
+        }
+        
+        // Handle statements, transformations, and primitives
+        let expression = "";
+        let parensCount = 0;
+        let isLeafStatement = false;
+        
+        while (i < len) {
+            let char = code[i];
+            expression += char;
+            if (char === '(') parensCount++;
+            if (char === ')') parensCount--;
+            i++;
+            
+            if (char === ';' && parensCount === 0) {
+                isLeafStatement = true;
+                break;
+            }
+            
+            // Look ahead outside parens to see if this wraps a child item next
+            if (parensCount === 0) {
+                let peek = i;
+                while (peek < len && /\s/.test(code[peek])) peek++;
+                // If followed by an opening brace or another code token, it's a wrapper operator
+                if (peek < len && (code[peek] === '{' || code[peek] === '%' || code[peek] === '*' || /[a-zA-Z0-9_]/.test(code[peek]))) {
+                    isLeafStatement = false;
+                    break;
+                }
+            }
+        }
+        
+        if (isLeafStatement) {
+            // Leaf node geometry (cube();, square();, etc.)
+            if (effectiveGhost) {
+                return hasGhostModifier ? `__GHOST__() ${expression} ` : `${expression} `;
+            } else {
+                // Pure solid node: cleanly disable it for the ghost pass
+                return `* ${expression} `;
+            }
+        } else {
+            // Operator wrapper node (hull(), linear_extrude(), translate(), for())
+            let childContent = parseComponent(effectiveGhost);
+            if (effectiveGhost) {
+                return hasGhostModifier ? `__GHOST__() ${expression} ${childContent}` : `${expression} ${childContent}`;
+            } else {
+                return `${expression} ${childContent}`;
+            }
+        }
+    }
+    
+    let output = "";
+    while (i < len) {
+        output += parseComponent(false);
+        skipWhitespaceAndComments();
+    }
+    return output;
 }
