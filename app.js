@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "134"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "135"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -912,21 +912,21 @@ hull() {                                   // hull example (D6 die)
         try {
             const customFonts = await getPersistentFonts();
             for (const font of customFonts) fontCache[font.filename] = font.binary;
-            if (customFonts.length > 0) logToConsole(`✔ Restored ${customFonts.length} custom fonts from local DB.`);
+            if (customFonts.length > 0) logToConsole(`✔ Restored ${customFonts.length} custom font(s) from local DB.`);
         } catch (err) { console.error(err); }
 
         // Restore Custom STL files
         try {
             const customStls = await getPersistentStls();
             for (const stl of customStls) stlCache[stl.filename] = stl.binary;
-            if (customStls.length > 0) logToConsole(`✔ Restored ${customStls.length} custom STLs from local DB.`);
+            if (customStls.length > 0) logToConsole(`✔ Restored ${customStls.length} custom STL(s) from local DB.`);
         } catch (err) { console.error(err); }
 
         // Restore Custom SVG files
         try {
             const customSvgs = await getPersistentSvgs();
             for (const svg of customSvgs) svgCache[svg.filename] = svg.binary;
-            if (customSvgs.length > 0) logToConsole(`✔ Restored ${customSvgs.length} custom SVGs from local DB.`);
+            if (customSvgs.length > 0) logToConsole(`✔ Restored ${customSvgs.length} custom SVG(s) from local DB.`);
         } catch (err) { console.error(err); }
 
         logToConsole('✅ Engine ready! Alter code and click Preview freely.');
@@ -973,7 +973,7 @@ btnPreview.addEventListener('click', async () => {
                             // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
                             const fontData = new Uint8Array(fontCache[fontName]);
                             Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
-                            console.log(`[preRun] Font Mapped: ~/.fonts/${fontName} (${fontData.length} bytes)`);
+                            //console.log(`[preRun] Font Mapped: ~/.fonts/${fontName} (${fontData.length} bytes)`);
                         } 
                         catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
                     }
