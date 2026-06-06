@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "181"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "182"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1365,13 +1365,36 @@ function update3DModelViewer(solidData, ghostData = null) {
                                 }
                             }
 
-                            // 🚀 MATERIAL COLOR ROUTER
-                            if (!isDefaultOpenSCADYellow) {
-                                // Script has an explicit, custom color() rule applied
-                                if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
-                                    mat.vertexColors = true;
-                                    mat.color.setRGB(1, 1, 1);
+							// 🚀 UPGRADED MATERIAL COLOR ROUTER
+                            let hasExplicitCustomColor = false;
+                            
+                            // Check if the vertex colors have been customized away from standard OpenSCAD defaults
+                            if (hasGeometryVertexColors) {
+                                const colorAttr = child.geometry.attributes.color;
+                                if (colorAttr && colorAttr.count > 0) {
+                                    const vR = colorAttr.getX(0), vG = colorAttr.getY(0), vB = colorAttr.getZ(0);
+                                    
+                                    // Check if it's the default OpenSCAD yellow scheme
+                                    const isDefaultYellow = (vR > 0.70 && vG > 0.55 && vB < 0.50 && (vR - vB) > 0.15);
+                                    
+                                    if (!isDefaultYellow) {
+                                        // Not default yellow! An explicit custom color statement (even pure white!) was run
+                                        hasExplicitCustomColor = true;
+                                    }
                                 }
+                            } else if (loaderFlaggedVertexColors) {
+                                // Fallback to check if the loader's materials internally flagged vertex profiles
+                                if (!isDefaultOpenSCADYellow) {
+                                    hasExplicitCustomColor = true;
+                                }
+                            }
+
+                            // Enforce the color routing path based on explicit presence rules
+                            if (hasExplicitCustomColor) {
+                                // Script has an explicit, custom color() rule applied
+                                mat.vertexColors = true;
+                                mat.color.setRGB(1, 1, 1); // Keep base neutral so vertex layers pass cleanly
+                                
                                 if (mat.opacity < 1.0) {
                                     mat.transparent = true;
                                     if (mat.opacity < 0.8) {
