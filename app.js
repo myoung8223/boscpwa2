@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "170"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "164"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1047,8 +1047,8 @@ btnPreview.addEventListener('click', async () => {
         // Write the code to the virtual filesystem
         instance.FS.writeFile('/input.scad', scriptCode);
         
-		// 🚀 YOUR CORRECT MANIFOLD PIPELINE (Now with Lazy Unions!)
-		instance.callMain(['/input.scad', '--backend=manifold', '--enable=lazy-unions', '-o', '/output.3mf']);
+        // 🚀 YOUR CORRECT MANIFOLD PIPELINE
+        instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']);
 
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
@@ -1295,7 +1295,7 @@ function update3DModelViewer(raw3mfData) {
         
         currentMesh = threemfGroup;
 
-// Pull the exact, active chosen hex value from your HTML color input box
+        // Pull the exact, active chosen hex value from your HTML color input box
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
         // Traverse the imported nodes to safely configure the hierarchy
@@ -1310,65 +1310,83 @@ function update3DModelViewer(raw3mfData) {
                 const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 
-                let hasTransparent = false;
-
                 materials.forEach((mat) => {
                     if (!mat) return;
+
+                    const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                     
-                    // Reset custom OpenSCAD vertex colors
-                    if (hasGeometryVertexColors || mat.vertexColors === true || mat.vertexColors === THREE.VertexColors) {
-                        mat.vertexColors = true;
-                        mat.color.setRGB(1, 1, 1);
+                    // 🔍 SPACE-PROOF DEFAULT YELLOW DETECTION
+                    let isDefaultOpenSCADYellow = false;
+
+                    // 1. Inspect material-level base color
+                    if (mat.color) {
+                        const r = mat.color.r;
+                        const g = mat.color.g;
+                        const b = mat.color.b;
+                        // Yellow/Orange profile: Red & Green are high, Blue is consistently low
+                        if (r > 0.75 && g > 0.60 && b < 0.65 && (r - b) > 0.20) {
+                            isDefaultOpenSCADYellow = true;
+                        }
                     }
 
-                    // Check if this specific material is glass/translucent
-                    if (mat.opacity < 0.99) {
-                        hasTransparent = true;
-                        mat.transparent = true;
-                        mat.depthWrite = false; // Stop glass faces from blocking each other
-                        mat.side = THREE.DoubleSide;
+                    // 2. Inspect vertex color stream attributes (where unstyled shapes get painted)
+                    if (hasGeometryVertexColors) {
+                        const colorAttr = child.geometry.attributes.color;
+                        if (colorAttr && colorAttr.count > 0) {
+                            const vR = colorAttr.getX(0);
+                            const vG = colorAttr.getY(0);
+                            const vB = colorAttr.getZ(0);
+                            if (vR > 0.75 && vG > 0.60 && vB < 0.65 && (vR - vB) > 0.20) {
+                                isDefaultOpenSCADYellow = true;
+                            }
+                        }
+                    }
+
+                    // 🚀 THE FIXED ROUTER
+                    if (!isDefaultOpenSCADYellow) {
+                        // 🎨 PIPELINE A: Script has an explicit, custom color() configuration applied
+                        if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                            mat.vertexColors = true;
+                            mat.color.setRGB(1, 1, 1); // Reset base material multiplier
+                        }
+                        
+                        // Smart opacity polygon sorting configuration
+                        if (mat.opacity < 1.0) {
+                            mat.transparent = true;
+                            
+                            if (mat.opacity < 0.8) {
+                                mat.depthWrite = false; 
+                                mat.side = THREE.DoubleSide; 
+                            } else {
+                                mat.depthWrite = true;  
+                                mat.side = THREE.FrontSide; // Eliminates transparent interior face clipping
+                            }
+                        } else {
+                            mat.transparent = false;
+                            mat.depthWrite = true;
+                            mat.side = THREE.FrontSide;
+                        }
                     } else {
+                        // 🎨 PIPELINE B: Unstyled background mesh (Detected OpenSCAD default Yellow)
+                        // Setting vertexColors to false forces the shader to ignore the vertex stream arrays!
+                        mat.vertexColors = false; 
+                        mat.color.set(fallbackHexColor); // Force our workspace settings color choice
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.side = THREE.FrontSide;
+                        mat.opacity = 1.0; 
                     }
-                    
+
+                    // Shading lighting attributes
                     mat.roughness = 0.5;
                     mat.metalness = 0.1;
                     
-                    // Wireframe toggler
                     if (typeof wireframeMode !== 'undefined') {
                         mat.wireframe = wireframeMode;
                     }
                     
                     mat.needsUpdate = true;
                 });
-
-                // 🪓 THE SPLITTER LOGIC:
-                if (hasTransparent && Array.isArray(child.material) && child.material.length > 1) {
-                    
-                    // 1. Original mesh gets forced to the background, and hides the glass
-                    child.renderOrder = 1;
-                    const solidMaterials = materials.map(m => {
-                        const mClone = m.clone();
-                        if (mClone.opacity < 0.99) mClone.visible = false; 
-                        return mClone;
-                    });
-                    child.material = solidMaterials;
-
-                    // 2. Clone the mesh, force it to the foreground, and hide the solids
-                    const glassClone = new THREE.Mesh(child.geometry, materials.map(m => {
-                        const mClone = m.clone();
-                        if (mClone.opacity >= 0.99) mClone.visible = false; 
-                        return mClone;
-                    }));
-                    glassClone.renderOrder = 999;
-                    
-                    // Add the glass layer directly to the parent group
-                    if (child.parent) {
-                        child.parent.add(glassClone);
-                    }
-                }
             }
         });
 
