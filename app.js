@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "174"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "175"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1083,8 +1083,8 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
             
             const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            //const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
-			const ghostModuleHeader = `module __GHOST__() { union() { scale([1.0001, 1.0001, 1.0001]) children(); } }\n`;
+            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n`;
+			//const ghostModuleHeader = `module __GHOST__() { union() { scale([1.0001, 1.0001, 1.0001]) children(); } }\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
             logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
@@ -1426,43 +1426,50 @@ function update3DModelViewer(solidData, ghostData = null) {
         }
 
 		// ---------------------------------------------------------
-        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
+        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (DEBUG OPAQUE MODE)
         // ---------------------------------------------------------
         if (ghostData) {
+            logToConsole("🪲 [DEBUG] Parsing Ghost Data Mesh Layer...");
             const ghostBytes = new Uint8Array(ghostData);
             const ghostGroup = loader.parse(ghostBytes.buffer);
             
             if (ghostGroup) {
+                let meshCount = 0;
                 ghostGroup.traverse((child) => {
                     if (child.isMesh) {
+                        meshCount++;
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
-                        // 🧊 Create a distinct, completely isolated transparent material instance
-                        const ghostGlassMaterial = new THREE.MeshStandardMaterial({
-                            color: 0xa5f3fc,          // Light cyan / ice glass
-                            transparent: true,        // Force alpha channels on
-                            opacity: 0.35,            // Clean overlay opacity density
-                            depthWrite: false,        // Prevents ghost planes from masking objects behind them
-                            side: THREE.DoubleSide,   // Render backfaces for interior hull/casing views
-                            roughness: 0.2,           // Sleek surface finish
-                            metalness: 0.1
+                        // 🚨 FORCE OPAQUE HIGH-VISIBILITY MATERIAL
+                        const debugMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xff00ff,          // Bright Neon Magenta / Fuchsia
+                            transparent: false,       // <-- BYPASS TRANSPARENCY ENTIRELY
+                            opacity: 1.0,             // Fully solid
+                            depthWrite: true,         // Standard depth behavior
+                            side: THREE.DoubleSide,   // Render inside and outside walls
+                            roughness: 0.4,
+                            metalness: 0.2
                         });
 
                         if (typeof wireframeMode !== 'undefined') {
-                            ghostGlassMaterial.wireframe = wireframeMode;
+                            debugMaterial.wireframe = wireframeMode;
                         }
 
-                        // Assign directly to both single and multi-material configurations
+                        // Override material arrays safely
                         if (Array.isArray(child.material)) {
-                            child.material = child.material.map(() => ghostGlassMaterial.clone());
+                            child.material = child.material.map(() => debugMaterial.clone());
                         } else {
-                            child.material = ghostGlassMaterial;
+                            child.material = debugMaterial;
                         }
                         
                         child.material.needsUpdate = true;
                     }
                 });
+                
+                logToConsole(`🪲 [DEBUG] Ghost Pass found and processed ${meshCount} meshes inside 3MF.`);
                 masterGroup.add(ghostGroup);
+            } else {
+                logToConsole("🪲 [DEBUG ALERT] Ghost 3MF parsed into an empty group object.");
             }
         }
 
