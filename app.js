@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "128"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "129"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -924,9 +924,27 @@ btnPreview.addEventListener('click', async () => {
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
             ENV: {
-                OPENSCAD_FONT_PATH: '/fonts', // Tells Fontconfig exactly where to look!
+                OPENSCAD_FONT_PATH: '/fonts', // Tells Fontconfig exactly where to look
                 HOME: '/home/web_user'
             },
+            
+            // 🔥 THE FIX: Setup the fonts folder and inject files BEFORE boot!
+            preRun: [
+                function(Module) {
+                    // 1. Create the fonts directory in the virtual filesystem
+                    try { Module.FS.mkdir('/fonts'); } catch(e) {}
+
+                    // 2. Write the custom fonts into it so Fontconfig sees them on boot
+                    for (const fontName of Object.keys(fontCache)) {
+                        try { 
+                            Module.FS.writeFile(`/fonts/${fontName}`, fontCache[fontName]); 
+                            console.log(`[preRun] Mounted Font: /fonts/${fontName}`);
+                        } 
+                        catch (fsErr) { console.error(`[ERROR] Failed to map: /fonts/${fontName}`); }
+                    }
+                }
+            ],
+
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -934,19 +952,7 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 📁 Create the /fonts directory in the virtual filesystem
-        try { instance.FS.mkdir('/fonts'); } catch(e) {}
-
-        // 📝 Map custom Fonts EXACTLY into the /fonts directory
-        for (const fontName of Object.keys(fontCache)) {
-            try { 
-                instance.FS.writeFile(`/fonts/${fontName}`, fontCache[fontName]); 
-                logToConsole(`Mounted Font: /fonts/${fontName}`);
-            } 
-            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /fonts/${fontName}`); }
-        }
-
-        // 📝 Map custom STLs and SVGs to the root directory
+        // 📝 Map custom STLs and SVGs AFTER boot (These don't need Fontconfig)
         for (const stlName of Object.keys(stlCache)) {
             try { instance.FS.writeFile(`/${stlName}`, stlCache[stlName]); logToConsole(`Mounted STL: /${stlName}`); } 
             catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
@@ -959,16 +965,16 @@ btnPreview.addEventListener('click', async () => {
         // Write the code to the virtual filesystem
         instance.FS.writeFile('/input.scad', scriptCode);
         
-        // 🚀 YOUR CORRECT MANIFOLD PIPELINE (Kept untouched!)
+        // 🚀 YOUR CORRECT MANIFOLD PIPELINE
         instance.callMain(['/input.scad', '--backend=manifold', '-o', '/output.3mf']);
 
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
             
-            // 🚀 Pass the raw Uint8Array data array directly to the viewer!
+            // 🚀 Pass the raw Uint8Array data array directly to the viewer
             update3DModelViewer(outputData);
             
-            // 💾 Keep this intact so your standalone download button handler still pulls from it cleanly
+            // 💾 Keep this intact for standalone downloads
             currentStlBlob = new Blob([outputData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
             
             if (placeholderText) placeholderText.style.display = 'none';
