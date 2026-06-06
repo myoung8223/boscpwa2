@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "179"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "180"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1407,6 +1407,58 @@ function update3DModelViewer(solidData, ghostData = null) {
             }
         }
 
+// ---------------------------------------------------------
+        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
+        // ---------------------------------------------------------
+        if (ghostData) {
+            logToConsole("🪲 [DEBUG] Parsing Ghost Data Mesh Layer...");
+            const ghostBytes = new Uint8Array(ghostData);
+            const ghostGroup = loader.parse(ghostBytes.buffer);
+            
+            if (ghostGroup) {
+                let meshCount = 0;
+                
+                // 💡 CRITICAL: Force the transparent layer to render AFTER all solid items
+                ghostGroup.renderOrder = 1;
+
+                ghostGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        meshCount++;
+                        if (child.geometry) child.geometry.computeVertexNormals();
+                        
+                        // ✨ PREMIUM CYAN SMOKY ICE-GLASS MATERIAL
+                        const glassMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xa5f3fc,          // 🧊 Light cyan/ice glass tint
+                            transparent: true,        // Enable alpha mapping channels
+                            opacity: 0.30,            // Smooth, subtle translucency density
+                            depthWrite: false,        // Prevents see-through faces from cutting out solids
+                            side: THREE.DoubleSide,   // Render both outer and inner interior walls
+                            roughness: 0.15,          // Glossy, polished glass surface finish
+                            metalness: 0.1            // Faint metallic edge sheen
+                        });
+
+                        if (typeof wireframeMode !== 'undefined') {
+                            glassMaterial.wireframe = wireframeMode;
+                        }
+
+                        // Apply to single and multi-material assets uniformly
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => glassMaterial.clone());
+                        } else {
+                            child.material = glassMaterial;
+                        }
+                        
+                        child.material.needsUpdate = true;
+                    }
+                });
+                
+                logToConsole(`🪲 [DEBUG] Ghost Pass found and processed ${meshCount} glass meshes.`);
+                masterGroup.add(ghostGroup);
+            }
+        }
+		
+		
+		/*
 		// ---------------------------------------------------------
         // 💎 PASS 2: GHOST GEOMETRY PROCESSING (DEBUG OPAQUE MODE)
         // ---------------------------------------------------------
@@ -1454,6 +1506,7 @@ function update3DModelViewer(solidData, ghostData = null) {
                 logToConsole("🪲 [DEBUG ALERT] Ghost 3MF parsed into an empty group object.");
             }
         }
+		*/
 
         // Complete compilation group assignment
         currentMesh = masterGroup;
