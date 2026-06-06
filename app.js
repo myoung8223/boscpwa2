@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "126"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "127"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -923,28 +923,10 @@ btnPreview.addEventListener('click', async () => {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`, // 💡 Critical path mapping!
-            
-            // 🔥 FIX 1: Pass correct environment paths
             ENV: {
                 OPENSCAD_FONT_PATH: '/fonts',
                 HOME: '/home/web_user'
             },
-            
-            // 🔥 FIX 2: Emscripten's preRun hook. 
-            // We map the fonts to the root directory BEFORE the engine wakes up!
-            preRun: [
-                function(inst) {
-                    for (const fontName of Object.keys(fontCache)) {
-                        try { 
-                            // Write directly to the root so 'use <font.ttf>' works perfectly
-                            inst.FS.writeFile(`/${fontName}`, fontCache[fontName]); 
-                        } catch (fsErr) { 
-                            console.error(`[ERROR] WASM FS failed to map font: /${fontName}`); 
-                        }
-                    }
-                }
-            ],
-
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -952,7 +934,14 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // 📝 Map custom STLs and SVGs AFTER initialization (These are fine here!)
+        // 📝 Map custom Fonts, STLs, and SVGs to the root directory
+        for (const fontName of Object.keys(fontCache)) {
+            try { 
+                instance.FS.writeFile(`/${fontName}`, fontCache[fontName]); 
+                logToConsole(`Mounted Font: /${fontName}`);
+            } 
+            catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map font: /${fontName}`); }
+        }
         for (const stlName of Object.keys(stlCache)) {
             try { instance.FS.writeFile(`/${stlName}`, stlCache[stlName]); logToConsole(`Mounted STL: /${stlName}`); } 
             catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
@@ -971,7 +960,7 @@ btnPreview.addEventListener('click', async () => {
         if (instance.FS.analyzePath('/output.3mf').exists) {
             const outputData = instance.FS.readFile('/output.3mf');
             
-            // 🚀 STEP 1 FIX: Pass the raw Uint8Array data array directly to the viewer!
+            // 🚀 Pass the raw Uint8Array data array directly to the viewer!
             update3DModelViewer(outputData);
             
             // 💾 Keep this intact so your standalone download button handler still pulls from it cleanly
