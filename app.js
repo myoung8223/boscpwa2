@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "171"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "169"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -989,7 +989,7 @@ btnPreview.addEventListener('click', async () => {
     }
 
     clearErrorHighlights();
-    logToConsole('--- Generating Multi-Pass Preview ---');
+    logToConsole('--- Generating Preview ---');
     const scriptCode = jar.toString(); 
     const errorLogs = [];
 
@@ -998,21 +998,31 @@ btnPreview.addEventListener('click', async () => {
         const instance = await openSCADFactory({
             noInitialRun: true,
             locateFile: (path) => `./libs/openscad.wasm`,
-            ENV: { HOME: '/home/web_user' },
+            
+            // 💡 Tell Fontconfig exactly where the "user" home folder is
+            ENV: {
+                HOME: '/home/web_user' 
+            },
+            
+            // 🔥 DROP FONTS INTO THE LINUX USER FONT FOLDER BEFORE BOOT!
             preRun: [
                 function(Module) {
+                    // Recreate the standard Linux user fonts directory
                     try { Module.FS.mkdir('/home'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                     try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
 
                     for (const fontName of Object.keys(fontCache)) {
                         try { 
+                            // 💡 CRITICAL: Must be Uint8Array to avoid WASM string-corruption crash!
                             const fontData = new Uint8Array(fontCache[fontName]);
                             Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData); 
-                        } catch (fsErr) {}
+                        } 
+                        catch (fsErr) { console.error(`[ERROR] Failed to map font: ${fontName}`); }
                     }
                 }
             ],
+
             print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
             printErr: (text) => {
                 errorLogs.push(text);
@@ -1020,24 +1030,33 @@ btnPreview.addEventListener('click', async () => {
             }
         });
 
-        // Map Assets
+        // 📝 Map custom STLs and SVGs as strict Uint8Arrays to the main instance
         for (const stlName of Object.keys(stlCache)) {
-            try { instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); logToConsole(`Mounted STL: /${stlName}`); } catch (fsErr) {}
+            try { 
+                instance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); 
+                logToConsole(`Mounted STL: /${stlName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map STL: /${stlName}`); }
         }
         for (const svgName of Object.keys(svgCache)) {
-            try { instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); logToConsole(`Mounted SVG: /${svgName}`); } catch (fsErr) {}
+            try { 
+                instance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); 
+                logToConsole(`Mounted SVG: /${svgName}`); 
+            } catch (fsErr) { logToConsole(`[ERROR] WASM FS failed to map SVG: /${svgName}`); }
         }
 
         // ---------------------------------------------------------
-        // 🚀 THE CHROMA-KEY MACRO PIPELINE
+        // 🚀 THE REGEX MACRO PIPELINE
         // ---------------------------------------------------------
+        
+        // 1. Safely isolate % modifiers (ignoring math modulo operations)
         const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
 
+        // Reset the search index immediately after testing
         const hasGhost = ghostRegex.test(scriptCode);
         ghostRegex.lastIndex = 0; 
 
-        // --- PASS 1: COMPILE SOLIDS (Replace % with * to turn off ghosts for STL Export) ---
-        const solidCode = scriptCode.replace(ghostRegex, '*'); 
+        // --- PASS 1: COMPILE SOLIDS ---
+        const solidCode = scriptCode.replace(ghostRegex, '*'); // Turn off ghosts
         instance.FS.writeFile('/solid_input.scad', solidCode);
         
         let solidData = null;
@@ -1046,7 +1065,7 @@ btnPreview.addEventListener('click', async () => {
             if (instance.FS.analyzePath('/solid.3mf').exists) {
                 solidData = instance.FS.readFile('/solid.3mf');
                 
-                // Keep ONLY the solid geometry tied to the Export button so ghosts aren't 3D printed!
+                // 💾 Save ONLY the solid parts for the 3D Printer Export button
                 currentStlBlob = new Blob([solidData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
                 btnExport.disabled = false;
             }
@@ -1054,18 +1073,15 @@ btnPreview.addEventListener('click', async () => {
             logToConsole("Pass 1: No solid geometry detected.");
         }
 
-        // --- PASS 2: COMPILE PREVIEW (Replace % with Chroma-Key Magenta) ---
-        let previewData = null;
-        
+        // --- PASS 2: COMPILE GHOSTS (Fresh companion instance to prevent closed context drops) ---
+        let ghostData = null;
         if (hasGhost) {
-            logToConsole("📥 Processing Chroma-Key Ghost pass...");
+            logToConsole("📥 Processing Multi-Pass 3MF assembly...");
             ghostRegex.lastIndex = 0; 
-            
-			// 🎨 Magic! We paint every % object with an impossible cryptographic float signature
-			const previewCode = scriptCode.replace(ghostRegex, 'color([0.98765, 0.01234, 0.87654]) ');
+            const ghostCode = scriptCode.replace(ghostRegex, '!'); // Solo the ghost elements
             
             try {
-                const previewInstance = await openSCADFactory({
+                const ghostInstance = await openSCADFactory({
                     noInitialRun: true,
                     locateFile: (path) => `./libs/openscad.wasm`,
                     ENV: { HOME: '/home/web_user' },
@@ -1075,7 +1091,9 @@ btnPreview.addEventListener('click', async () => {
                             try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
                             try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
                             for (const fontName of Object.keys(fontCache)) {
-                                try { Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName])); } catch (fsErr) {}
+                                try {
+                                    Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, new Uint8Array(fontCache[fontName]));
+                                } catch (fsErr) {}
                             }
                         }
                     ],
@@ -1083,34 +1101,36 @@ btnPreview.addEventListener('click', async () => {
                     printErr: () => {}
                 });
 
-                for (const stlName of Object.keys(stlCache)) { try { previewInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {} }
-                for (const svgName of Object.keys(svgCache)) { try { previewInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {} }
+                // Mirror custom assets to the temporary ghost environment 
+                for (const stlName of Object.keys(stlCache)) {
+                    try { ghostInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
+                }
+                for (const svgName of Object.keys(svgCache)) {
+                    try { ghostInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
+                }
 
-                previewInstance.FS.writeFile('/preview_input.scad', previewCode);
+                ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
                 
-                // Compile the scene with the Magenta highlights
-                previewInstance.callMain(['/preview_input.scad', '--backend=manifold', '-o', '/preview.3mf']);
+                // Run execution WITHOUT Manifold backend to bypass root assertion errors on solitary '!' rules
+                ghostInstance.callMain(['/ghost_input.scad', '-o', '/ghost.3mf']);
                 
-                if (previewInstance.FS.analyzePath('/preview.3mf').exists) {
-                    previewData = previewInstance.FS.readFile('/preview.3mf');
+                if (ghostInstance.FS.analyzePath('/ghost.3mf').exists) {
+                    ghostData = ghostInstance.FS.readFile('/ghost.3mf');
                 }
             } catch (err) {
-                logToConsole("⚠️ Notice: Preview generation dropped by engine core.");
+                logToConsole("⚠️ Notice: Ghost evaluation skipped or dropped by engine core.");
             }
-        } else {
-            // If no ghosts exist, previewData is exactly identical to solidData
-            previewData = solidData;
         }
 
         // ---------------------------------------------------------
         // 📦 ASSEMBLE & RENDER DISPATCH
         // ---------------------------------------------------------
-        if (previewData) {
-            // Hand the combined file to the Viewer (which erases the Magenta)
-            update3DModelViewer(previewData);
+        if (solidData || ghostData) {
+            update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
+            logToConsole("✨ 3D Render Canvas Updated Successfully.");
 
-            // Clean up virtual filesystem
+            // Clean up the virtual core filesystem to prevent browser leaks
             try { if (solidData) instance.FS.unlink('/solid.3mf'); } catch(e){}
             try { if (instance.FS.analyzePath('/solid_input.scad').exists) instance.FS.unlink('/solid_input.scad'); } catch(e){}
             
@@ -1287,9 +1307,9 @@ function init3DWorkspace() {
 }
 
 // ==========================================================================
-// 🎨 SINGLE-PASS 3MF VIEWER (Chroma-Key Magic Ghosts)
+// 🎨 MULTI-PASS 3MF VIEWER (Solids + Translucent Ghosts)
 // ==========================================================================
-function update3DModelViewer(previewData) {
+function update3DModelViewer(solidData, ghostData = null) {
     if (!workspaceInitialized) init3DWorkspace();
 
     let savedPosition = null;
@@ -1299,6 +1319,7 @@ function update3DModelViewer(previewData) {
         savedTarget = controls.target.clone();
     }
 
+    // Safely remove the old mesh from the scene and free memory
     if (currentMesh) {
         scene.remove(currentMesh);
         currentMesh.traverse((child) => {
@@ -1311,11 +1332,14 @@ function update3DModelViewer(previewData) {
         currentMesh = null;
     }
 
-    logToConsole("📥 Processing Chroma-Key 3MF graphics layout...");
+    logToConsole("📥 Processing 3MF multi-pass graphics layout...");
 
     try {
-        if (typeof fflate === 'undefined') throw new Error("fflate.js missing.");
+        if (typeof fflate === 'undefined') {
+            throw new Error("fflate.js library is missing or failed to load. Check your index.html tags!");
+        }
 
+        // THE COMPATIBILITY LAYER FOR THREE.JS 3MF LOADER
         window.JSZip = {
             loadAsync: async function(data) {
                 const bytes = new Uint8Array(data);
@@ -1336,124 +1360,140 @@ function update3DModelViewer(previewData) {
         };
 
         const loader = new THREE.ThreeMFLoader();
+        const masterGroup = new THREE.Group();
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
-        
-        const previewBytes = new Uint8Array(previewData);
-        const previewGroup = loader.parse(previewBytes.buffer);
-        
-        if (previewGroup) {
-            previewGroup.traverse((child) => {
-                if (child.isMesh) {
-                    if (child.geometry) child.geometry.computeVertexNormals();
 
-                    const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
-                    const materials = Array.isArray(child.material) ? child.material : [child.material];
+        // ---------------------------------------------------------
+        // 🎨 PASS 1: CORE SOLID GEOMETRY PROCESSING
+        // ---------------------------------------------------------
+        if (solidData) {
+            const solidBytes = new Uint8Array(solidData);
+            const solidGroup = loader.parse(solidBytes.buffer);
+            
+            if (solidGroup) {
+                solidGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.computeVertexNormals();
 
-                    materials.forEach((mat) => {
-                        if (!mat) return;
-                        
-                        const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
-                        
-						// 🔍 1. DETECT CRYPTOGRAPHIC GHOST SIGNATURE (Impossible to trigger by accident)
-                        let isGhost = false;
-                        
-                        // Look for the exact [0.98765, 0.01234, 0.87654] signature (allowing tiny WebGL rounding variance)
-                        const isMagicSignature = (r, g, b) => {
-                            return (r > 0.987 && r < 0.988) && 
-                                   (g > 0.012 && g < 0.013) && 
-                                   (b > 0.876 && b < 0.877);
-                        };
+                        const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
 
-                        if (mat.color && isMagicSignature(mat.color.r, mat.color.g, mat.color.b)) {
-                            isGhost = true;
-                        }
-                        
-                        if (hasGeometryVertexColors && !isGhost) {
-                            const colorAttr = child.geometry.attributes.color;
-                            if (colorAttr && colorAttr.count > 0) {
-                                const vR = colorAttr.getX(0);
-                                const vG = colorAttr.getY(0);
-                                const vB = colorAttr.getZ(0);
-                                if (isMagicSignature(vR, vG, vB)) {
-                                    isGhost = true;
-                                }
-                            }
-                        }
-
-                        // 🔍 2. DETECT DEFAULT YELLOW (Catch OpenSCAD defaults)
-                        let isDefaultYellow = false;
-                        if (!isGhost) {
+                        materials.forEach((mat) => {
+                            if (!mat) return;
+                            const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
+                            
+                            // 🔍 WIDENED DETECTOR: Catch variant default OpenSCAD yellows/oranges safely
+                            let isDefaultOpenSCADYellow = false;
                             if (mat.color) {
                                 const r = mat.color.r, g = mat.color.g, b = mat.color.b;
-                                if (r > 0.70 && g > 0.55 && b < 0.50 && (r - b) > 0.15) isDefaultYellow = true;
+                                if (r > 0.70 && g > 0.55 && b < 0.50 && (r - b) > 0.15) {
+                                    isDefaultOpenSCADYellow = true;
+                                }
                             }
-                            if (hasGeometryVertexColors && !isDefaultYellow) {
+                            if (hasGeometryVertexColors) {
                                 const colorAttr = child.geometry.attributes.color;
                                 if (colorAttr && colorAttr.count > 0) {
                                     const vR = colorAttr.getX(0), vG = colorAttr.getY(0), vB = colorAttr.getZ(0);
-                                    if (vR > 0.70 && vG > 0.55 && vB < 0.50 && (vR - vB) > 0.15) isDefaultYellow = true;
+                                    if (vR > 0.70 && vG > 0.55 && vB < 0.50 && (vR - vB) > 0.15) {
+                                        isDefaultOpenSCADYellow = true;
+                                    }
                                 }
                             }
-                        }
 
-                        // 🚀 3. MATERIAL ROUTER
-                        if (isGhost) {
-                            // 💎 GHOST PIPELINE: Erase the Magenta and Paint as Smoky Glass!
-                            mat.vertexColors = false;   
-                            mat.color.set('#444444');     // Your preferred slate/smoky tint
-                            mat.transparent = true;
-                            mat.opacity = 0.40;           
-                            mat.depthWrite = false;       
-                            mat.side = THREE.DoubleSide;  
-                            mat.roughness = 0.15;         
-                            mat.metalness = 0.1;
-                        } else if (isDefaultYellow) {
-                            // 🟨 UNSTYLED PIPELINE: Force your custom workspace color
-                            mat.vertexColors = false;
-                            mat.color.set(fallbackHexColor);
-                            mat.transparent = false;
-                            mat.depthWrite = true;
-                            mat.side = THREE.FrontSide;
-                            mat.opacity = 1.0;
-                            mat.roughness = 0.5;
-                            mat.metalness = 0.1;
-                        } else {
-                            // 🎨 CUSTOM SOLID PIPELINE: User explicitly used color() in code
-                            if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
-                                mat.vertexColors = true;
-                                mat.color.setRGB(1, 1, 1);
-                            }
-                            if (mat.opacity < 1.0) {
-                                mat.transparent = true;
-                                if (mat.opacity < 0.8) {
-                                    mat.depthWrite = false;
-                                    mat.side = THREE.DoubleSide;
+                            // 🚀 MATERIAL COLOR ROUTER
+                            if (!isDefaultOpenSCADYellow) {
+                                // Script has an explicit, custom color() rule applied
+                                if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
+                                    mat.vertexColors = true;
+                                    mat.color.setRGB(1, 1, 1);
+                                }
+                                if (mat.opacity < 1.0) {
+                                    mat.transparent = true;
+                                    if (mat.opacity < 0.8) {
+                                        mat.depthWrite = false;
+                                        mat.side = THREE.DoubleSide;
+                                    } else {
+                                        mat.depthWrite = true;
+                                        mat.side = THREE.FrontSide;
+                                    }
                                 } else {
+                                    mat.transparent = false;
                                     mat.depthWrite = true;
                                     mat.side = THREE.FrontSide;
                                 }
                             } else {
+                                // Unstyled geometry -> Force your custom workspace color picker setting
+                                mat.vertexColors = false;
+                                mat.color.set(fallbackHexColor);
                                 mat.transparent = false;
                                 mat.depthWrite = true;
                                 mat.side = THREE.FrontSide;
+                                mat.opacity = 1.0;
                             }
+
                             mat.roughness = 0.5;
                             mat.metalness = 0.1;
-                        }
-
-                        if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
-                        mat.needsUpdate = true;
-                    });
-                }
-            });
-            currentMesh = previewGroup;
+                            if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
+                            mat.needsUpdate = true;
+                        });
+                    }
+                });
+                masterGroup.add(solidGroup);
+            }
         }
 
-        if (currentMesh) {
-            currentMesh.rotation.x = -Math.PI / 2;
-            scene.add(currentMesh);
+        // ---------------------------------------------------------
+        // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
+        // ---------------------------------------------------------
+        if (ghostData) {
+            const ghostBytes = new Uint8Array(ghostData);
+            const ghostGroup = loader.parse(ghostBytes.buffer);
+            
+            if (ghostGroup) {
+                ghostGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        if (child.geometry) child.geometry.computeVertexNormals();
+                        
+                        const materials = Array.isArray(child.material) ? child.material : [child.material];
+                        materials.forEach((mat) => {
+                            if (!mat) return;
+
+							/*
+                            // 🛠️ TRANSFORM INTO CLEAN SMOKY GLASS
+                            mat.vertexColors = false;   // Strip out unstyled background yellows
+                            mat.color.set('#222222');     // Dark, premium charcoal glass tint
+                            mat.transparent = true;
+                            mat.opacity = 0.55;           // Darkened and thickened (up from faint translucent levels)
+                            mat.depthWrite = false;       // Eliminates transparent layer clipping artifacts
+                            mat.side = THREE.DoubleSide;  // Draw both sides of the window panes
+                            mat.roughness = 0.15;         // Sleek, glossy surface finish
+                            mat.metalness = 0.1;
+							*/
+
+							mat.vertexColors = false;   
+							mat.color.set('#a5f3fc');     // 🧊 Vibrant light cyan / ice glass
+							mat.transparent = true;
+							mat.opacity = 0.30;           // High legibility overlay
+							mat.depthWrite = false;       
+							mat.side = THREE.DoubleSide;  
+							mat.roughness = 0.2;          
+							mat.metalness = 0.1;
+							
+                            if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
+                            mat.needsUpdate = true;
+                        });
+                    }
+                });
+                masterGroup.add(ghostGroup);
+            }
         }
 
+        // Complete compilation group assignment
+        currentMesh = masterGroup;
+        currentMesh.rotation.x = -Math.PI / 2; // Correct OpenSCAD coordinate system to Three.js space
+        scene.add(currentMesh);
+
+        // Retain view camera positions smoothly
         if (savedPosition && savedTarget) {
             camera.position.copy(savedPosition);
             controls.target.copy(savedTarget);
@@ -1466,7 +1506,12 @@ function update3DModelViewer(previewData) {
         logToConsole("✨ 3D Render Canvas Updated Successfully.");
 
     } catch (err) {
+        console.error("3MF Parse Pipeline Failure via fflate:", err);
         logToConsole(`[ERROR] 3D Viewer pipeline failed: ${err.message}`);
+        if (placeholderText) {
+            placeholderText.textContent = "❌ Render Error (Check Console)";
+            placeholderText.style.display = 'flex';
+        }
     }
 }
 
