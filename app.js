@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "135"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "136"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -611,6 +611,7 @@ if (btnCameraReset) {
 }
 */
 
+/*
 // 📷 Reusable function to perfectly frame any Three.js mesh
 function frameModelInCamera(mesh) {
     if (!camera || !controls) return;
@@ -638,6 +639,48 @@ function frameModelInCamera(mesh) {
         controls.target.copy(center); 
         camera.lookAt(center);
     } else {
+        camera.position.set(40, 40, 40);
+        controls.target.set(0, 0, 0); 
+        camera.lookAt(0, 0, 0);
+    }
+    controls.update();
+}
+*/
+
+// 📷 Reusable function to perfectly frame any Three.js mesh or group structure
+function frameModelInCamera(mesh) {
+    if (!camera || !controls) return;
+
+    if (mesh) {
+        // Create an empty bounding box
+        const boundingBox = new THREE.Box3();
+        // Automatically measures all components inside a Group or a Mesh
+        boundingBox.setFromObject(mesh);
+        
+        const size = new THREE.Vector3();
+        boundingBox.getSize(size);
+        const center = new THREE.Vector3();
+        boundingBox.getCenter(center);
+        
+        const maxDim = Math.max(size.x, size.y, size.z);
+        
+        // Ensure we handle cases where the object has zero volume/hasn't rendered yet
+        const validDim = maxDim > 0 ? maxDim : 50;
+        
+        const padding = 1.2; 
+        const fov = camera.fov * (Math.PI / 180);
+        let cameraDistance = Math.abs(validDim / 2 / Math.tan(fov / 2)) * padding;
+        
+        if (camera.aspect < 1) cameraDistance /= camera.aspect;
+
+        // Angle the camera slightly down at the model's center bounds
+        const viewDirection = new THREE.Vector3(1, 1.2, 1).normalize();
+        camera.position.copy(center).add(viewDirection.multiplyScalar(cameraDistance));
+        
+        controls.target.copy(center); 
+        camera.lookAt(center);
+    } else {
+        // Fallback default position if no model exists on screen
         camera.position.set(40, 40, 40);
         controls.target.set(0, 0, 0); 
         camera.lookAt(0, 0, 0);
