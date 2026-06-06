@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "137"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "138"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1091,25 +1091,32 @@ btnExport.addEventListener('click', () => {
 
 // STL export feature
 btnExport.addEventListener('click', () => {
-    // 🛡️ Ensure there is a model actively rendered on screen
     if (!currentMesh) {
         logToConsole(`[ERROR]: No model loaded to export.`);
         return;
     }
     
     try {
-        logToConsole(`⚙️ Packaging geometry via Three.js STLExporter...`);
+        logToConsole(`⚙️ Correcting orientation and packaging STL via Three.js...`);
         
-        // 🚀 Initialize the Exporter
         const exporter = new THREE.STLExporter();
         
-        // Parse the current active group/mesh structure out into a raw Binary STL Array
-        const stlResult = exporter.parse(currentMesh, { binary: true });
+        // 1. Clone the current mesh hierarchy so we don't mess up the visual screen layout
+        const exportClone = currentMesh.clone();
         
-        // Turn the raw array data into an actual downloadable STL File Blob
+        // 2. Clear any transformations or parent matrices that Three.js 3MFLoader forced
+        exportClone.updateMatrixWorld(true);
+        
+        // 3. Counter-rotate it by 90 degrees around the Y axis to restore OpenSCAD alignment
+        // (If it's rotated the wrong direction, change -Math.PI/2 to Math.PI/2)
+        exportClone.rotation.y += -Math.PI / 2; 
+        exportClone.updateMatrixWorld(true);
+        
+        // 4. Parse the corrected clone instead of the visual screen mesh
+        const stlResult = exporter.parse(exportClone, { binary: true });
+        
+        // 5. Package and Download
         const stlBlob = new Blob([stlResult], { type: 'application/octet-stream' });
-        
-        // Trigger a clean browser anchor download
         const link = document.createElement('a');
         link.href = URL.createObjectURL(stlBlob);
         
@@ -1117,7 +1124,7 @@ btnExport.addEventListener('click', () => {
         link.download = `${projectName}.stl`; 
         link.click();
         
-        logToConsole(`✔ Exported ${projectName}.stl successfully!`);
+        logToConsole(`✔ Exported ${projectName}.stl with corrected axes successfully!`);
     } catch (exportErr) {
         logToConsole(`[ERROR]: Failed to export STL geometry: ${exportErr.message}`);
         console.error(exportErr);
