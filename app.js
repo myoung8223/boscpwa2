@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "122"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "123"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1148,6 +1148,7 @@ function update3DModelViewer(raw3mfData) {
                     child.geometry.computeVertexNormals();
                 }
 
+                // Identify if the geometry contains embedded vertex color streams
                 const hasGeometryVertexColors = !!(child.geometry && child.geometry.attributes && child.geometry.attributes.color);
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 
@@ -1156,37 +1157,54 @@ function update3DModelViewer(raw3mfData) {
 
                     const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                     
-                    // 🔍 BULLETPROOF DEFAULT YELLOW DETECTION
-                    // Captures OpenSCAD's default pastel yellow in both sRGB (1.0, 0.92, 0.60) and Linear (1.0, 0.83, 0.32) color spaces.
-                    // The 'b > 0.20' prevents collision with explicit user script choices like pure bright yellow [1, 1, 0].
-                    const isDefaultOpenSCADYellow = (mat.color && 
-                        mat.color.r > 0.85 && 
-                        mat.color.g > 0.75 && 
-                        mat.color.b > 0.20 && 
-                        mat.color.b < 0.70
-                    );
+                    // 🔍 DEEP GEOMETRY INSPECTION
+                    // Check if OpenSCAD baked its default pastel yellow theme into the file
+                    let isDefaultOpenSCADYellow = false;
 
-                    // A mesh is a baseline fallback only if it matches the uncolored factory signature 
-                    // and does not carry custom geometry vertex streams.
-                    const isBaselineFallbackMesh = isDefaultOpenSCADYellow && !hasGeometryVertexColors && !loaderFlaggedVertexColors;
+                    // Check material-level fallback color
+                    if (mat.color) {
+                        if (mat.color.r > 0.75 && mat.color.g > 0.65 && mat.color.b > 0.15 && mat.color.b < 0.70) {
+                            isDefaultOpenSCADYellow = true;
+                        }
+                    }
+
+                    // Check vertex-level color stream (Where Manifold maps unstyled face templates)
+                    if (hasGeometryVertexColors) {
+                        const colorAttr = child.geometry.attributes.color;
+                        if (colorAttr && colorAttr.count > 0) {
+                            // Extract RGB floats from the first vertex index
+                            const vR = colorAttr.getX(0);
+                            const vG = colorAttr.getY(0);
+                            const vB = colorAttr.getZ(0);
+
+                            // Bounding box matching default OpenSCAD colors across standard/linear profiles
+                            if (vR > 0.75 && vG > 0.65 && vB > 0.15 && vB < 0.70) {
+                                isDefaultOpenSCADYellow = true;
+                            }
+                        }
+                    }
+
+                    // 🚀 THE ULTIMATE ROUTER
+                    // If it matches the baked uncolored scheme, force it to behave as an unstyled background item.
+                    const isBaselineFallbackMesh = isDefaultOpenSCADYellow;
 
                     if (!isBaselineFallbackMesh) {
-                        // 🎨 PIPELINE A: Script has an explicit color() operation applied!
+                        // 🎨 PIPELINE A: Script has an explicit, custom color() configuration applied
                         if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                             mat.vertexColors = true;
-                            mat.color.setRGB(1, 1, 1); // Reset base diffuse multiplier
+                            mat.color.setRGB(1, 1, 1); // Reset material base so vertex data streams perfectly
                         }
                         
-                        // Handle opacity rendering rules without alpha polygon clipping bugs
+                        // Smart opacity polygon sorting configuration
                         if (mat.opacity < 1.0) {
                             mat.transparent = true;
                             
                             if (mat.opacity < 0.8) {
-                                mat.depthWrite = false; // Deep transparency stacking
+                                mat.depthWrite = false; 
                                 mat.side = THREE.DoubleSide; 
                             } else {
-                                mat.depthWrite = true;  // Solid sorting for values like 0.999
-                                mat.side = THREE.FrontSide;  
+                                mat.depthWrite = true;  
+                                mat.side = THREE.FrontSide; // Eliminates transparent interior face clipping
                             }
                         } else {
                             mat.transparent = false;
@@ -1194,17 +1212,17 @@ function update3DModelViewer(raw3mfData) {
                             mat.side = THREE.FrontSide;
                         }
                     } else {
-                        // 🎨 PIPELINE B: Absolute unstyled background mesh.
-                        // Overwrite the native yellow template with your workspace color input choice!
-                        mat.vertexColors = false;
-                        mat.color.set(fallbackHexColor);
+                        // 🎨 PIPELINE B: Unstyled baseline geometry asset
+                        // Override OpenSCAD's default baked yellow with your active UI color panel preference!
+                        mat.vertexColors = false; // Disables vertex-level coloring completely
+                        mat.color.set(fallbackHexColor); // Force material color selection
                         mat.transparent = false;
                         mat.depthWrite = true;
                         mat.side = THREE.FrontSide;
                         mat.opacity = 1.0; 
                     }
 
-                    // Polished physical shading attributes
+                    // Premium physical layout lighting attributes
                     mat.roughness = 0.5;
                     mat.metalness = 0.1;
                     
