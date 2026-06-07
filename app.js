@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "216"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "217"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2867,7 +2867,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         return {
             solidContent: fullSolidBlock,
             content:      fullSolidBlock,
-            ghostContent: ghostSpill,
+            ghostContent: ghostSpill ? `${expression}\n{\n${ghostSpill}}\n` : "",
             containsGhost: false, hasNestedGhost: false, isSelfGhost: false
         };
     }
