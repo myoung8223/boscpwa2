@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "200"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "201"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2535,7 +2535,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         const isBooleanOp    = isDifference || isIntersection;
 
         // --- Ghost wrapper (non-boolean) ---
-        // Parse children for ghost output; solidContent included for CSG, hidden from solid render
         if (effectiveGhost && !isBooleanOp) {
             let children = [];
             if (i < len && code[i] === '{') {
@@ -2558,7 +2557,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
 
         // --- Parse children ---
-        // Boolean op children never inherit ghost scope — must be explicit per child
         let children = [];
         if (i < len && code[i] === '{') {
             i++;
@@ -2588,7 +2586,30 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                     containsGhost: true, hasNestedGhost: false, isSelfGhost: true
                 };
             }
-            // Use solidContent for all children so ghost children still contribute to CSG
+
+            if (isBooleanOp && anyChildGhost) {
+                const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
+                let allSolid = joinField('solidContent');
+                if (firstIsGhost) {
+                    // Positive volume is ghost — rewrite as union() so full shape appears as solid context
+                    return {
+                        solidContent: `union()\n{\n${allSolid}}\n`,
+                        content:      `union()\n{\n${allSolid}}\n`,
+                        ghostContent: "",
+                        containsGhost: true, hasNestedGhost: false, isSelfGhost: false
+                    };
+                }
+                // Positive volume is solid — keep original op, drop ghost subtractors
+                let solidOnly = children.filter(c => !c.isSelfGhost && !c.containsGhost).map(c => c.content).join("");
+                return {
+                    solidContent: `${expression}\n{\n${allSolid}}\n`,
+                    content:      `${expression}\n{\n${solidOnly}}\n`,
+                    ghostContent: "",
+                    containsGhost: false, hasNestedGhost: false, isSelfGhost: false
+                };
+            }
+
+            // No ghost children — pass through using solidContent
             let allSolidContent = joinField('solidContent');
             return {
                 solidContent: `${expression}\n{\n${allSolidContent}}\n`,
@@ -2608,10 +2629,8 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             let allSolid = joinField('solidContent');
 
             if (firstIsGhost) {
-                // Positive volume is ghost.
-                // Solid pass: full difference using solidContent — renders cut result opaque.
-                // Ghost pass: ONLY the ghost positive volume in ghost 3MF — nothing else,
-                //             so Three.js glass material only touches the ghost geometry.
+                // Positive volume is ghost — rewrite as union() in both passes.
+                // Ghost pass: only the ghost positive volume translucent in ghost 3MF.
                 let ghostOnlyContent = "";
                 for (let child of children) {
                     if (child.isSelfGhost || child.containsGhost || child.hasNestedGhost) {
@@ -2619,15 +2638,15 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                     }
                 }
                 return {
-                    solidContent: `${expression}\n{\n${allSolid}}\n`,
-                    content:      `${expression}\n{\n${allSolid}}\n`,
+                    solidContent: `union()\n{\n${allSolid}}\n`,
+                    content:      `union()\n{\n${allSolid}}\n`,
                     ghostContent: ghostOnlyContent,
                     containsGhost: true, hasNestedGhost: true, isSelfGhost: false
                 };
             } else {
                 // Positive volume is solid, some subtractors are explicitly ghost.
-                // Solid pass: difference with only solid subtractors.
-                // Ghost pass: ONLY the ghost subtractors in ghost 3MF.
+                // Solid pass: original op with only solid subtractors.
+                // Ghost pass: only ghost subtractors in ghost 3MF.
                 let solidSubtractorsOnly = children.map(c =>
                     (c.isSelfGhost || c.containsGhost || c.hasNestedGhost) ? "" : c.content
                 ).join("");
