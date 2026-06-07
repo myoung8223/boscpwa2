@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "213"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "214"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2680,12 +2680,12 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 };
             }
 
-            // No ghost children — pass through using solidContent
+			// Pass through — use content for visible output, solidContent for CSG
             let allSolidContent = joinField('solidContent');
-			//console.log("SOLID PASS GENERAL:", expression.trim(), "allSolidContent length:", allSolidContent.length);
+            let allContent = joinField('content');
             return {
                 solidContent: `${expression}\n{\n${allSolidContent}}\n`,
-                content:      `${expression}\n{\n${allSolidContent}}\n`,
+                content:      `${expression}\n{\n${allContent}}\n`,
                 ghostContent: "",
                 containsGhost: anyChildGhost, hasNestedGhost: anyChildGhost, isSelfGhost: false
             };
