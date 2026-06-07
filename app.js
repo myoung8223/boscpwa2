@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "214"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "215"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2591,6 +2591,33 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         const isIntersection = cleanExpr.startsWith('intersection');
         const isBooleanOp    = isDifference || isIntersection;
         const isHullOp       = cleanExpr.startsWith('hull') || cleanExpr.startsWith('minkowski');
+		const isConditional  = cleanExpr.startsWith('if') || cleanExpr.startsWith('for') || cleanExpr.startsWith('let') || cleanExpr.startsWith('each');
+
+		// --- Conditional/loop — transparent pass-through, never aggregate ghost flags upward ---
+        if (isConditional) {
+            let condChildren = [];
+            if (i < len && code[i] === '{') {
+                i++;
+                condChildren = parseBlock(effectiveGhost);
+            } else {
+                condChildren.push(parseComponent(effectiveGhost));
+            }
+            const jf = (field) => condChildren.map(c => c[field] || "").join("");
+            const solidC  = jf('solidContent');
+            const contentC = jf('content');
+            const rawGhost = jf('ghostContent');
+            const hasRealGhostContent = condChildren.some(c =>
+                c.ghostContent && c.ghostContent !== c.content && c.ghostContent !== c.solidContent
+            );
+            return {
+                solidContent: `${expression}\n{\n${solidC}}\n`,
+                content:      `${expression}\n{\n${contentC}}\n`,
+                ghostContent: hasRealGhostContent ? `${expression}\n{\n${rawGhost}}\n` : "",
+                containsGhost:  false,
+                hasNestedGhost: false,
+                isSelfGhost:    false
+            };
+        }
 
         // --- Ghost wrapper (non-boolean) ---
         if (effectiveGhost && !isBooleanOp) {
