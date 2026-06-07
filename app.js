@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "206"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "207"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2671,40 +2671,40 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             const solidChildren = children.filter(c => !c.isSelfGhost && !c.containsGhost && !c.hasNestedGhost);
             const ghostChildren = children.filter(c =>  c.isSelfGhost ||  c.containsGhost ||  c.hasNestedGhost);
 
-            // All children ghost — hull produces nothing solid, everything ghost
-            if (allChildrenGhost) {
-                let ghostSeparateParts = "";
-                for (let child of ghostChildren) {
-                    ghostSeparateParts += child.ghostContent || `__GHOST__() {\n${child.solidContent}}\n`;
-                }
-                return {
-                    solidContent: "",
-                    content:      "",
-                    ghostContent: ghostSeparateParts,
-                    containsGhost: true, hasNestedGhost: false, isSelfGhost: false
-                };
-            }
-
-            // No ghost children — fully solid hull, pass through normally
-            if (!anyChildGhost) {
-                let solidParts = joinField('solidContent');
-                return {
-                    solidContent: `${expression}\n{\n${solidParts}}\n`,
-                    content:      `${expression}\n{\n${solidParts}}\n`,
-                    ghostContent: `${expression}\n{\n${solidParts}}\n`,
-                    containsGhost: false, hasNestedGhost: false, isSelfGhost: false
-                };
-            }
-
-            // Mixed children — ghost children excluded from hull, rendered separately
-            const solidHullParts = solidChildren.map(c => c.solidContent).join("");
-            const solidHull = `${expression}\n{\n${solidHullParts}}\n`;
-
+            // Collect ghost spillover from extracted children
             let ghostSeparateParts = "";
             for (let child of ghostChildren) {
                 ghostSeparateParts += child.ghostContent || `__GHOST__() {\n${child.solidContent}}\n`;
             }
 
+            // All children ghost — hull produces nothing, all children rendered separately
+            if (allChildrenGhost) {
+                return {
+                    solidContent: "",
+                    content:      "",
+                    ghostContent: ghostSeparateParts,
+                    containsGhost: false, hasNestedGhost: false, isSelfGhost: false
+                };
+            }
+
+            // No ghost children — fully solid hull, pass through normally
+            if (!anyChildGhost) {
+                let solidParts = solidChildren.map(c => c.solidContent).join("");
+                return {
+                    solidContent: `${expression}\n{\n${solidParts}}\n`,
+                    content:      `${expression}\n{\n${solidParts}}\n`,
+                    ghostContent: "",
+                    containsGhost: false, hasNestedGhost: false, isSelfGhost: false
+                };
+            }
+
+            // Mixed children — ghost children excluded from hull, rendered separately.
+            // The hull result is solid; ghost extractions bubble up via ghostContent
+            // so they float out of any parent wrapper (difference, translate, etc.)
+            // rather than getting re-wrapped inside it.
+            const solidHullParts = solidChildren.map(c => c.solidContent).join("");
+            const solidHull = `${expression}\n{\n${solidHullParts}}\n`;
+			console.log("HULL MIXED RETURN ghostSeparateParts:", JSON.stringify(ghostSeparateParts.substring(0, 150)));
             return {
                 solidContent: solidHull,
                 content:      solidHull,
@@ -2738,12 +2738,14 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             };
         }
 
-        // Fully solid — no ghost anywhere
+		// Fully solid — but children may have ghost spillover from hull extractions
         let solidParts = joinField('solidContent');
+        let ghostSpill = joinField('ghostContent');
+		console.log("FULLY SOLID PATH:", expression.trim(), "ghostSpill length:", ghostSpill.length, "ghostSpill:", JSON.stringify(ghostSpill.substring(0, 150)));
         return {
             solidContent: `${expression}\n{\n${solidParts}}\n`,
             content:      `${expression}\n{\n${solidParts}}\n`,
-            ghostContent: `${expression}\n{\n${solidParts}}\n`,
+            ghostContent: ghostSpill,
             containsGhost: false, hasNestedGhost: false, isSelfGhost: false
         };
     }
