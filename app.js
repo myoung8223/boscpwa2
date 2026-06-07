@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "201"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "202"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2592,9 +2592,9 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 let allSolid = joinField('solidContent');
                 if (firstIsGhost) {
                     // Positive volume is ghost — rewrite as union() so full shape appears as solid context
-                    return {
-                        solidContent: `union()\n{\n${allSolid}}\n`,
-                        content:      `union()\n{\n${allSolid}}\n`,
+					return {
+                        solidContent: children[0].solidContent,
+                        content:      children[0].solidContent,
                         ghostContent: "",
                         containsGhost: true, hasNestedGhost: false, isSelfGhost: false
                     };
