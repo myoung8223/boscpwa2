@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "195"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "196"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2405,6 +2405,82 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
     }
 
+    // Skips a complete child body — either a braced block or a single statement/wrapper.
+    // Used to consume ghost subtrees without emitting anything.
+    function skipChildBody() {
+        skipWhitespaceAndComments();
+        if (i >= len) return;
+
+        if (code[i] === '{') {
+            // Skip a braced block, respecting nesting and strings/comments
+            let depth = 1; i++;
+            while (i < len && depth > 0) {
+                let ch = code[i];
+                if (ch === '"') {
+                    i++;
+                    while (i < len) {
+                        if (code[i] === '\\') i += 2;
+                        else if (code[i] === '"') { i++; break; }
+                        else i++;
+                    }
+                } else if (ch === '/' && code[i+1] === '/') {
+                    while (i < len && code[i] !== '\n') i++;
+                } else if (ch === '/' && code[i+1] === '*') {
+                    i += 2;
+                    while (i < len && !(code[i] === '*' && code[i+1] === '/')) i++;
+                    if (i < len) i += 2;
+                } else if (ch === '{') {
+                    depth++; i++;
+                } else if (ch === '}') {
+                    depth--; i++;
+                } else {
+                    i++;
+                }
+            }
+        } else {
+            // Skip a single statement (up to ; ) or a modifier+child chain
+            // Read past any modifier prefixes
+            while (i < len && (code[i] === '%' || code[i] === '*' || code[i] === '!' || code[i] === '#')) {
+                i++;
+                skipWhitespaceAndComments();
+            }
+            // Read the expression
+            let parens = 0, brackets = 0;
+            while (i < len) {
+                let ch = code[i];
+                if (ch === '"') {
+                    i++;
+                    while (i < len) {
+                        if (code[i] === '\\') i += 2;
+                        else if (code[i] === '"') { i++; break; }
+                        else i++;
+                    }
+                    continue;
+                }
+                if (ch === '(' ) { parens++; i++; continue; }
+                if (ch === ')' ) {
+                    parens--; i++;
+                    if (parens === 0 && brackets === 0) {
+                        // Check for trailing semicolon
+                        skipWhitespaceAndComments();
+                        if (i < len && code[i] === ';') i++;
+                        break;
+                    }
+                    continue;
+                }
+                if (ch === '[') { brackets++; i++; continue; }
+                if (ch === ']') { brackets--; i++; continue; }
+                if (ch === ';' && parens === 0 && brackets === 0) { i++; break; }
+                i++;
+            }
+            // If followed by another child body (wrapper chain), skip that too
+            skipWhitespaceAndComments();
+            if (i < len && (code[i] === '{' || /[a-zA-Z%*!#]/.test(code[i]))) {
+                skipChildBody();
+            }
+        }
+    }
+
     function parseBlock(isInsideGhostScope) {
         // Caller has already consumed '{'
         let children = [];
@@ -2413,17 +2489,13 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             if (i >= len || code[i] === '}') break;
             children.push(parseComponent(isInsideGhostScope));
         }
-        if (i < len && code[i] === '}') i++; // consume '}'
+        if (i < len && code[i] === '}') i++;
         return children;
-    }
-
-    function emptyResult() {
-        return { content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
     }
 
     function parseComponent(isInsideGhostScope) {
         skipWhitespaceAndComments();
-        if (i >= len) return emptyResult();
+        if (i >= len) return { content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
 
         let hasGhostModifier = false;
         while (i < len) {
@@ -2437,9 +2509,9 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
 
         skipWhitespaceAndComments();
-        if (i >= len) return emptyResult();
+        if (i >= len) return { content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: effectiveGhost };
 
-        // --- Bare brace block { ... } ---
+        // --- Bare brace block ---
         if (code[i] === '{') {
             i++;
             let children = parseBlock(effectiveGhost);
@@ -2459,7 +2531,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             };
         }
 
-        // --- Read expression (call, primitive, assignment) ---
+        // --- Read expression ---
         let expression = "";
         let parensCount = 0;
         let bracketCount = 0;
@@ -2468,7 +2540,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
         while (i < len) {
             let char = code[i];
-
             if (char === '"') {
                 expression += char; i++;
                 while (i < len) {
@@ -2489,22 +2560,17 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 if (i < len) { expression += '*/'; i += 2; }
                 continue;
             }
-
             expression += char;
             if (char === '(') parensCount++;
             if (char === ')') parensCount--;
             if (char === '[') bracketCount++;
             if (char === ']') bracketCount--;
-
             if (char === '=' && parensCount === 0 && bracketCount === 0 && !expression.trim().startsWith('module')) {
                 isVariableAssignment = true;
             }
-
             i++;
-
             if (char === ';' && parensCount === 0 && bracketCount === 0) {
-                endedWithSemicolon = true;
-                break;
+                endedWithSemicolon = true; break;
             }
             if (char === ')' && parensCount === 0 && bracketCount === 0) {
                 let peek = i;
@@ -2520,12 +2586,10 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
         skipWhitespaceAndComments();
 
-        // Variable/function assignment — pass through unchanged, never ghost
         if (isVariableAssignment) {
             return { content: `${expression}\n`, ghostContent: `${expression}\n`, containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
         }
 
-        // Determine if this expression has a child body following it
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nc = code[i];
@@ -2538,8 +2602,8 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         if (!isWrapper) {
             if (effectiveGhost) {
                 return {
-                    content:      "",                              // omit from solid pass
-                    ghostContent: `__GHOST__() ${expression}\n`, // translucent in ghost pass
+                    content:      "",
+                    ghostContent: `__GHOST__() ${expression}\n`,
                     containsGhost: true, hasNestedGhost: false, isSelfGhost: true
                 };
             }
@@ -2552,13 +2616,36 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         const isIntersection = cleanExpr.startsWith('intersection');
         const isBooleanOp    = isDifference || isIntersection;
 
-        // Parse children. Boolean op children are NEVER ghost by inheritance —
-        // ghost status must come from an explicit % on each child individually.
+        // KEY: if this entire wrapper is ghost, skip its body cleanly
+        // rather than parsing children that then leak content/braces
+        if (effectiveGhost && !isBooleanOp) {
+            // Capture ghost content by parsing, then also need to emit for ghost pass
+            // Parse children for ghost output, but use skipChildBody for solid pass
+            // We need to parse to get ghostContent, so parse normally then discard content
+            let savedI = i;
+            let children = [];
+            if (i < len && code[i] === '{') {
+                i++;
+                children = parseBlock(true); // all children are ghost-scoped
+            } else {
+                children.push(parseComponent(true));
+            }
+            let ghostParts = "";
+            for (let child of children) {
+                ghostParts += child.ghostContent || child.content;
+            }
+            return {
+                content:      "",   // nothing in solid pass
+                ghostContent: `__GHOST__() ${expression}\n{\n${ghostParts}}\n`,
+                containsGhost: true, hasNestedGhost: false, isSelfGhost: true
+            };
+        }
+
+        // Parse children normally for non-ghost or boolean op wrappers
+        // Boolean op children never inherit ghost scope — must be explicit per child
         let children = [];
-        let hadBraceBlock = false;
         if (i < len && code[i] === '{') {
             i++;
-            hadBraceBlock = true;
             children = parseBlock(isBooleanOp ? false : effectiveGhost);
         } else {
             children.push(parseComponent(isBooleanOp ? false : effectiveGhost));
@@ -2568,46 +2655,30 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         const allChildrenGhost = children.length > 0 && children.every(c => c.isSelfGhost || c.containsGhost || c.hasNestedGhost);
         const hasMixedChildren = anyChildGhost && !allChildrenGhost;
 
-        // Helper: reassemble children into a braced block string for a given content field
-        function joinChildren(field) {
-            return children.map(c => c[field]).join("");
+        function joinField(field) {
+            return children.map(c => c[field] || "").join("");
         }
 
         // -----------------------------------------------------------------------
         // SOLID PASS
         // -----------------------------------------------------------------------
         if (stripAllGhostsMode) {
-
-            // Entire wrapper explicitly ghosted — emit nothing in solid pass
             if (hasGhostModifier) {
                 return { content: "", ghostContent: "", containsGhost: true, hasNestedGhost: false, isSelfGhost: true };
             }
-
             if (isBooleanOp && anyChildGhost) {
-                const firstChild = children[0];
-                const firstIsGhost = firstChild.isSelfGhost || firstChild.containsGhost;
-
+                const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
                 if (firstIsGhost) {
-                    // Positive volume is ghost — nothing solid to produce
                     return { content: "", ghostContent: "", containsGhost: true, hasNestedGhost: false, isSelfGhost: false };
                 }
-
-                // Positive volume is solid; drop any ghost subtractors
-                let solidChildContent = "";
-                for (let child of children) {
-                    if (!child.isSelfGhost && !child.containsGhost) {
-                        solidChildContent += child.content;
-                    }
-                }
+                let solidOnly = children.filter(c => !c.isSelfGhost && !c.containsGhost).map(c => c.content).join("");
                 return {
-                    content:      `${expression}\n{\n${solidChildContent}}\n`,
+                    content:      `${expression}\n{\n${solidOnly}}\n`,
                     ghostContent: "",
                     containsGhost: false, hasNestedGhost: false, isSelfGhost: false
                 };
             }
-
-            // Non-boolean or no ghost children — pass through, children already stripped
-            let solidContent = joinChildren('content');
+            let solidContent = joinField('content');
             return {
                 content:      `${expression}\n{\n${solidContent}}\n`,
                 ghostContent: "",
@@ -2619,48 +2690,26 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         // GHOST PASS
         // -----------------------------------------------------------------------
 
-        // Entire wrapper explicitly ghosted and no mixed children
-        if (effectiveGhost && !hasMixedChildren) {
-            let ghostContent = joinChildren('ghostContent') || joinChildren('content');
-            return {
-                content:      "",   // nothing solid
-                ghostContent: `__GHOST__() ${expression}\n{\n${ghostContent}}\n`,
-                containsGhost: true, hasNestedGhost: false, isSelfGhost: true
-            };
-        }
-
-        // Boolean op with a mix of ghost and solid children
         if (isBooleanOp && hasMixedChildren) {
-            const firstChild = children[0];
-            const firstIsGhost = firstChild.isSelfGhost || firstChild.containsGhost;
-
+            const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
             let solidChildContent = "";
             let ghostChildContent = "";
-
             for (let child of children) {
                 const childIsGhost = child.isSelfGhost || child.containsGhost || child.hasNestedGhost;
                 if (childIsGhost) {
-                    // Use ghostContent if available, else wrap content
                     ghostChildContent += child.ghostContent || `__GHOST__() {\n${child.content}}\n`;
                 } else {
                     solidChildContent += child.content;
-                    // Solid children also appear in ghost pass (opaque) so user sees context
                     ghostChildContent += child.ghostContent || child.content;
                 }
             }
-
             if (firstIsGhost) {
-                // Positive volume is ghost — no solid geometry from this op.
-                // Ghost pass: show ghost volume translucent + solid subtractors for context.
                 return {
                     content:      "",
                     ghostContent: `union()\n{\n${ghostChildContent}}\n`,
                     containsGhost: true, hasNestedGhost: true, isSelfGhost: false
                 };
             } else {
-                // Positive volume is solid, some subtractors are ghost.
-                // Solid pass: original op with only solid subtractors.
-                // Ghost pass: union showing solid body + ghost subtractors translucent.
                 return {
                     content:      `${expression}\n{\n${solidChildContent}}\n`,
                     ghostContent: `union()\n{\n${ghostChildContent}}\n`,
@@ -2669,9 +2718,8 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             }
         }
 
-        // Non-boolean wrapper with mixed children (translate, color, rotate, etc.)
         if (hasMixedChildren) {
-            let solidContent = joinChildren('content');
+            let solidContent = joinField('content');
             let ghostContent = children.map(c => c.ghostContent || c.content).join("");
             return {
                 content:      `${expression}\n{\n${solidContent}}\n`,
@@ -2680,22 +2728,21 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             };
         }
 
-        // No ghost anywhere — fully solid wrapper
-        if (!anyChildGhost) {
-            let solidContent = joinChildren('content');
+        if (allChildrenGhost) {
+            let ghostContent = joinField('ghostContent');
             return {
-                content:      `${expression}\n{\n${solidContent}}\n`,
-                ghostContent: `${expression}\n{\n${solidContent}}\n`,
-                containsGhost: false, hasNestedGhost: false, isSelfGhost: false
+                content:      "",
+                ghostContent: `${expression}\n{\n${ghostContent}}\n`,
+                containsGhost: true, hasNestedGhost: false, isSelfGhost: false
             };
         }
 
-        // All children ghost (but wrapper itself not explicitly ghosted)
-        let ghostContent = joinChildren('ghostContent') || joinChildren('content');
+        // Fully solid
+        let solidContent = joinField('content');
         return {
-            content:      "",
-            ghostContent: `${expression}\n{\n${ghostContent}}\n`,
-            containsGhost: true, hasNestedGhost: false, isSelfGhost: false
+            content:      `${expression}\n{\n${solidContent}}\n`,
+            ghostContent: `${expression}\n{\n${solidContent}}\n`,
+            containsGhost: false, hasNestedGhost: false, isSelfGhost: false
         };
     }
 
