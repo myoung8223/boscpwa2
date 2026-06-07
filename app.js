@@ -2693,9 +2693,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 containsGhost: true, hasNestedGhost: true, isSelfGhost: false
             };
         }
-
-        // Non-boolean wrapper with mixed children (translate, color, rotate, etc.)
-        if (hasMixedChildren) {
 		
         // Non-boolean wrapper with mixed children (translate, color, rotate, etc.)
         if (hasMixedChildren) {
