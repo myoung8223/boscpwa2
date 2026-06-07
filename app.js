@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "193"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "194"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2405,17 +2405,15 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
     }
 
-    // Parses a brace block's children into an array of result objects,
-    // each tagged with whether it was directly ghost-marked.
     function parseBlock(isInsideGhostScope) {
-        // Caller has already consumed the opening '{'
+        // Caller has already consumed '{'
         let children = [];
         while (i < len) {
             skipWhitespaceAndComments();
             if (i >= len || code[i] === '}') break;
             children.push(parseComponent(isInsideGhostScope));
         }
-        if (i < len && code[i] === '}') i++; // consume '}'
+        if (i < len && code[i] === '}') i++;
         return children;
     }
 
@@ -2424,7 +2422,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         if (i >= len) return { content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
 
         let hasGhostModifier = false;
-
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
@@ -2433,7 +2430,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             skipWhitespaceAndComments();
         }
 
-        // effectiveGhost: this node and all its descendants are in ghost scope
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
 
         skipWhitespaceAndComments();
@@ -2444,24 +2440,22 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             i++;
             let solidParts = "", ghostParts = "";
             let blockContainsGhost = false;
-
             let children = parseBlock(effectiveGhost);
             for (let child of children) {
                 if (child.containsGhost || child.hasNestedGhost || child.isSelfGhost) blockContainsGhost = true;
                 solidParts += child.content;
                 ghostParts += child.ghostContent;
             }
-
             return {
-                content:      `{ ${solidParts} } `,
-                ghostContent: `{ ${ghostParts} } `,
-                containsGhost: effectiveGhost,
+                content:       `{ ${solidParts} }`,
+                ghostContent:  `{ ${ghostParts} }`,
+                containsGhost:  effectiveGhost,
                 hasNestedGhost: blockContainsGhost,
-                isSelfGhost: effectiveGhost
+                isSelfGhost:    effectiveGhost
             };
         }
 
-        // --- Expression: module call, primitive, assignment ---
+        // --- Expression ---
         let expression = "";
         let parensCount = 0;
         let bracketCount = 0;
@@ -2509,7 +2503,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 endedWithSemicolon = true;
                 break;
             }
-
             if (char === ')' && parensCount === 0 && bracketCount === 0) {
                 let peek = i;
                 while (peek < len && /\s/.test(code[peek])) peek++;
@@ -2524,12 +2517,10 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
         skipWhitespaceAndComments();
 
-        // --- Variable / function assignment: pass through as-is, no ghost handling ---
         if (isVariableAssignment) {
             return { content: `${expression}\n`, ghostContent: `${expression}\n`, containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
         }
 
-        // --- Is this a wrapper (has a child body)? ---
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nextChar = code[i];
@@ -2539,8 +2530,8 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             }
         }
 
+        // --- Leaf primitive ---
         if (!isWrapper) {
-            // --- Leaf primitive ---
             if (stripAllGhostsMode) {
                 if (effectiveGhost) {
                     return { content: `/* Ghost Leaf Omitted */\n`, ghostContent: "", containsGhost: true, hasNestedGhost: false, isSelfGhost: true };
@@ -2554,131 +2545,145 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             }
         }
 
-        // --- Wrapper: parse child first, then decide ---
-
-        // Detect if this is a boolean op that needs special mixed-child handling
+        // --- Wrapper: classify the operation ---
         const cleanExpr = expression.trim().toLowerCase();
         const isDifference   = cleanExpr.startsWith('difference');
         const isIntersection = cleanExpr.startsWith('intersection');
         const isBooleanOp    = isDifference || isIntersection;
 
-        // If the next token is a bare '{', parse all children at once so we can inspect the mix.
-        // Otherwise parse a single child (translate, rotate, color, etc.)
+        // KEY FIX: boolean op children are NEVER parsed with inherited ghost scope.
+        // Ghost scope on a child of difference/intersection must come from an explicit
+        // % on that child itself, not from the parent context.
         let children = [];
         if (i < len && code[i] === '{') {
-            i++; // consume '{'
-            children = parseBlock(effectiveGhost);
+            i++;
+            children = parseBlock(isBooleanOp ? false : effectiveGhost);
         } else {
-            children.push(parseComponent(effectiveGhost));
+            children.push(parseComponent(isBooleanOp ? false : effectiveGhost));
         }
 
-        const anyChildGhost = children.some(c => c.isSelfGhost || c.containsGhost || c.hasNestedGhost);
-        const allChildrenGhost = children.every(c => c.isSelfGhost || c.containsGhost || c.hasNestedGhost);
+        const anyChildGhost    = children.some(c => c.isSelfGhost || c.containsGhost || c.hasNestedGhost);
+        const allChildrenGhost = children.length > 0 && children.every(c => c.isSelfGhost || c.containsGhost || c.hasNestedGhost);
         const hasMixedChildren = anyChildGhost && !allChildrenGhost;
 
         // -----------------------------------------------------------------------
-        // SOLID PASS (stripAllGhostsMode = true)
+        // SOLID PASS
         // -----------------------------------------------------------------------
         if (stripAllGhostsMode) {
             if (hasGhostModifier) {
-                // Entire wrapper is ghost — omit from solid pass
                 return { content: `/* Ghost Block Omitted */\n`, ghostContent: "", containsGhost: true, hasNestedGhost: false, isSelfGhost: true };
             }
 
             if (isBooleanOp && hasMixedChildren) {
-                // difference/intersection with mixed children:
-                // The first child is the positive volume. If it's ghost, there's nothing solid here.
+                // If the positive volume (first child) is ghost, nothing solid results
                 const firstChild = children[0];
                 if (firstChild.isSelfGhost || firstChild.containsGhost) {
-                    return { content: `/* Ghost positive volume — solid omitted */\n`, ghostContent: "", containsGhost: true, hasNestedGhost: false, isSelfGhost: false };
+                    return { content: `/* Ghost positive volume — no solid output */\n`, ghostContent: "", containsGhost: true, hasNestedGhost: false, isSelfGhost: false };
                 }
-                // First child is solid. Solid pass keeps only solid children (skip ghost subtractors).
+                // Positive volume is solid; drop ghost subtractors, keep solid ones
                 let solidChildContent = "";
                 for (let child of children) {
                     if (!child.isSelfGhost && !child.containsGhost) {
                         solidChildContent += child.content;
                     }
                 }
-                return { content: `${expression}\n{ ${solidChildContent} }\n`, ghostContent: "", containsGhost: false, hasNestedGhost: true, isSelfGhost: false };
+                return { content: `${expression}\n{ ${solidChildContent} }\n`, ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
             }
 
-            // Default: pass through, strip any ghost children
+            // Non-boolean or all-solid: pass through with ghost children stripped
             let solidContent = "";
             for (let child of children) solidContent += child.content;
             return { content: `${expression}\n{ ${solidContent} }\n`, ghostContent: "", containsGhost: effectiveGhost, hasNestedGhost: anyChildGhost, isSelfGhost: false };
         }
 
         // -----------------------------------------------------------------------
-        // GHOST PASS (stripAllGhostsMode = false)
+        // GHOST PASS
         // -----------------------------------------------------------------------
 
+        // Entire wrapper explicitly ghosted — wrap the whole thing
         if (effectiveGhost && !hasMixedChildren) {
-            // Whole wrapper is ghost — wrap the whole thing
             let ghostContent = "";
             for (let child of children) ghostContent += (child.ghostContent || child.content);
             return {
-                content: "",
-                ghostContent: `__GHOST__() ${expression}\n{ ${ghostContent} }\n`,
-                containsGhost: true,
+                content:       "",
+                ghostContent:  `__GHOST__() ${expression}\n{ ${ghostContent} }\n`,
+                containsGhost:  true,
                 hasNestedGhost: false,
-                isSelfGhost: true
+                isSelfGhost:    true
             };
         }
 
+        // Boolean op with mixed ghost/solid children — the core case
         if (isBooleanOp && hasMixedChildren) {
-            // THIS is the core fix for your reported issue:
-            // difference/intersection with a mix of ghost and solid children →
-            // rewrite as union() so ghost children appear alongside solid ones
-            // instead of being subtracted. Each child is rendered per its own ghost status.
+            const firstChild = children[0];
+            const firstIsGhost = firstChild.isSelfGhost || firstChild.containsGhost;
+
             let solidChildContent = "";
             let ghostChildContent = "";
 
             for (let child of children) {
-                if (child.isSelfGhost || child.containsGhost || child.hasNestedGhost) {
-                    ghostChildContent += (child.ghostContent || `__GHOST__() { ${child.content} }`);
+                const childIsGhost = child.isSelfGhost || child.containsGhost || child.hasNestedGhost;
+                if (childIsGhost) {
+                    // Ghost child: appears translucent in ghost pass
+                    ghostChildContent += child.ghostContent || `__GHOST__() { ${child.content} }`;
                 } else {
+                    // Solid child: appears in both passes
                     solidChildContent += child.content;
-                    ghostChildContent += child.content; // solid children still appear in ghost pass
+                    // Solid children still appear opaque in the ghost pass view
+                    // so the user can see the context of what's being cut
+                    ghostChildContent += child.content;
                 }
             }
 
-            return {
-                // Solid pass: keep original op, but only with solid children
-                content:      `${expression}\n{ ${solidChildContent} }\n`,
-                // Ghost pass: union with ghost children translucent, solid children opaque
-                ghostContent: `union()\n{ ${solidChildContent}${ghostChildContent} }\n`,
-                containsGhost: true,
-                hasNestedGhost: true,
-                isSelfGhost: false
-            };
+            if (firstIsGhost) {
+                // Positive volume is ghost — no solid output from this difference.
+                // Ghost pass shows the ghost volume translucent beside the solid subtractors.
+                return {
+                    content:       `/* Ghost positive volume — no solid output */\n`,
+                    ghostContent:  `union()\n{ ${ghostChildContent} }\n`,
+                    containsGhost:  true,
+                    hasNestedGhost: true,
+                    isSelfGhost:    false
+                };
+            } else {
+                // Positive volume is solid, some subtractors are ghost.
+                // Solid pass: difference with only solid subtractors.
+                // Ghost pass: union showing solid body + ghost subtractors translucent.
+                return {
+                    content:       `${expression}\n{ ${solidChildContent} }\n`,
+                    ghostContent:  `union()\n{ ${solidChildContent}${ghostChildContent} }\n`,
+                    containsGhost:  true,
+                    hasNestedGhost: true,
+                    isSelfGhost:    false
+                };
+            }
         }
 
-        if (hasMixedChildren && !isBooleanOp) {
-            // A non-boolean wrapper (translate, color, etc.) with mixed children —
-            // propagate per-child ghost status through
+        // Non-boolean wrapper with mixed children (translate, color, etc.)
+        if (hasMixedChildren) {
             let solidContent = "", ghostContent = "";
             for (let child of children) {
                 solidContent += child.content;
-                ghostContent += (child.ghostContent || child.content);
+                ghostContent += child.ghostContent || child.content;
             }
             return {
-                content:      `${expression}\n{ ${solidContent} }\n`,
-                ghostContent: `${expression}\n{ ${ghostContent} }\n`,
-                containsGhost: false,
+                content:       `${expression}\n{ ${solidContent} }\n`,
+                ghostContent:  `${expression}\n{ ${ghostContent} }\n`,
+                containsGhost:  false,
                 hasNestedGhost: true,
-                isSelfGhost: false
+                isSelfGhost:    false
             };
         }
 
-        // Fully solid wrapper — nothing ghost anywhere in it
+        // Fully solid wrapper
         let solidContent = "";
         for (let child of children) solidContent += child.content;
         return {
-            content:      `${expression}\n{ ${solidContent} }\n`,
-            ghostContent: "",
-            containsGhost: false,
+            content:       `${expression}\n{ ${solidContent} }\n`,
+            ghostContent:  "",
+            containsGhost:  false,
             hasNestedGhost: false,
-            isSelfGhost: false
+            isSelfGhost:    false
         };
     }
 
@@ -2691,6 +2696,5 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         skipWhitespaceAndComments();
     }
 
-    // Return the appropriate output depending on which pass is calling us
     return stripAllGhostsMode ? solidOutput : ghostOutput;
 }
