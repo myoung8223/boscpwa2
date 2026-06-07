@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "210"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "211"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2731,6 +2731,18 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                     containsGhost: true, hasNestedGhost: true, isSelfGhost: false
                 };
             }
+        }
+
+		// Boolean op that is itself ghost (%difference, %intersection) with fully solid children
+        if (isBooleanOp && effectiveGhost && !hasMixedChildren) {
+            let solidParts = joinField('solidContent');
+            let ghostParts = joinField('ghostContent') || joinField('solidContent');
+            return {
+                solidContent: `${expression}\n{\n${solidParts}}\n`,
+                content:      "",
+                ghostContent: `__GHOST__() ${expression}\n{\n${ghostParts}}\n`,
+                containsGhost: true, hasNestedGhost: false, isSelfGhost: true
+            };
         }
 
 		// Hull/minkowski op — ghost children are excluded from hull computation
