@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "184"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "185"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2515,52 +2515,43 @@ function isolateOpenSCADGhosts(code) {
             };
         }
         
-        if (isWrapper) {
-            let childResult = parseComponent(effectiveGhost);
-            
-            let childContent = childResult.content;
-            let shouldDisableWrapper = childResult.allChildrenDisabled;
-            
-            // A wrapper contains a ghost if it has the modifier itself OR its children do
-            let wrapperContainsGhost = hasGhostModifier || childResult.containsGhost;
+if (isWrapper) {
+    let childResult = parseComponent(effectiveGhost);
+    let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
+    let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
 
-            if (effectiveGhost) {
-                if (hasGhostModifier) {
-                    return {
-                        content: `__GHOST__() ${expression}\n${childContent}`,
-                        allChildrenDisabled: false,
-                        containsGhost: true
-                    };
-                }
-                return {
-                    content: `${expression}\n${childContent}`,
-                    allChildrenDisabled: false,
-                    containsGhost: wrapperContainsGhost
-                };
-            } else {
-                // 💡 CLEAN HULL CRASH PROTECTION: If all children are disabled, disable this operator chain
-                if (shouldDisableWrapper) {
-                    return {
-                        content: `* ${expression}\n${childContent}`,
-                        allChildrenDisabled: true,
-                        containsGhost: wrapperContainsGhost
-                    };
-                }
+    // 💡 FIX: Check childResult metadata or update containsGhost by scanning childContent
+    if (isCsgFilterOp && !stripAllGhostsMode) {
+        // If the parsed child block contains a ghost call or token
+        if (childContent.includes('__GHOST__') || childContent.includes('%')) {
+            containsGhost = true;
+        }
+    }
 
-                // ✨ THE ELEGANT SOLUTION: Dynamically rewrite operations to unions 
-                // if we are outside a global ghost context but a child contains a tool.
-                let finalExpression = expression;
-                if (wrapperContainsGhost && (finalExpression.startsWith('difference') || finalExpression.startsWith('intersection'))) {
-                    finalExpression = finalExpression.replace('difference', 'union').replace('intersection', 'union');
-                }
+    // 💡 FIX: Handle both 'difference' and 'intersection' operators safely
+    if (isCsgFilterOp && containsGhost) {
+        if (pass2Expression.startsWith('difference')) {
+            pass2Expression = pass2Expression.replace('difference', 'union');
+        } else if (pass2Expression.startsWith('intersection')) {
+            pass2Expression = pass2Expression.replace('intersection', 'union');
+        }
+    }
 
-                return {
-                    content: `${finalExpression}\n${childContent}`,
-                    allChildrenDisabled: false,
-                    containsGhost: wrapperContainsGhost
-                };
-            }
-        } else {
+    if (effectiveGhost) {
+        if (hasGhostModifier && !isInsideGhostScope) {
+            return `__GHOST__() ${pass2Expression}\n${childContent}`;
+        }
+        return `${pass2Expression}\n${childContent}`;
+    } else {
+        if (containsGhost) {
+            return `${pass2Expression}\n${childContent}`;
+        }
+        if (shouldDisableWrapper) {
+            return `* ${pass2Expression}\n${childContent}`;
+        }
+        return `${pass2Expression}\n${childContent}`;
+    }
+} else {
             // Leaf Statement Execution (cube, cylinder, sphere, import, text)
             if (effectiveGhost) {
                 if (hasIgnoreModifier) {
