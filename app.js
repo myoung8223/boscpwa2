@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "183"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "184"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2400,7 +2400,7 @@ function isolateOpenSCADGhosts(code) {
     
     function parseComponent(isInsideGhostScope) {
         skipWhitespaceAndComments();
-        if (i >= len) return "";
+        if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
         
         let hasGhostModifier = false;
         let hasIgnoreModifier = false;
@@ -2418,36 +2418,41 @@ function isolateOpenSCADGhosts(code) {
         
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
-        if (i >= len) return "";
+        if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
 
-        // Context 1: Block Group Braces { ... }
+        // 📦 Context 1: Block Group Braces { ... }
         if (code[i] === '{') {
             i++; // consume '{'
             let blockContent = "";
             let totalChildren = 0;
             let disabledChildren = 0;
+            let blockContainsGhost = false;
 
             while (true) {
                 skipWhitespaceAndComments();
                 if (i >= len || code[i] === '}') break;
                 
-                // Track children to determine if this whole block becomes empty
                 totalChildren++;
                 let parsedChild = parseComponent(effectiveGhost);
-                if (parsedChild.trim().startsWith('*')) {
+                
+                if (parsedChild.content.trim().startsWith('*')) {
                     disabledChildren++;
                 }
-                blockContent += parsedChild;
+                if (parsedChild.containsGhost) {
+                    blockContainsGhost = true;
+                }
+                blockContent += parsedChild.content;
             }
             if (i < len && code[i] === '}') i++; // consume '}'
             
             return {
                 content: `{ ${blockContent} } `,
-                allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren)
+                allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren),
+                containsGhost: blockContainsGhost
             };
         }
         
-        // Context 2: Read Token Signatures (Expressions / Parameters)
+        // 🔍 Context 2: Read Token Signatures (Expressions / Parameters)
         let expression = "";
         let parensCount = 0;
         let endedWithSemicolon = false;
@@ -2503,36 +2508,70 @@ function isolateOpenSCADGhosts(code) {
         
         if (isVariableAssignment) {
             // 💡 SAFEKEEPING: Pass variables raw without prepending any modifier operators
-            return `${expression}\n`;
+            return {
+                content: `${expression}\n`,
+                allChildrenDisabled: false,
+                containsGhost: false
+            };
         }
         
         if (isWrapper) {
             let childResult = parseComponent(effectiveGhost);
             
-            // Handle if the returned child data was a block context payload
-            let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
-            let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
+            let childContent = childResult.content;
+            let shouldDisableWrapper = childResult.allChildrenDisabled;
+            
+            // A wrapper contains a ghost if it has the modifier itself OR its children do
+            let wrapperContainsGhost = hasGhostModifier || childResult.containsGhost;
 
             if (effectiveGhost) {
                 if (hasGhostModifier) {
-                    return `__GHOST__() ${expression}\n${childContent}`;
+                    return {
+                        content: `__GHOST__() ${expression}\n${childContent}`,
+                        allChildrenDisabled: false,
+                        containsGhost: true
+                    };
                 }
-                return `${expression}\n${childContent}`;
+                return {
+                    content: `${expression}\n${childContent}`,
+                    allChildrenDisabled: false,
+                    containsGhost: wrapperContainsGhost
+                };
             } else {
-                // 💡 CLEAN HULL CRASH PROTECTION: If the children under this operator are completely disabled,
-                // disable the entire upstream transformation chain automatically to keep the syntax clean.
+                // 💡 CLEAN HULL CRASH PROTECTION: If all children are disabled, disable this operator chain
                 if (shouldDisableWrapper) {
-                    return `* ${expression}\n${childContent}`;
+                    return {
+                        content: `* ${expression}\n${childContent}`,
+                        allChildrenDisabled: true,
+                        containsGhost: wrapperContainsGhost
+                    };
                 }
-                return `${expression}\n${childContent}`;
+
+                // ✨ THE ELEGANT SOLUTION: Dynamically rewrite operations to unions 
+                // if we are outside a global ghost context but a child contains a tool.
+                let finalExpression = expression;
+                if (wrapperContainsGhost && (finalExpression.startsWith('difference') || finalExpression.startsWith('intersection'))) {
+                    finalExpression = finalExpression.replace('difference', 'union').replace('intersection', 'union');
+                }
+
+                return {
+                    content: `${finalExpression}\n${childContent}`,
+                    allChildrenDisabled: false,
+                    containsGhost: wrapperContainsGhost
+                };
             }
         } else {
             // Leaf Statement Execution (cube, cylinder, sphere, import, text)
             if (effectiveGhost) {
-                if (hasIgnoreModifier) return `* ${expression}\n`;
-                return hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`;
+                if (hasIgnoreModifier) {
+                    return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
+                }
+                if (hasGhostModifier) {
+                    return { content: `__GHOST__() ${expression}\n`, allChildrenDisabled: false, containsGhost: true };
+                }
+                return { content: `${expression}\n`, allChildrenDisabled: false, containsGhost: false };
             } else {
-                return `* ${expression}\n`;
+                return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
             }
         }
     }
@@ -2540,7 +2579,7 @@ function isolateOpenSCADGhosts(code) {
     let output = "";
     while (i < len) {
         let res = parseComponent(false);
-        output += (typeof res === 'object') ? res.content : res;
+        output += res.content; // Always safe because res is consistently an object
         skipWhitespaceAndComments();
     }
     return output;
