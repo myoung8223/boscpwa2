@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "202"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "203"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2590,11 +2590,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             if (isBooleanOp && anyChildGhost) {
                 const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
                 let allSolid = joinField('solidContent');
-                if (firstIsGhost) {
-                    // Positive volume is ghost — rewrite as union() so full shape appears as solid context
-					return {
-                        solidContent: children[0].solidContent,
-                        content:      children[0].solidContent,
+				if (firstIsGhost) {
+                    let subtractorContent = children.slice(1).map(c => c.solidContent).join("");
+                    return {
+                        solidContent: `union()\n{\n${subtractorContent}}\n`,
+                        content:      `union()\n{\n${subtractorContent}}\n`,
                         ghostContent: "",
                         containsGhost: true, hasNestedGhost: false, isSelfGhost: false
                     };
@@ -2628,9 +2628,8 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
             let allSolid = joinField('solidContent');
 
-            if (firstIsGhost) {
-                // Positive volume is ghost — rewrite as union() in both passes.
-                // Ghost pass: only the ghost positive volume translucent in ghost 3MF.
+			if (firstIsGhost) {
+                let subtractorContent = children.slice(1).map(c => c.solidContent).join("");
                 let ghostOnlyContent = "";
                 for (let child of children) {
                     if (child.isSelfGhost || child.containsGhost || child.hasNestedGhost) {
@@ -2638,8 +2637,8 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                     }
                 }
                 return {
-                    solidContent: `union()\n{\n${allSolid}}\n`,
-                    content:      `union()\n{\n${allSolid}}\n`,
+                    solidContent: `union()\n{\n${subtractorContent}}\n`,
+                    content:      `union()\n{\n${subtractorContent}}\n`,
                     ghostContent: ghostOnlyContent,
                     containsGhost: true, hasNestedGhost: true, isSelfGhost: false
                 };
