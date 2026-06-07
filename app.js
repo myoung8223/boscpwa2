@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "198"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "199"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1328,7 +1328,7 @@ function update3DModelViewer(solidData, ghostData = null) {
         const masterGroup = new THREE.Group();
         const fallbackHexColor = modelColorInput ? modelColorInput.value : "#3b82f6";
 
-        // ---------------------------------------------------------
+// ---------------------------------------------------------
         // 🎨 PASS 1: CORE SOLID GEOMETRY PROCESSING
         // ---------------------------------------------------------
         if (solidData) {
@@ -1336,6 +1336,8 @@ function update3DModelViewer(solidData, ghostData = null) {
             const solidGroup = loader.parse(solidBytes.buffer);
             
             if (solidGroup) {
+                solidGroup.renderOrder = 1; // solid renders AFTER ghost
+
                 solidGroup.traverse((child) => {
                     if (child.isMesh) {
                         if (child.geometry) child.geometry.computeVertexNormals();
@@ -1347,7 +1349,6 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (!mat) return;
                             const loaderFlaggedVertexColors = (mat.vertexColors === true || mat.vertexColors === THREE.VertexColors);
                             
-                            // 🔍 WIDENED DETECTOR: Catch variant default OpenSCAD yellows/oranges safely
                             let isDefaultOpenSCADYellow = false;
                             if (mat.color) {
                                 const r = mat.color.r, g = mat.color.g, b = mat.color.b;
@@ -1364,50 +1365,32 @@ function update3DModelViewer(solidData, ghostData = null) {
                                     }
                                 }
                             }
-// 🚀 MATERIAL COLOR ROUTER (REVISED)
-                            let isCustomColor = false;
 
+                            let isCustomColor = false;
                             if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
-                                // If OpenSCAD packed colors into the geometry or material layers,
-                                // and it escaped our yellow detector, it's an explicit custom color!
-                                if (!isDefaultOpenSCADYellow) {
-                                    isCustomColor = true;
-                                }
+                                if (!isDefaultOpenSCADYellow) isCustomColor = true;
                             } else if (mat.color) {
-                                // Double check if a custom color (like white) is explicitly on the material,
-                                // while ensuring it isn't the default OpenSCAD GUI yellow.
                                 const isWhite = (mat.color.r === 1 && mat.color.g === 1 && mat.color.b === 1);
-                                if (!isDefaultOpenSCADYellow || isWhite) {
-                                    isCustomColor = true;
-                                }
+                                if (!isDefaultOpenSCADYellow || isWhite) isCustomColor = true;
                             }
 
-                            // Route the rendering properties based on our findings
                             if (isCustomColor) {
-                                // Keep the script's color configuration intact
                                 if (hasGeometryVertexColors || loaderFlaggedVertexColors) {
                                     mat.vertexColors = true;
-                                    mat.color.setRGB(1, 1, 1); // Neutralize base so vertex colors show perfectly
+                                    mat.color.setRGB(1, 1, 1);
                                 } else {
-                                    mat.vertexColors = false; // Use the direct material color property
+                                    mat.vertexColors = false;
                                 }
-                                
                                 if (mat.opacity < 1.0) {
                                     mat.transparent = true;
-                                    if (mat.opacity < 0.8) {
-                                        mat.depthWrite = false;
-                                        mat.side = THREE.DoubleSide;
-                                    } else {
-                                        mat.depthWrite = true;
-                                        mat.side = THREE.FrontSide;
-                                    }
+                                    mat.depthWrite = mat.opacity >= 0.8;
+                                    mat.side = mat.opacity < 0.8 ? THREE.DoubleSide : THREE.FrontSide;
                                 } else {
                                     mat.transparent = false;
                                     mat.depthWrite = true;
                                     mat.side = THREE.FrontSide;
                                 }
                             } else {
-                                // Unstyled geometry -> Force your custom workspace color picker setting
                                 mat.vertexColors = false;
                                 mat.color.set(fallbackHexColor);
                                 mat.transparent = false;
@@ -1421,13 +1404,15 @@ function update3DModelViewer(solidData, ghostData = null) {
                             if (typeof wireframeMode !== 'undefined') mat.wireframe = wireframeMode;
                             mat.needsUpdate = true;
                         });
+
+                        child.renderOrder = 1; // each solid mesh renders after ghost meshes
                     }
                 });
                 masterGroup.add(solidGroup);
             }
         }
 
-// ---------------------------------------------------------
+        // ---------------------------------------------------------
         // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
         // ---------------------------------------------------------
         if (ghostData) {
@@ -1438,36 +1423,36 @@ function update3DModelViewer(solidData, ghostData = null) {
             if (ghostGroup) {
                 let meshCount = 0;
                 
-                // 💡 CRITICAL: Force the transparent layer to render AFTER all solid items
-                ghostGroup.renderOrder = 1;
+                // Ghost renders FIRST (renderOrder 0) so solid geometry draws on top
+                ghostGroup.renderOrder = 0;
 
                 ghostGroup.traverse((child) => {
                     if (child.isMesh) {
                         meshCount++;
                         if (child.geometry) child.geometry.computeVertexNormals();
                         
-                        // ✨ PREMIUM CYAN SMOKY ICE-GLASS MATERIAL
                         const glassMaterial = new THREE.MeshStandardMaterial({
-                            color: 0xa5f3fc,          // 🧊 Light cyan/ice glass tint
-                            transparent: true,        // Enable alpha mapping channels
-                            opacity: 0.30,            // Smooth, subtle translucency density
-                            depthWrite: false,        // Prevents see-through faces from cutting out solids
-                            side: THREE.DoubleSide,   // Render both outer and inner interior walls
-                            roughness: 0.15,          // Glossy, polished glass surface finish
-                            metalness: 0.1            // Faint metallic edge sheen
+                            color: 0xa5f3fc,
+                            transparent: true,
+                            opacity: 0.30,
+                            depthWrite: false,  // don't block solid geometry
+                            depthTest: true,    // but do test against existing depth
+                            side: THREE.DoubleSide,
+                            roughness: 0.15,
+                            metalness: 0.1
                         });
 
                         if (typeof wireframeMode !== 'undefined') {
                             glassMaterial.wireframe = wireframeMode;
                         }
 
-                        // Apply to single and multi-material assets uniformly
                         if (Array.isArray(child.material)) {
                             child.material = child.material.map(() => glassMaterial.clone());
                         } else {
                             child.material = glassMaterial;
                         }
                         
+                        child.renderOrder = 0; // each ghost mesh renders before solid meshes
                         child.material.needsUpdate = true;
                     }
                 });
