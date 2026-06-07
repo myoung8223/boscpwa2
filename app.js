@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "185"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "186"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2377,7 +2377,7 @@ if (leftPaneContainer && panelSplitGutter) {
     });
 }
 
-function isolateOpenSCADGhosts(code) {
+function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     let i = 0;
     const len = code.length;
     
@@ -2406,7 +2406,7 @@ function isolateOpenSCADGhosts(code) {
         let hasIgnoreModifier = false;
         let hasOtherModifier = false;
         
-        // Sequential prefix modifier tracking
+        // Accumulate modifier prefixes sequentially
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
@@ -2420,9 +2420,9 @@ function isolateOpenSCADGhosts(code) {
         skipWhitespaceAndComments();
         if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
 
-        // 📦 Context 1: Block Group Braces { ... }
+        // 📦 Context 1: Braces Group { ... }
         if (code[i] === '{') {
-            i++; // consume '{'
+            i++; 
             let blockContent = "";
             let totalChildren = 0;
             let disabledChildren = 0;
@@ -2443,22 +2443,21 @@ function isolateOpenSCADGhosts(code) {
                 }
                 blockContent += parsedChild.content;
             }
-            if (i < len && code[i] === '}') i++; // consume '}'
+            if (i < len && code[i] === '}') i++; 
             
             return {
                 content: `{ ${blockContent} } `,
                 allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren),
-                containsGhost: blockContainsGhost
+                containsGhost: blockContainsGhost || hasGhostModifier
             };
         }
         
-        // 🔍 Context 2: Read Token Signatures (Expressions / Parameters)
+        // 🔍 Context 2: Read Expressions / Signature Tokens
         let expression = "";
         let parensCount = 0;
         let endedWithSemicolon = false;
         let isVariableAssignment = false;
         
-        // Peek to check if this expression is a variable definition (e.g., $fn =)
         let peekIdx = i;
         let peekString = "";
         while (peekIdx < len && peekIdx < i + 50 && code[peekIdx] !== ';' && code[peekIdx] !== '{') {
@@ -2497,7 +2496,6 @@ function isolateOpenSCADGhosts(code) {
         
         skipWhitespaceAndComments();
         
-        // Determine structural relationship (Is it an operating wrapper or terminal statement?)
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nextChar = code[i];
@@ -2507,7 +2505,6 @@ function isolateOpenSCADGhosts(code) {
         }
         
         if (isVariableAssignment) {
-            // 💡 SAFEKEEPING: Pass variables raw without prepending any modifier operators
             return {
                 content: `${expression}\n`,
                 allChildrenDisabled: false,
@@ -2515,54 +2512,87 @@ function isolateOpenSCADGhosts(code) {
             };
         }
         
-if (isWrapper) {
-    let childResult = parseComponent(effectiveGhost);
-    let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
-    let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
+        if (isWrapper) {
+            let childResult = parseComponent(effectiveGhost);
+            let childContent = childResult.content;
+            let shouldDisableWrapper = childResult.allChildrenDisabled;
+            let containsGhost = hasGhostModifier || childResult.containsGhost;
 
-    // 💡 FIX: Check childResult metadata or update containsGhost by scanning childContent
-    if (isCsgFilterOp && !stripAllGhostsMode) {
-        // If the parsed child block contains a ghost call or token
-        if (childContent.includes('__GHOST__') || childContent.includes('%')) {
-            containsGhost = true;
-        }
-    }
+            // Deep check string body for nested macro/token indicators
+            if (childContent.includes('__GHOST__') || childContent.includes('%')) {
+                containsGhost = true;
+            }
 
-    // 💡 FIX: Handle both 'difference' and 'intersection' operators safely
-    if (isCsgFilterOp && containsGhost) {
-        if (pass2Expression.startsWith('difference')) {
-            pass2Expression = pass2Expression.replace('difference', 'union');
-        } else if (pass2Expression.startsWith('intersection')) {
-            pass2Expression = pass2Expression.replace('intersection', 'union');
-        }
-    }
+            // ⚡ THE SWAP: Check boolean signatures and convert to union if a ghost is involved
+            let pass2Expression = expression;
+            let cleanExpr = expression.trim().toLowerCase();
+            let isCsgFilterOp = cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection');
+            
+            if (isCsgFilterOp && containsGhost) {
+                pass2Expression = pass2Expression.replace('difference', 'union').replace('intersection', 'union');
+            }
 
-    if (effectiveGhost) {
-        if (hasGhostModifier && !isInsideGhostScope) {
-            return `__GHOST__() ${pass2Expression}\n${childContent}`;
-        }
-        return `${pass2Expression}\n${childContent}`;
-    } else {
-        if (containsGhost) {
-            return `${pass2Expression}\n${childContent}`;
-        }
-        if (shouldDisableWrapper) {
-            return `* ${pass2Expression}\n${childContent}`;
-        }
-        return `${pass2Expression}\n${childContent}`;
-    }
-} else {
-            // Leaf Statement Execution (cube, cylinder, sphere, import, text)
-            if (effectiveGhost) {
-                if (hasIgnoreModifier) {
-                    return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
-                }
+            if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
-                    return { content: `__GHOST__() ${expression}\n`, allChildrenDisabled: false, containsGhost: true };
+                    return {
+                        content: `cube([0.001, 0.001, 0.001], center=true);\n${childContent}`,
+                        allChildrenDisabled: false,
+                        containsGhost: true
+                    };
+                }
+                return {
+                    content: `${pass2Expression}\n${childContent}`,
+                    allChildrenDisabled: shouldDisableWrapper,
+                    containsGhost: containsGhost
+                };
+            }
+
+            if (effectiveGhost) {
+                if (hasGhostModifier) {
+                    return {
+                        content: `__GHOST__() ${pass2Expression}\n${childContent}`,
+                        allChildrenDisabled: false,
+                        containsGhost: true
+                    };
+                }
+                return {
+                    content: `${pass2Expression}\n${childContent}`,
+                    allChildrenDisabled: false,
+                    containsGhost: containsGhost
+                };
+            } else {
+                if (shouldDisableWrapper) {
+                    return {
+                        content: `* ${pass2Expression}\n${childContent}`,
+                        allChildrenDisabled: true,
+                        containsGhost: containsGhost
+                    };
+                }
+                return {
+                    content: `${pass2Expression}\n${childContent}`,
+                    allChildrenDisabled: false,
+                    containsGhost: containsGhost
+                };
+            }
+        } else {
+            // Primitive Leaf Nodes
+            if (stripAllGhostsMode) {
+                if (hasGhostModifier) {
+                    return { content: `cube([0.001, 0.001, 0.001], center=true);\n`, allChildrenDisabled: false, containsGhost: true };
                 }
                 return { content: `${expression}\n`, allChildrenDisabled: false, containsGhost: false };
+            }
+
+            if (effectiveGhost) {
+                if (hasIgnoreModifier) return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
+                return {
+                    content: hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`,
+                    allChildrenDisabled: false,
+                    containsGhost: hasGhostModifier
+                };
             } else {
-                return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
+                if (hasIgnoreModifier) return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
+                return { content: `${expression}\n`, allChildrenDisabled: false, containsGhost: false };
             }
         }
     }
@@ -2570,7 +2600,7 @@ if (isWrapper) {
     let output = "";
     while (i < len) {
         let res = parseComponent(false);
-        output += res.content; // Always safe because res is consistently an object
+        output += res.content;
         skipWhitespaceAndComments();
     }
     return output;
