@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "187"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "188"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2406,7 +2406,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         let hasIgnoreModifier = false;
         let hasOtherModifier = false;
         
-        // Accumulate modifier prefixes sequentially
+        // Track modifiers sequentially
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
@@ -2416,7 +2416,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             skipWhitespaceAndComments();
         }
         
-        // Flip effective ghost true ONLY for this node branch's children
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
         if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
@@ -2449,11 +2448,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return {
                 content: `{ ${blockContent} } `,
                 allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren),
-                containsGhost: blockContainsGhost // ✨ ISOLATED: Do not bleed hasGhostModifier upward as a sticky state
+                containsGhost: blockContainsGhost
             };
         }
         
-        // 🔍 Context 2: Read Expressions / Signature Tokens
+        // 🔍 Context 2: Token Expressions Signatures
         let expression = "";
         let parensCount = 0;
         let endedWithSemicolon = false;
@@ -2518,32 +2517,34 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             let childContent = childResult.content;
             let shouldDisableWrapper = childResult.allChildrenDisabled;
             
-            // This node contains a ghost if its children do, OR if it has a % prefix itself!
+            // Explicitly track if this structural level or its descendants are ghost layers
             let containsGhost = hasGhostModifier || childResult.containsGhost;
-
             if (childContent.includes('__GHOST__') || childContent.includes('%')) {
                 containsGhost = true;
             }
 
-            // ⚡ THE SWAP: Convert boolean signatures to unions if a ghost is active anywhere inside
-            let pass2Expression = expression;
+            // ⚡ THE SWAP: Runs globally for both Pass 1 and Pass 2
+            let passExpression = expression;
             let cleanExpr = expression.trim().toLowerCase();
             let isCsgFilterOp = cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection');
             
             if (isCsgFilterOp && containsGhost) {
-                pass2Expression = pass2Expression.replace('difference', 'union').replace('intersection', 'union');
+                passExpression = passExpression.replace('difference', 'union').replace('intersection', 'union');
+            }
+
+            // If we are in Solid Pass 1, and THIS wrapper block is the ghost container, 
+            // empty it out but keep its downstream siblings alive and active!
+            if (stripAllGhostsMode && hasGhostModifier) {
+                return {
+                    content: `cube([0.001, 0.001, 0.001], center=true);\n`,
+                    allChildrenDisabled: false,
+                    containsGhost: true
+                };
             }
 
             if (stripAllGhostsMode) {
-                if (hasGhostModifier) {
-                    return {
-                        content: `cube([0.001, 0.001, 0.001], center=true);\n${childContent}`,
-                        allChildrenDisabled: false,
-                        containsGhost: true
-                    };
-                }
                 return {
-                    content: `${pass2Expression}\n${childContent}`,
+                    content: `${passExpression}\n${childContent}`,
                     allChildrenDisabled: shouldDisableWrapper,
                     containsGhost: containsGhost
                 };
@@ -2552,32 +2553,32 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             if (effectiveGhost) {
                 if (hasGhostModifier) {
                     return {
-                        content: `__GHOST__() ${pass2Expression}\n${childContent}`,
+                        content: `__GHOST__() ${passExpression}\n${childContent}`,
                         allChildrenDisabled: false,
                         containsGhost: true
                     };
                 }
                 return {
-                    content: `${pass2Expression}\n${childContent}`,
+                    content: `${passExpression}\n${childContent}`,
                     allChildrenDisabled: false,
                     containsGhost: containsGhost
                 };
             } else {
                 if (shouldDisableWrapper) {
                     return {
-                        content: `* ${pass2Expression}\n${childContent}`,
+                        content: `* ${passExpression}\n${childContent}`,
                         allChildrenDisabled: true,
                         containsGhost: containsGhost
                     };
                 }
                 return {
-                    content: `${pass2Expression}\n${childContent}`,
+                    content: `${passExpression}\n${childContent}`,
                     allChildrenDisabled: false,
                     containsGhost: containsGhost
                 };
             }
         } else {
-            // Leaf execution handling
+            // Primitive Leaf Nodes
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
                     return { content: `cube([0.001, 0.001, 0.001], center=true);\n`, allChildrenDisabled: false, containsGhost: true };
