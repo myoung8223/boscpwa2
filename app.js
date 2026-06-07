@@ -1601,7 +1601,10 @@ Basic OpenSCAD PWA was architected, designed, and tested by Michael Young.
 
 The vast majority of the code syntax in this application was generated 
 using Google Gemini Large Language Models (including Gemini Flash, Gemini 
-Pro, and Gemini Experimental/Thinking models). 
+Pro, and Gemini Experimental/Thinking models).
+
+Additional work was performed with the assistance of Anthropic Claude
+(Sonnet 4.6 High).
 
 The author's role focused on structural engineering ideas, UI/UX steering, 
 extensive behavioral testing, and orchestrating the integration of the 
