@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "199"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "200"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1044,7 +1044,8 @@ btnPreview.addEventListener('click', async () => {
         const solidInstance = await createWasmInstance();
         mapExternalResources(solidInstance);
 
-        const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
+        //const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
+		const solidCode = isolateOpenSCADGhosts(scriptCode, true);
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
