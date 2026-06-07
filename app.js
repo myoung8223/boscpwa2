@@ -2797,14 +2797,21 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
 		
         // Non-boolean wrapper with mixed children (translate, color, rotate, etc.)
-        if (hasMixedChildren) {
+		if (hasMixedChildren) {
             let solidParts   = joinField('solidContent');
             let visibleParts = joinField('content');
-            let ghostParts   = children.map(c => c.ghostContent || c.content).join("");
+            // Ghost pass: only emit children that have actual ghost content.
+            // Solid children emit nothing to ghost 3MF.
+            let ghostParts = children.map(c => {
+                const hasRealGhost = c.ghostContent && 
+                                     c.ghostContent !== c.content && 
+                                     c.ghostContent !== c.solidContent;
+                return hasRealGhost ? c.ghostContent : "";
+            }).join("");
             return {
                 solidContent: `${expression}\n{\n${solidParts}}\n`,
                 content:      `${expression}\n{\n${visibleParts}}\n`,
-                ghostContent: `${expression}\n{\n${ghostParts}}\n`,
+                ghostContent: ghostParts ? `${expression}\n{\n${ghostParts}}\n` : ghostParts,
                 containsGhost: false, hasNestedGhost: true, isSelfGhost: false
             };
         }
