@@ -2630,22 +2630,21 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
             let allSolid = joinField('solidContent');
 
-            if (firstIsGhost) {
-                // Positive volume is ghost — rewrite as union() in both passes.
-                // Ghost pass: only the ghost positive volume translucent in ghost 3MF.
-                let ghostOnlyContent = "";
-                for (let child of children) {
-                    if (child.isSelfGhost || child.containsGhost || child.hasNestedGhost) {
-                        ghostOnlyContent += child.ghostContent || `__GHOST__() {\n${child.solidContent}}\n`;
-                    }
-                }
-                return {
-                    solidContent: `union()\n{\n${allSolid}}\n`,
-                    content:      `union()\n{\n${allSolid}}\n`,
-                    ghostContent: ghostOnlyContent,
-                    containsGhost: true, hasNestedGhost: true, isSelfGhost: false
-                };
-            } else {
+if (firstIsGhost) {
+    const firstChildSolid = children[0].solidContent;
+    let ghostOnlyContent = "";
+    for (let child of children) {
+        if (child.isSelfGhost || child.containsGhost || child.hasNestedGhost) {
+            ghostOnlyContent += child.ghostContent || `__GHOST__() {\n${child.solidContent}}\n`;
+        }
+    }
+    return {
+        solidContent: firstChildSolid,
+        content:      firstChildSolid,
+        ghostContent: ghostOnlyContent,
+        containsGhost: true, hasNestedGhost: true, isSelfGhost: false
+    };
+} else {
                 // Positive volume is solid, some subtractors are explicitly ghost.
                 // Solid pass: original op with only solid subtractors.
                 // Ghost pass: only ghost subtractors in ghost 3MF.
