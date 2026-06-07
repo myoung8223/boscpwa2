@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "207"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "208"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2610,8 +2610,22 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 };
             }
 
+			if (isHullOp && anyChildGhost) {
+                // Ghost children excluded from hull computation in solid pass
+                const solidChildren = children.filter(c => !c.isSelfGhost && !c.containsGhost && !c.hasNestedGhost);
+                const solidHullParts = solidChildren.map(c => c.solidContent).join("");
+                const solidHull = allChildrenGhost ? "" : `${expression}\n{\n${solidHullParts}}\n`;
+                return {
+                    solidContent: solidHull,
+                    content:      solidHull,
+                    ghostContent: "",
+                    containsGhost: false, hasNestedGhost: false, isSelfGhost: false
+                };
+            }
+
             // No ghost children — pass through using solidContent
             let allSolidContent = joinField('solidContent');
+			console.log("SOLID PASS GENERAL:", expression.trim(), "allSolidContent length:", allSolidContent.length);
             return {
                 solidContent: `${expression}\n{\n${allSolidContent}}\n`,
                 content:      `${expression}\n{\n${allSolidContent}}\n`,
