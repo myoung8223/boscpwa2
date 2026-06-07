@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "190"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "191"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2408,7 +2408,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     
     function parseComponent(isInsideGhostScope) {
         skipWhitespaceAndComments();
-        if (i >= len) return { content: "", containsGhost: false };
+        if (i >= len) return { content: "", containsGhost: false, hasNestedGhost: false };
         
         let hasGhostModifier = false;
         
@@ -2423,7 +2423,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
-        if (i >= len) return { content: "", containsGhost: false };
+        if (i >= len) return { content: "", containsGhost: false, hasNestedGhost: false };
 
         // 📦 Context 1: Safe Brace Grouping { ... }
         if (code[i] === '{') {
@@ -2436,7 +2436,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 if (i >= len || code[i] === '}') break;
                 
                 let parsedChild = parseComponent(effectiveGhost);
-                if (parsedChild.containsGhost) {
+                if (parsedChild.containsGhost || parsedChild.hasNestedGhost) {
                     blockContainsGhost = true;
                 }
                 blockContent += parsedChild.content;
@@ -2445,34 +2445,30 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             
             return {
                 content: `{ ${blockContent} } `,
-                containsGhost: blockContainsGhost
+                containsGhost: effectiveGhost,
+                hasNestedGhost: blockContainsGhost
             };
         }
         
         // 🔍 Context 2: Structural Expressions (Modules, assignments, calls)
         let expression = "";
         let parensCount = 0;
-        let bracketCount = 0; // Added bracket counting for arrays
+        let bracketCount = 0;
         let endedWithSemicolon = false;
         let isVariableAssignment = false;
 
-        // Unified loop: Collect expression while safely navigating strings and comments
         while (i < len) {
             let char = code[i];
             
-            // Safe String Parsing
             if (char === '"') {
                 expression += char;
                 i++;
                 while (i < len) {
                     let strChar = code[i];
                     expression += strChar;
-                    if (strChar === '\\') { // Handle escaped characters
+                    if (strChar === '\\') {
                         i++;
-                        if (i < len) {
-                            expression += code[i];
-                            i++;
-                        }
+                        if (i < len) { expression += code[i]; i++; }
                     } else if (strChar === '"') {
                         i++;
                         break;
@@ -2483,51 +2479,34 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 continue;
             }
 
-            // Safe Inline Comment Parsing
             if (char === '/' && code[i+1] === '/') {
-                while (i < len && code[i] !== '\n') {
-                    expression += code[i];
-                    i++;
-                }
+                while (i < len && code[i] !== '\n') { expression += code[i]; i++; }
                 continue;
             }
 
-            // Safe Block Comment Parsing
             if (char === '/' && code[i+1] === '*') {
-                expression += '/*';
-                i += 2;
-                while (i < len && !(code[i] === '*' && code[i+1] === '/')) {
-                    expression += code[i];
-                    i++;
-                }
-                if (i < len) {
-                    expression += '*/';
-                    i += 2;
-                }
+                expression += '/*'; i += 2;
+                while (i < len && !(code[i] === '*' && code[i+1] === '/')) { expression += code[i]; i++; }
+                if (i < len) { expression += '*/'; i += 2; }
                 continue;
             }
 
             expression += char;
-            
             if (char === '(') parensCount++;
             if (char === ')') parensCount--;
             if (char === '[') bracketCount++;
             if (char === ']') bracketCount--;
 
-            // Detect variable assignments securely
             if (char === '=' && parensCount === 0 && bracketCount === 0 && !expression.trim().startsWith('module')) {
                 isVariableAssignment = true;
             }
 
             i++;
-            
-            // Semicolon checks
             if (char === ';' && parensCount === 0 && bracketCount === 0) {
                 endedWithSemicolon = true;
                 break;
             }
             
-            // Wrapper check (like `module something()`)
             if (parensCount === 0 && bracketCount === 0 && char === ')') {
                 let peek = i;
                 while (peek < len && /\s/.test(code[peek])) peek++;
@@ -2550,49 +2529,49 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
         
         if (isVariableAssignment) {
-            return { content: `${expression}\n`, containsGhost: false };
+            return { content: `${expression}\n`, containsGhost: false, hasNestedGhost: false };
         }
         
         if (isWrapper) {
             let childResult = parseComponent(effectiveGhost);
-            let containsGhost = hasGhostModifier || childResult.containsGhost;
             
-            if (childResult.content.includes('__GHOST__') || childResult.content.includes('%')) {
-                containsGhost = true;
-            }
+            // A branch tracks nested ghosts for structural awareness, but operators
+            // are only mutated if this wrapper itself is part of a ghost scope.
+            let childHasGhost = childResult.containsGhost || childResult.hasNestedGhost || 
+                                childResult.content.includes('__GHOST__') || childResult.content.includes('%');
 
-            // ⚡ GLOBAL OPERATOR SWAP (Guaranteed Execution)
+            // ⚡ GLOBAL OPERATOR SWAP (Only runs if THIS structural scope is a ghost)
             let passExpr = expression;
             let cleanExpr = expression.trim().toLowerCase();
             if (cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection')) {
-                if (containsGhost) {
+                if (effectiveGhost) {
                     passExpr = passExpr.replace(/difference/i, 'union').replace(/intersection/i, 'union');
                 }
             }
 
-            if (stripAllGhostsMode) { // PASS 1: Solid Pass
+            if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
-                    return { content: `/* Ghost Block Omitted */\n`, containsGhost: true };
+                    return { content: `/* Ghost Block Omitted */\n`, containsGhost: true, hasNestedGhost: false };
                 }
-                return { content: `${passExpr}\n${childResult.content}`, containsGhost: containsGhost };
-            } else { // PASS 2: Ghost Pass
+                return { content: `${passExpr}\n${childResult.content}`, containsGhost: effectiveGhost, hasNestedGhost: childHasGhost };
+            } else {
                 if (effectiveGhost && hasGhostModifier) {
-                    return { content: `__GHOST__() ${passExpr}\n${childResult.content}`, containsGhost: true };
+                    return { content: `__GHOST__() ${passExpr}\n${childResult.content}`, containsGhost: true, hasNestedGhost: childHasGhost };
                 }
-                return { content: `${passExpr}\n${childResult.content}`, containsGhost: containsGhost };
+                return { content: `${passExpr}\n${childResult.content}`, containsGhost: effectiveGhost, hasNestedGhost: childHasGhost };
             }
         } else {
             // Leaf Primitive Execution
-            if (stripAllGhostsMode) { // PASS 1: Solid Pass
-                if (hasGhostModifier || effectiveGhost) {
-                    return { content: `/* Ghost Leaf Omitted */\n`, containsGhost: true };
+            if (stripAllGhostsMode) {
+                if (effectiveGhost) {
+                    return { content: `/* Ghost Leaf Omitted */\n`, containsGhost: true, hasNestedGhost: false };
                 }
-                return { content: `${expression}\n`, containsGhost: false };
-            } else { // PASS 2: Ghost Pass
+                return { content: `${expression}\n`, containsGhost: false, hasNestedGhost: false };
+            } else {
                 if (effectiveGhost && hasGhostModifier) {
-                    return { content: `__GHOST__() ${expression}\n`, containsGhost: true };
+                    return { content: `__GHOST__() ${expression}\n`, containsGhost: true, hasNestedGhost: false };
                 }
-                return { content: `${expression}\n`, containsGhost: hasGhostModifier };
+                return { content: `${expression}\n`, containsGhost: effectiveGhost, hasNestedGhost: false };
             }
         }
     }
