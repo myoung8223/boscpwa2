@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "189"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "190"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2381,9 +2381,10 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     let i = 0;
     const len = code.length;
     
+    // Robust character skipping (handles strings, inline comments, block comments)
     function skipWhitespaceAndComments() {
         while (i < len) {
-            const ch = code[i];
+            let ch = code[i];
             if (/\s/.test(ch)) {
                 i++;
             } else if (ch === '/' && code[i+1] === '/') {
@@ -2392,6 +2393,13 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 i += 2;
                 while (i < len && !(code[i] === '*' && code[i+1] === '/')) i++;
                 i += 2;
+            } else if (ch === '"') {
+                i++;
+                while (i < len) {
+                    if (code[i] === '\\') i += 2;
+                    else if (code[i] === '"') { i++; break; }
+                    else i++;
+                }
             } else {
                 break;
             }
@@ -2404,7 +2412,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         
         let hasGhostModifier = false;
         
-        // Track modifiers
+        // Track modifiers cleanly
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
@@ -2417,13 +2425,13 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         skipWhitespaceAndComments();
         if (i >= len) return { content: "", containsGhost: false };
 
-        // 📦 Context 1: Braces Group { ... }
+        // 📦 Context 1: Safe Brace Grouping { ... }
         if (code[i] === '{') {
             i++; 
             let blockContent = "";
             let blockContainsGhost = false;
 
-            while (true) {
+            while (i < len) {
                 skipWhitespaceAndComments();
                 if (i >= len || code[i] === '}') break;
                 
@@ -2433,7 +2441,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 }
                 blockContent += parsedChild.content;
             }
-            if (i < len && code[i] === '}') i++; 
+            if (i < len && code[i] === '}') i++; // Consume closing brace
             
             return {
                 content: `{ ${blockContent} } `,
@@ -2441,22 +2449,24 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             };
         }
         
-        // 🔍 Context 2: Token Expressions
+        // 🔍 Context 2: Structural Expressions (Modules, assignments, calls)
         let expression = "";
         let parensCount = 0;
         let endedWithSemicolon = false;
         let isVariableAssignment = false;
         
+        // Peek ahead to see if it's a variable assignment
         let peekIdx = i;
-        let peekString = "";
-        while (peekIdx < len && peekIdx < i + 50 && code[peekIdx] !== ';' && code[peekIdx] !== '{') {
-            peekString += code[peekIdx];
+        while (peekIdx < len && code[peekIdx] !== ';' && code[peekIdx] !== '{' && code[peekIdx] !== '\n') {
+            if (code[peekIdx] === '=' && !expression.trim().startsWith('module') && parensCount === 0) {
+                isVariableAssignment = true;
+            }
+            if (code[peekIdx] === '(') parensCount++;
+            if (code[peekIdx] === ')') parensCount--;
             peekIdx++;
         }
-        if (peekString.includes('=') && !peekString.trim().startsWith('module') && !peekString.includes('(')) {
-            isVariableAssignment = true;
-        }
 
+        parensCount = 0; // Reset for actual extraction
         while (i < len) {
             let char = code[i];
             expression += char;
@@ -2473,10 +2483,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 let peek = i;
                 while (peek < len && /\s/.test(code[peek])) peek++;
                 if (peek < len && code[peek] === ';') {
-                    while (i <= peek) {
-                        expression += code[i];
-                        i++;
-                    }
+                    while (i <= peek) { expression += code[i]; i++; }
                     endedWithSemicolon = true;
                 }
                 break;
@@ -2486,7 +2493,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         skipWhitespaceAndComments();
         
         let isWrapper = false;
-        if (!endedWithSemicolon && i < len) {
+        if (!endedWithSemicolon && !isVariableAssignment && i < len) {
             let nextChar = code[i];
             if (nextChar === '{' || nextChar === '%' || nextChar === '*' || nextChar === '!' || nextChar === '#' || /[a-zA-Z0-9_$]/.test(nextChar)) {
                 isWrapper = true;
@@ -2505,18 +2512,18 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 containsGhost = true;
             }
 
-            // ⚡ GLOBAL OPERATOR SWAP: Swaps difference/intersection to union for BOTH passes!
+            // ⚡ GLOBAL OPERATOR SWAP (Guaranteed Execution)
             let passExpr = expression;
             let cleanExpr = expression.trim().toLowerCase();
             if (cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection')) {
                 if (containsGhost) {
-                    passExpr = passExpr.replace('difference', 'union').replace('intersection', 'union');
+                    passExpr = passExpr.replace(/difference/i, 'union').replace(/intersection/i, 'union');
                 }
             }
 
             if (stripAllGhostsMode) { // PASS 1: Solid Pass
                 if (hasGhostModifier) {
-                    // Safe removal: replaces the ghost block with a structural comment
+                    // Strips the ghost block perfectly without breaking structure
                     return { content: `/* Ghost Block Omitted */\n`, containsGhost: true };
                 }
                 return { content: `${passExpr}\n${childResult.content}`, containsGhost: containsGhost };
@@ -2530,7 +2537,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             // Leaf Primitive Execution
             if (stripAllGhostsMode) { // PASS 1: Solid Pass
                 if (hasGhostModifier || effectiveGhost) {
-                    // Safe removal of primitive internal parts
                     return { content: `/* Ghost Leaf Omitted */\n`, containsGhost: true };
                 }
                 return { content: `${expression}\n`, containsGhost: false };
