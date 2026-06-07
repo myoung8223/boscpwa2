@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "201"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "202"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2591,12 +2591,9 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
                 let allSolid = joinField('solidContent');
 				if (firstIsGhost) {
-				    // Positive volume is ghost — solid pass shows only the positive volume as context.
-				    // Cutout children are irrelevant since there's no actual difference being performed.
-				    const firstChildSolid = children[0].solidContent;
 				    return {
-				        solidContent: firstChildSolid,
-				        content:      firstChildSolid,
+				        solidContent: "",
+				        content:      "",
 				        ghostContent: "",
 				        containsGhost: true, hasNestedGhost: false, isSelfGhost: false
 				    };
