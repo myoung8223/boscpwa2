@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "208"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "209"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2402,15 +2402,48 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         return children;
     }
 
+	function skipChildBody() {
+        skipWhitespaceAndComments();
+        if (i >= len) return;
+        if (code[i] === '{') {
+            let depth = 1; i++;
+            while (i < len && depth > 0) {
+                const ch = code[i];
+                if (ch === '"') {
+                    i++;
+                    while (i < len) {
+                        if (code[i] === '\\') i += 2;
+                        else if (code[i] === '"') { i++; break; }
+                        else i++;
+                    }
+                } else if (ch === '/' && code[i+1] === '/') {
+                    while (i < len && code[i] !== '\n') i++;
+                } else if (ch === '/' && code[i+1] === '*') {
+                    i += 2;
+                    while (i < len && !(code[i] === '*' && code[i+1] === '/')) i++;
+                    if (i < len) i += 2;
+                } else if (ch === '{') { depth++; i++; }
+                else if (ch === '}') { depth--; i++; }
+                else i++;
+            }
+        } else {
+            parseComponent(false); // parse and discard
+        }
+    }
+	
     function parseComponent(isInsideGhostScope) {
         skipWhitespaceAndComments();
         if (i >= len) return { solidContent: "", content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
 
-        let hasGhostModifier = false;
+		let hasGhostModifier   = false;
+        let hasDisableModifier = false;
+        let hasRootModifier    = false;
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
-            else if (ch === '*' || ch === '!' || ch === '#') { i++; }
+            else if (ch === '*') { hasDisableModifier = true; i++; }
+            else if (ch === '!') { hasRootModifier = true; i++; }
+            else if (ch === '#') { hasGhostModifier = true; i++; }
             else break;
             skipWhitespaceAndComments();
         }
@@ -2418,6 +2451,19 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
 
         skipWhitespaceAndComments();
+
+		// * modifier — disable entirely, skip body and produce nothing in either pass
+        if (hasDisableModifier) {
+            skipChildBody();
+            return { solidContent: "", content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
+        }
+
+        // ! modifier — render ONLY this subtree, everything else at top level is ignored
+        if (hasRootModifier) {
+            const result = parseComponent(isInsideGhostScope);
+            return { ...result, isRootNode: true };
+        }
+		
         if (i >= len) return { solidContent: "", content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: effectiveGhost };
 
         // --- Bare brace block ---
@@ -2505,7 +2551,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nc = code[i];
-            if (nc === '{' || nc === '(' || nc === '%' || nc === '*' || nc === '!' || nc === '#' || /[a-zA-Z0-9_$]/.test(nc)) {
+            if (nc === '{' || nc === '(' || nc === '%' || nc === '*' || nc === '#' || /[a-zA-Z0-9_$]/.test(nc)) {
                 isWrapper = true;
             }
         }
@@ -2625,7 +2671,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
             // No ghost children — pass through using solidContent
             let allSolidContent = joinField('solidContent');
-			console.log("SOLID PASS GENERAL:", expression.trim(), "allSolidContent length:", allSolidContent.length);
+			//console.log("SOLID PASS GENERAL:", expression.trim(), "allSolidContent length:", allSolidContent.length);
             return {
                 solidContent: `${expression}\n{\n${allSolidContent}}\n`,
                 content:      `${expression}\n{\n${allSolidContent}}\n`,
@@ -2718,7 +2764,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             // rather than getting re-wrapped inside it.
             const solidHullParts = solidChildren.map(c => c.solidContent).join("");
             const solidHull = `${expression}\n{\n${solidHullParts}}\n`;
-			console.log("HULL MIXED RETURN ghostSeparateParts:", JSON.stringify(ghostSeparateParts.substring(0, 150)));
+			//console.log("HULL MIXED RETURN ghostSeparateParts:", JSON.stringify(ghostSeparateParts.substring(0, 150)));
             return {
                 solidContent: solidHull,
                 content:      solidHull,
@@ -2755,7 +2801,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 		// Fully solid — but children may have ghost spillover from hull extractions
         let solidParts = joinField('solidContent');
         let ghostSpill = joinField('ghostContent');
-		console.log("FULLY SOLID PATH:", expression.trim(), "ghostSpill length:", ghostSpill.length, "ghostSpill:", JSON.stringify(ghostSpill.substring(0, 150)));
+		//console.log("FULLY SOLID PATH:", expression.trim(), "ghostSpill length:", ghostSpill.length, "ghostSpill:", JSON.stringify(ghostSpill.substring(0, 150)));
         return {
             solidContent: `${expression}\n{\n${solidParts}}\n`,
             content:      `${expression}\n{\n${solidParts}}\n`,
@@ -2764,13 +2810,27 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         };
     }
 
-    let solidOutput = "";
+	let solidOutput = "";
     let ghostOutput = "";
+    let rootSolid = null;
+    let rootGhost = null;
+
     while (i < len) {
         let res = parseComponent(false);
-        solidOutput += res.content;
-        ghostOutput += res.ghostContent;
+        if (res.isRootNode) {
+            rootSolid = res.content;
+            rootGhost = res.ghostContent;
+        } else {
+            solidOutput += res.content;
+            ghostOutput += res.ghostContent;
+        }
         skipWhitespaceAndComments();
+    }
+
+    // ! modifier — if a root node was found, it overrides everything else
+    if (rootSolid !== null) {
+        solidOutput = rootSolid;
+        ghostOutput = rootGhost || "";
     }
 
     return stripAllGhostsMode ? solidOutput : ghostOutput;
