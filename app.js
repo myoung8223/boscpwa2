@@ -2452,34 +2452,83 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         // 🔍 Context 2: Structural Expressions (Modules, assignments, calls)
         let expression = "";
         let parensCount = 0;
+        let bracketCount = 0; // Added bracket counting for arrays
         let endedWithSemicolon = false;
         let isVariableAssignment = false;
-        
-        // Peek ahead to see if it's a variable assignment
-        let peekIdx = i;
-        while (peekIdx < len && code[peekIdx] !== ';' && code[peekIdx] !== '{' && code[peekIdx] !== '\n') {
-            if (code[peekIdx] === '=' && !expression.trim().startsWith('module') && parensCount === 0) {
-                isVariableAssignment = true;
-            }
-            if (code[peekIdx] === '(') parensCount++;
-            if (code[peekIdx] === ')') parensCount--;
-            peekIdx++;
-        }
 
-        parensCount = 0; // Reset for actual extraction
+        // Unified loop: Collect expression while safely navigating strings and comments
         while (i < len) {
             let char = code[i];
+            
+            // Safe String Parsing
+            if (char === '"') {
+                expression += char;
+                i++;
+                while (i < len) {
+                    let strChar = code[i];
+                    expression += strChar;
+                    if (strChar === '\\') { // Handle escaped characters
+                        i++;
+                        if (i < len) {
+                            expression += code[i];
+                            i++;
+                        }
+                    } else if (strChar === '"') {
+                        i++;
+                        break;
+                    } else {
+                        i++;
+                    }
+                }
+                continue;
+            }
+
+            // Safe Inline Comment Parsing
+            if (char === '/' && code[i+1] === '/') {
+                while (i < len && code[i] !== '\n') {
+                    expression += code[i];
+                    i++;
+                }
+                continue;
+            }
+
+            // Safe Block Comment Parsing
+            if (char === '/' && code[i+1] === '*') {
+                expression += '/*';
+                i += 2;
+                while (i < len && !(code[i] === '*' && code[i+1] === '/')) {
+                    expression += code[i];
+                    i++;
+                }
+                if (i < len) {
+                    expression += '*/';
+                    i += 2;
+                }
+                continue;
+            }
+
             expression += char;
+            
             if (char === '(') parensCount++;
             if (char === ')') parensCount--;
+            if (char === '[') bracketCount++;
+            if (char === ']') bracketCount--;
+
+            // Detect variable assignments securely
+            if (char === '=' && parensCount === 0 && bracketCount === 0 && !expression.trim().startsWith('module')) {
+                isVariableAssignment = true;
+            }
+
             i++;
             
-            if (char === ';' && parensCount === 0) {
+            // Semicolon checks
+            if (char === ';' && parensCount === 0 && bracketCount === 0) {
                 endedWithSemicolon = true;
                 break;
             }
             
-            if (parensCount === 0 && char === ')') {
+            // Wrapper check (like `module something()`)
+            if (parensCount === 0 && bracketCount === 0 && char === ')') {
                 let peek = i;
                 while (peek < len && /\s/.test(code[peek])) peek++;
                 if (peek < len && code[peek] === ';') {
@@ -2523,7 +2572,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
             if (stripAllGhostsMode) { // PASS 1: Solid Pass
                 if (hasGhostModifier) {
-                    // Strips the ghost block perfectly without breaking structure
                     return { content: `/* Ghost Block Omitted */\n`, containsGhost: true };
                 }
                 return { content: `${passExpr}\n${childResult.content}`, containsGhost: containsGhost };
