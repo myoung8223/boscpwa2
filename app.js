@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "194"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "183"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1037,16 +1037,14 @@ btnPreview.addEventListener('click', async () => {
             }
         };
 
-// ---------------------------------------------------------
+        // ---------------------------------------------------------
         // 🚀 PASS 1: CORE SOLID COMPILER (INSTANCE 1)
         // ---------------------------------------------------------
         logToConsole("⚡ Initializing Solid Geometry Compiler Instance...");
         const solidInstance = await createWasmInstance();
         mapExternalResources(solidInstance);
 
-        // 💡 THE FIX: Use our token parser with 'true' to safely swap ghosts for micro-cubes
-        const solidCode = isolateOpenSCADGhosts(scriptCode, true);
-        
+        const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
@@ -1076,7 +1074,7 @@ btnPreview.addEventListener('click', async () => {
 
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
             const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876, 0.4]) children(); }\n\n`;
+            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
             logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
@@ -1443,63 +1441,36 @@ function update3DModelViewer(solidData, ghostData = null) {
                 // 💡 CRITICAL: Force the transparent layer to render AFTER all solid items
                 ghostGroup.renderOrder = 1;
 
-ghostGroup.traverse((child) => {
-            if (child.isMesh) {
-                meshCount++;
-                if (child.geometry) child.geometry.computeVertexNormals();
+                ghostGroup.traverse((child) => {
+                    if (child.isMesh) {
+                        meshCount++;
+                        if (child.geometry) child.geometry.computeVertexNormals();
+                        
+                        // ✨ PREMIUM CYAN SMOKY ICE-GLASS MATERIAL
+                        const glassMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xa5f3fc,          // 🧊 Light cyan/ice glass tint
+                            transparent: true,        // Enable alpha mapping channels
+                            opacity: 0.30,            // Smooth, subtle translucency density
+                            depthWrite: false,        // Prevents see-through faces from cutting out solids
+                            side: THREE.DoubleSide,   // Render both outer and inner interior walls
+                            roughness: 0.15,          // Glossy, polished glass surface finish
+                            metalness: 0.1            // Faint metallic edge sheen
+                        });
 
-                // OpenSCAD 3MF materials can be arrays or single objects. 
-                // Let's check if the native material has an alpha < 1.0
-                let isTransparentBase = false;
-                const originalMats = Array.isArray(child.material) ? child.material : [child.material];
-                
-                originalMats.forEach(mat => {
-                    if (mat && mat.opacity < 0.9) {
-                        isTransparentBase = true;
+                        if (typeof wireframeMode !== 'undefined') {
+                            glassMaterial.wireframe = wireframeMode;
+                        }
+
+                        // Apply to single and multi-material assets uniformly
+                        if (Array.isArray(child.material)) {
+                            child.material = child.material.map(() => glassMaterial.clone());
+                        } else {
+                            child.material = glassMaterial;
+                        }
+                        
+                        child.material.needsUpdate = true;
                     }
                 });
-
-                if (isTransparentBase) {
-                    // ✨ THIS IS THE GHOST BASE: Apply your premium Glass Material
-                    const glassMaterial = new THREE.MeshPhysicalMaterial({
-                        color: 0xff4dff,         // Your pink tint
-                        transparent: true,
-                        opacity: 0.35,           // See-through
-                        roughness: 0.1,
-                        metalness: 0.1,
-                        transmission: 0.9,       // Glass-like light transmission
-                        thickness: 0.5,
-                        side: THREE.DoubleSide,
-                        depthWrite: false
-                    });
-                    
-                    if (typeof wireframeMode !== 'undefined') {
-                        glassMaterial.wireframe = wireframeMode;
-                    }
-                    
-                    child.material = glassMaterial;
-                } else {
-                    // 🪨 THIS IS A CUTTING TOOL: Render it as a solid, highly visible object!
-                    const toolMaterial = new THREE.MeshStandardMaterial({
-                        color: 0xebc815, // Highly visible OpenSCAD yellow/gold
-                        transparent: false,
-                        opacity: 1.0,
-                        roughness: 0.4,
-                        metalness: 0.2,
-                        side: THREE.FrontSide,
-                        depthWrite: true
-                    });
-
-                    if (typeof wireframeMode !== 'undefined') {
-                        toolMaterial.wireframe = wireframeMode;
-                    }
-
-                    child.material = toolMaterial;
-                }
-                
-                child.material.needsUpdate = true;
-            }
-        });
                 
                 logToConsole(`🪲 [DEBUG] Ghost Pass found and processed ${meshCount} glass meshes.`);
                 masterGroup.add(ghostGroup);
@@ -2406,7 +2377,7 @@ if (leftPaneContainer && panelSplitGutter) {
     });
 }
 
-function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
+function isolateOpenSCADGhosts(code) {
     let i = 0;
     const len = code.length;
     
@@ -2445,7 +2416,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             skipWhitespaceAndComments();
         }
         
-        let effectiveGhost = isInsideGhostScope || hasGhostModifier;
+        const effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
         if (i >= len) return "";
 
@@ -2460,6 +2431,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 skipWhitespaceAndComments();
                 if (i >= len || code[i] === '}') break;
                 
+                // Track children to determine if this whole block becomes empty
                 totalChildren++;
                 let parsedChild = parseComponent(effectiveGhost);
                 if (parsedChild.trim().startsWith('*')) {
@@ -2481,6 +2453,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         let endedWithSemicolon = false;
         let isVariableAssignment = false;
         
+        // Peek to check if this expression is a variable definition (e.g., $fn =)
         let peekIdx = i;
         let peekString = "";
         while (peekIdx < len && peekIdx < i + 50 && code[peekIdx] !== ';' && code[peekIdx] !== '{') {
@@ -2519,6 +2492,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         
         skipWhitespaceAndComments();
         
+        // Determine structural relationship (Is it an operating wrapper or terminal statement?)
         let isWrapper = false;
         if (!endedWithSemicolon && i < len) {
             let nextChar = code[i];
@@ -2528,90 +2502,32 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
         
         if (isVariableAssignment) {
+            // 💡 SAFEKEEPING: Pass variables raw without prepending any modifier operators
             return `${expression}\n`;
         }
         
-if (isWrapper) {
-            let normalizedExpr = expression.trim();
-            const isCsgFilterOp = normalizedExpr.startsWith('difference') || normalizedExpr.startsWith('intersection');
-            
-            let containsGhost = false;
-            if (isCsgFilterOp && !stripAllGhostsMode) {
-                // Find where this block ends to limit our peek window safely
-                let openBraces = 0;
-                let endSearchIdx = i;
-                
-                while (endSearchIdx < len) {
-                    if (code[endSearchIdx] === '{') openBraces++;
-                    if (code[endSearchIdx] === '}') {
-                        openBraces--;
-                        if (openBraces <= 0) break;
-                    }
-                    endSearchIdx++;
-                }
-                
-                let blockSlice = code.slice(i, endSearchIdx);
-                
-                // Flag if a ghost modifier is hidden inside this CSG operation
-                if (blockSlice.includes('%')) {
-                    containsGhost = true;
-                }
-            }
-
-// Let children evaluate their own scope naturally
+        if (isWrapper) {
             let childResult = parseComponent(effectiveGhost);
+            
+            // Handle if the returned child data was a block context payload
             let childContent = (typeof childResult === 'object') ? childResult.content : childResult;
-            
-            // Safely strip asterisks whether they start on a new line or after a bracket
-            if (containsGhost && !stripAllGhostsMode) {
-                childContent = childContent.replace(/(^|[{}]\s*)\*\s+/gm, '$1');
-            }
-
-            let shouldDisableWrapper = false;
-            if (!containsGhost) {
-                shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
-            }
-
-            // --- PASS 1 ROUTING (Solid Geometry) ---
-            if (stripAllGhostsMode) {
-                if (hasGhostModifier) {
-                    // Replace the ghosted base with a tiny invisible cube to keep the CSG math valid
-                    return `cube([0.001, 0.001, 0.001], center=true);\n`;
-                }
-                // Keep differences as differences!
-                return `${expression}\n${childContent}`;
-            }
-
-            // --- PASS 2 ROUTING (Ghost / X-Ray Layout) ---
-            
-            // THE FIX: If this block contains a ghost, swap the difference operator to a union
-            let pass2Expression = expression;
-            if (containsGhost && pass2Expression.startsWith('difference')) {
-                pass2Expression = pass2Expression.replace('difference', 'union');
-            }
+            let shouldDisableWrapper = (typeof childResult === 'object') ? childResult.allChildrenDisabled : childResult.trim().startsWith('*');
 
             if (effectiveGhost) {
-                if (hasGhostModifier && !isInsideGhostScope) {
-                    return `__GHOST__() ${pass2Expression}\n${childContent}`;
+                if (hasGhostModifier) {
+                    return `__GHOST__() ${expression}\n${childContent}`;
                 }
-                return `${pass2Expression}\n${childContent}`;
+                return `${expression}\n${childContent}`;
             } else {
-                if (containsGhost) {
-                    return `${pass2Expression}\n${childContent}`;
-                }
+                // 💡 CLEAN HULL CRASH PROTECTION: If the children under this operator are completely disabled,
+                // disable the entire upstream transformation chain automatically to keep the syntax clean.
                 if (shouldDisableWrapper) {
-                    return `* ${pass2Expression}\n${childContent}`;
+                    return `* ${expression}\n${childContent}`;
                 }
-                return `${pass2Expression}\n${childContent}`;
+                return `${expression}\n${childContent}`;
             }
         } else {
-            if (stripAllGhostsMode) {
-                if (hasGhostModifier) {
-                    return `cube([0.001, 0.001, 0.001], center=true);\n`;
-                }
-                return `${expression}\n`;
-            }
-
+            // Leaf Statement Execution (cube, cylinder, sphere, import, text)
             if (effectiveGhost) {
                 if (hasIgnoreModifier) return `* ${expression}\n`;
                 return hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`;
