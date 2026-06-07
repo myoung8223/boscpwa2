@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "212"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "213"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2821,8 +2821,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             };
         }
 
-		// Fully solid — emit full structure for ghost pass context,
-        // but only propagate hull ghost spillover (non-structural ghost extractions)
+		// Fully solid — only propagate hull ghost spillover if present, nothing otherwise
         let solidParts = joinField('solidContent');
         let ghostSpill = children
             .filter(c => c.ghostContent && c.ghostContent !== c.content && c.ghostContent !== c.solidContent)
@@ -2831,7 +2830,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         return {
             solidContent: fullSolidBlock,
             content:      fullSolidBlock,
-            ghostContent: ghostSpill || fullSolidBlock,
+            ghostContent: ghostSpill,
             containsGhost: false, hasNestedGhost: false, isSelfGhost: false
         };
     }
