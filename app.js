@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "209"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "210"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -998,6 +998,22 @@ btnPreview.addEventListener('click', async () => {
     const hasGhost = ghostRegex.test(scriptCode);
     ghostRegex.lastIndex = 0; 
 
+	// Check for ! root modifier — if present, bypass parser entirely
+    const hasRootModifier = (() => {
+        let inLineComment = false, inBlockComment = false, inString = false;
+        for (let i = 0; i < scriptCode.length; i++) {
+            const ch = scriptCode[i];
+            if (inLineComment) { if (ch === '\n') inLineComment = false; continue; }
+            if (inBlockComment) { if (ch === '*' && scriptCode[i+1] === '/') { inBlockComment = false; i++; } continue; }
+            if (inString) { if (ch === '\\') i++; else if (ch === '"') inString = false; continue; }
+            if (ch === '"') { inString = true; continue; }
+            if (ch === '/' && scriptCode[i+1] === '/') { inLineComment = true; i++; continue; }
+            if (ch === '/' && scriptCode[i+1] === '*') { inBlockComment = true; i++; continue; }
+            if (ch === '!' && scriptCode[i+1] !== '=') return true;
+        }
+        return false;
+    })();
+	
     try {
         // --- INSTANCE SETTINGS BUILDER FUNCTION ---
         const createWasmInstance = async () => {
@@ -1045,7 +1061,7 @@ btnPreview.addEventListener('click', async () => {
         mapExternalResources(solidInstance);
 
         //const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
-		const solidCode = isolateOpenSCADGhosts(scriptCode, true);
+		const solidCode = hasRootModifier ? scriptCode : isolateOpenSCADGhosts(scriptCode, true);
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
@@ -1068,7 +1084,7 @@ btnPreview.addEventListener('click', async () => {
         // 🚀 PASS 2: ISOLATED GHOST COMPILER (INSTANCE 2)
         // ---------------------------------------------------------
         let ghostData = null;
-        if (hasGhost) {
+        if (hasGhost && !hasRootModifier) {
             logToConsole("⚡ Initializing Dedicated Ghost Geometry Compiler Instance...");
             const ghostInstance = await createWasmInstance();
             mapExternalResources(ghostInstance);
@@ -2437,13 +2453,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
 		let hasGhostModifier   = false;
         let hasDisableModifier = false;
-        let hasRootModifier    = false;
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
             else if (ch === '*') { hasDisableModifier = true; i++; }
-            else if (ch === '!') { hasRootModifier = true; i++; }
-            else if (ch === '#') { hasGhostModifier = true; i++; }
+            else if (ch === '!' || ch === '#') { hasGhostModifier = true; i++; }
             else break;
             skipWhitespaceAndComments();
         }
@@ -2456,12 +2470,6 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         if (hasDisableModifier) {
             skipChildBody();
             return { solidContent: "", content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: false };
-        }
-
-        // ! modifier — render ONLY this subtree, everything else at top level is ignored
-        if (hasRootModifier) {
-            const result = parseComponent(isInsideGhostScope);
-            return { ...result, isRootNode: true };
         }
 		
         if (i >= len) return { solidContent: "", content: "", ghostContent: "", containsGhost: false, hasNestedGhost: false, isSelfGhost: effectiveGhost };
