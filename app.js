@@ -2590,15 +2590,17 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             if (isBooleanOp && anyChildGhost) {
                 const firstIsGhost = children[0].isSelfGhost || children[0].containsGhost;
                 let allSolid = joinField('solidContent');
-                if (firstIsGhost) {
-                    // Positive volume is ghost — rewrite as union() so full shape appears as solid context
-                    return {
-                        solidContent: `union()\n{\n${allSolid}}\n`,
-                        content:      `union()\n{\n${allSolid}}\n`,
-                        ghostContent: "",
-                        containsGhost: true, hasNestedGhost: false, isSelfGhost: false
-                    };
-                }
+				if (firstIsGhost) {
+				    // Positive volume is ghost — solid pass shows only the positive volume as context.
+				    // Cutout children are irrelevant since there's no actual difference being performed.
+				    const firstChildSolid = children[0].solidContent;
+				    return {
+				        solidContent: firstChildSolid,
+				        content:      firstChildSolid,
+				        ghostContent: "",
+				        containsGhost: true, hasNestedGhost: false, isSelfGhost: false
+				    };
+				}
                 // Positive volume is solid — keep original op, drop ghost subtractors
                 let solidOnly = children.filter(c => !c.isSelfGhost && !c.containsGhost).map(c => c.content).join("");
                 return {
