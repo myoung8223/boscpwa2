@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "188"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "189"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2400,44 +2400,34 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     
     function parseComponent(isInsideGhostScope) {
         skipWhitespaceAndComments();
-        if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
+        if (i >= len) return { content: "", containsGhost: false };
         
         let hasGhostModifier = false;
-        let hasIgnoreModifier = false;
-        let hasOtherModifier = false;
         
-        // Track modifiers sequentially
+        // Track modifiers
         while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
-            else if (ch === '*') { hasIgnoreModifier = true; i++; }
-            else if (ch === '!' || ch === '#') { hasOtherModifier = true; i++; } 
+            else if (ch === '*' || ch === '!' || ch === '#') { i++; } 
             else break;
             skipWhitespaceAndComments();
         }
         
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
-        if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
+        if (i >= len) return { content: "", containsGhost: false };
 
         // 📦 Context 1: Braces Group { ... }
         if (code[i] === '{') {
             i++; 
             let blockContent = "";
-            let totalChildren = 0;
-            let disabledChildren = 0;
             let blockContainsGhost = false;
 
             while (true) {
                 skipWhitespaceAndComments();
                 if (i >= len || code[i] === '}') break;
                 
-                totalChildren++;
                 let parsedChild = parseComponent(effectiveGhost);
-                
-                if (parsedChild.content.trim().startsWith('*')) {
-                    disabledChildren++;
-                }
                 if (parsedChild.containsGhost) {
                     blockContainsGhost = true;
                 }
@@ -2447,12 +2437,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             
             return {
                 content: `{ ${blockContent} } `,
-                allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren),
                 containsGhost: blockContainsGhost
             };
         }
         
-        // 🔍 Context 2: Token Expressions Signatures
+        // 🔍 Context 2: Token Expressions
         let expression = "";
         let parensCount = 0;
         let endedWithSemicolon = false;
@@ -2505,97 +2494,51 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         }
         
         if (isVariableAssignment) {
-            return {
-                content: `${expression}\n`,
-                allChildrenDisabled: false,
-                containsGhost: false
-            };
+            return { content: `${expression}\n`, containsGhost: false };
         }
         
         if (isWrapper) {
             let childResult = parseComponent(effectiveGhost);
-            let childContent = childResult.content;
-            let shouldDisableWrapper = childResult.allChildrenDisabled;
-            
-            // Explicitly track if this structural level or its descendants are ghost layers
             let containsGhost = hasGhostModifier || childResult.containsGhost;
-            if (childContent.includes('__GHOST__') || childContent.includes('%')) {
+            
+            if (childResult.content.includes('__GHOST__') || childResult.content.includes('%')) {
                 containsGhost = true;
             }
 
-            // ⚡ THE SWAP: Runs globally for both Pass 1 and Pass 2
-            let passExpression = expression;
+            // ⚡ GLOBAL OPERATOR SWAP: Swaps difference/intersection to union for BOTH passes!
+            let passExpr = expression;
             let cleanExpr = expression.trim().toLowerCase();
-            let isCsgFilterOp = cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection');
-            
-            if (isCsgFilterOp && containsGhost) {
-                passExpression = passExpression.replace('difference', 'union').replace('intersection', 'union');
+            if (cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection')) {
+                if (containsGhost) {
+                    passExpr = passExpr.replace('difference', 'union').replace('intersection', 'union');
+                }
             }
 
-            // If we are in Solid Pass 1, and THIS wrapper block is the ghost container, 
-            // empty it out but keep its downstream siblings alive and active!
-            if (stripAllGhostsMode && hasGhostModifier) {
-                return {
-                    content: `cube([0.001, 0.001, 0.001], center=true);\n`,
-                    allChildrenDisabled: false,
-                    containsGhost: true
-                };
-            }
-
-            if (stripAllGhostsMode) {
-                return {
-                    content: `${passExpression}\n${childContent}`,
-                    allChildrenDisabled: shouldDisableWrapper,
-                    containsGhost: containsGhost
-                };
-            }
-
-            if (effectiveGhost) {
+            if (stripAllGhostsMode) { // PASS 1: Solid Pass
                 if (hasGhostModifier) {
-                    return {
-                        content: `__GHOST__() ${passExpression}\n${childContent}`,
-                        allChildrenDisabled: false,
-                        containsGhost: true
-                    };
+                    // Safe removal: replaces the ghost block with a structural comment
+                    return { content: `/* Ghost Block Omitted */\n`, containsGhost: true };
                 }
-                return {
-                    content: `${passExpression}\n${childContent}`,
-                    allChildrenDisabled: false,
-                    containsGhost: containsGhost
-                };
-            } else {
-                if (shouldDisableWrapper) {
-                    return {
-                        content: `* ${passExpression}\n${childContent}`,
-                        allChildrenDisabled: true,
-                        containsGhost: containsGhost
-                    };
+                return { content: `${passExpr}\n${childResult.content}`, containsGhost: containsGhost };
+            } else { // PASS 2: Ghost Pass
+                if (effectiveGhost && hasGhostModifier) {
+                    return { content: `__GHOST__() ${passExpr}\n${childResult.content}`, containsGhost: true };
                 }
-                return {
-                    content: `${passExpression}\n${childContent}`,
-                    allChildrenDisabled: false,
-                    containsGhost: containsGhost
-                };
+                return { content: `${passExpr}\n${childResult.content}`, containsGhost: containsGhost };
             }
         } else {
-            // Primitive Leaf Nodes
-            if (stripAllGhostsMode) {
-                if (hasGhostModifier) {
-                    return { content: `cube([0.001, 0.001, 0.001], center=true);\n`, allChildrenDisabled: false, containsGhost: true };
+            // Leaf Primitive Execution
+            if (stripAllGhostsMode) { // PASS 1: Solid Pass
+                if (hasGhostModifier || effectiveGhost) {
+                    // Safe removal of primitive internal parts
+                    return { content: `/* Ghost Leaf Omitted */\n`, containsGhost: true };
                 }
-                return { content: `${expression}\n`, allChildrenDisabled: false, containsGhost: false };
-            }
-
-            if (effectiveGhost) {
-                if (hasIgnoreModifier) return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
-                return {
-                    content: hasGhostModifier ? `__GHOST__() ${expression}\n` : `${expression}\n`,
-                    allChildrenDisabled: false,
-                    containsGhost: hasGhostModifier
-                };
-            } else {
-                if (hasIgnoreModifier) return { content: `* ${expression}\n`, allChildrenDisabled: true, containsGhost: false };
-                return { content: `${expression}\n`, allChildrenDisabled: false, containsGhost: false };
+                return { content: `${expression}\n`, containsGhost: false };
+            } else { // PASS 2: Ghost Pass
+                if (effectiveGhost && hasGhostModifier) {
+                    return { content: `__GHOST__() ${expression}\n`, containsGhost: true };
+                }
+                return { content: `${expression}\n`, containsGhost: hasGhostModifier };
             }
         }
     }
@@ -2603,7 +2546,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     let output = "";
     while (i < len) {
         let res = parseComponent(false);
-        output += (typeof res === 'object') ? res.content : res;
+        output += res.content;
         skipWhitespaceAndComments();
     }
     return output;
