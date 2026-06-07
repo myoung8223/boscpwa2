@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "205"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "206"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2665,32 +2665,51 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             }
         }
 
-		// Hull/minkowski op with mixed ghost/solid children —
-        // ghost children are excluded from the hull computation and rendered separately.
-        if (isHullOp && hasMixedChildren) {
-            const solidChildren  = children.filter(c => !c.isSelfGhost && !c.containsGhost && !c.hasNestedGhost);
-            const ghostChildren  = children.filter(c =>  c.isSelfGhost ||  c.containsGhost ||  c.hasNestedGhost);
+		// Hull/minkowski op — ghost children are excluded from hull computation
+        // and rendered separately, never infecting the hull itself.
+        if (isHullOp) {
+            const solidChildren = children.filter(c => !c.isSelfGhost && !c.containsGhost && !c.hasNestedGhost);
+            const ghostChildren = children.filter(c =>  c.isSelfGhost ||  c.containsGhost ||  c.hasNestedGhost);
 
+            // All children ghost — hull produces nothing solid, everything ghost
+            if (allChildrenGhost) {
+                let ghostSeparateParts = "";
+                for (let child of ghostChildren) {
+                    ghostSeparateParts += child.ghostContent || `__GHOST__() {\n${child.solidContent}}\n`;
+                }
+                return {
+                    solidContent: "",
+                    content:      "",
+                    ghostContent: ghostSeparateParts,
+                    containsGhost: true, hasNestedGhost: false, isSelfGhost: false
+                };
+            }
+
+            // No ghost children — fully solid hull, pass through normally
+            if (!anyChildGhost) {
+                let solidParts = joinField('solidContent');
+                return {
+                    solidContent: `${expression}\n{\n${solidParts}}\n`,
+                    content:      `${expression}\n{\n${solidParts}}\n`,
+                    ghostContent: `${expression}\n{\n${solidParts}}\n`,
+                    containsGhost: false, hasNestedGhost: false, isSelfGhost: false
+                };
+            }
+
+            // Mixed children — ghost children excluded from hull, rendered separately
             const solidHullParts = solidChildren.map(c => c.solidContent).join("");
-            const ghostHullParts = solidChildren.map(c => c.solidContent).join(""); // same solid hull in ghost pass for context
+            const solidHull = `${expression}\n{\n${solidHullParts}}\n`;
 
-            // Ghost children rendered individually outside the hull
             let ghostSeparateParts = "";
             for (let child of ghostChildren) {
                 ghostSeparateParts += child.ghostContent || `__GHOST__() {\n${child.solidContent}}\n`;
             }
 
-            // Solid pass: hull of only solid children, ghost children excluded entirely
-            const solidHull = `${expression}\n{\n${solidHullParts}}\n`;
-
-            // Ghost pass: hull of solid children (opaque context) + ghost children individually translucent
-            const ghostHull = `${expression}\n{\n${ghostHullParts}}\n${ghostSeparateParts}`;
-
-			return {
+            return {
                 solidContent: solidHull,
-                content:      solidHull,       // solid hull goes into solid 3MF
-                ghostContent: ghostSeparateParts, // ONLY the extracted ghost children go into ghost 3MF
-                containsGhost: true, hasNestedGhost: true, isSelfGhost: false
+                content:      solidHull,
+                ghostContent: ghostSeparateParts,
+                containsGhost: false, hasNestedGhost: false, isSelfGhost: false
             };
         }
 		
