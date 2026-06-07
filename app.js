@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "186"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "187"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2416,6 +2416,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             skipWhitespaceAndComments();
         }
         
+        // Flip effective ghost true ONLY for this node branch's children
         const effectiveGhost = isInsideGhostScope || hasGhostModifier;
         skipWhitespaceAndComments();
         if (i >= len) return { content: "", allChildrenDisabled: true, containsGhost: false };
@@ -2448,7 +2449,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             return {
                 content: `{ ${blockContent} } `,
                 allChildrenDisabled: (totalChildren > 0 && totalChildren === disabledChildren),
-                containsGhost: blockContainsGhost || hasGhostModifier
+                containsGhost: blockContainsGhost // ✨ ISOLATED: Do not bleed hasGhostModifier upward as a sticky state
             };
         }
         
@@ -2516,14 +2517,15 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             let childResult = parseComponent(effectiveGhost);
             let childContent = childResult.content;
             let shouldDisableWrapper = childResult.allChildrenDisabled;
+            
+            // This node contains a ghost if its children do, OR if it has a % prefix itself!
             let containsGhost = hasGhostModifier || childResult.containsGhost;
 
-            // Deep check string body for nested macro/token indicators
             if (childContent.includes('__GHOST__') || childContent.includes('%')) {
                 containsGhost = true;
             }
 
-            // ⚡ THE SWAP: Check boolean signatures and convert to union if a ghost is involved
+            // ⚡ THE SWAP: Convert boolean signatures to unions if a ghost is active anywhere inside
             let pass2Expression = expression;
             let cleanExpr = expression.trim().toLowerCase();
             let isCsgFilterOp = cleanExpr.startsWith('difference') || cleanExpr.startsWith('intersection');
@@ -2575,7 +2577,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                 };
             }
         } else {
-            // Primitive Leaf Nodes
+            // Leaf execution handling
             if (stripAllGhostsMode) {
                 if (hasGhostModifier) {
                     return { content: `cube([0.001, 0.001, 0.001], center=true);\n`, allChildrenDisabled: false, containsGhost: true };
@@ -2600,7 +2602,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     let output = "";
     while (i < len) {
         let res = parseComponent(false);
-        output += res.content;
+        output += (typeof res === 'object') ? res.content : res;
         skipWhitespaceAndComments();
     }
     return output;
