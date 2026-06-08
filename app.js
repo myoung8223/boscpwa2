@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "217"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "218"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2379,6 +2379,48 @@ if (leftPaneContainer && panelSplitGutter) {
             logToConsole(`📐 Split layout updated and cached to: ${localStorage.getItem('openscad_layout_split')}%`);
         }
         document.addEventListener('mousemove', onMouseMove); document.addEventListener('mouseup', onMouseUp);
+    });
+}
+
+// ==========================================================================
+// 🖥️ VERTICAL CONSOLE SPLITTER
+// ==========================================================================
+const consoleGutter = document.getElementById('console-gutter');
+const leftPanel = document.querySelector('.left-panel');
+if (consoleGutter && consoleBox && leftPanel) {
+    // Restore saved console height
+    const savedConsoleHeight = localStorage.getItem('openscad_console_height');
+    if (savedConsoleHeight) consoleBox.style.height = savedConsoleHeight + 'px';
+
+    consoleGutter.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        document.body.style.cursor = 'row-resize';
+        document.body.style.userSelect = 'none';
+
+        const startY = e.clientY;
+        const startHeight = consoleBox.getBoundingClientRect().height;
+
+        function onMouseMove(moveEvent) {
+            const delta = startY - moveEvent.clientY;
+            const newHeight = Math.min(
+                Math.max(startHeight + delta, 60),               // min 60px
+                leftPanel.getBoundingClientRect().height * 0.8   // max 80% of panel
+            );
+            consoleBox.style.height = newHeight + 'px';
+        }
+
+        function onMouseUp() {
+            document.removeEventListener('mousemove', onMouseMove);
+            document.removeEventListener('mouseup', onMouseUp);
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'text';
+            const finalHeight = Math.round(consoleBox.getBoundingClientRect().height);
+            localStorage.setItem('openscad_console_height', finalHeight);
+            logToConsole(`🖥️ Console height saved: ${finalHeight}px`);
+        }
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
     });
 }
 
