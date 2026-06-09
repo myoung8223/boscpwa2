@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "223"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "224"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1015,6 +1015,7 @@ btnPreview.addEventListener('click', async () => {
         return false;
     })();
 	logToConsole(`🪲 [DEBUG] hasRootModifier: ${hasRootModifier}, rootModifierIndex: ${rootModifierIndex}`);
+	logToConsole(`🪲 [DEBUG] scriptCode contains !: ${scriptCode.includes('!difference')}`);
 	
     try {
         // --- INSTANCE SETTINGS BUILDER FUNCTION ---
