@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "224"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "225"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -176,10 +176,16 @@ const jar = CodeJar(
     (el) => {
         if (typeof Prism !== 'undefined') {
             const code = el.textContent;
+            // Protect OpenSCAD ! modifier from Prism stripping (but not != operator)
+            const protectedCode = code.replace(/!(?!=)/g, '\x01BANG\x01');
             const grammar = Prism.languages.openscad || Prism.languages.clike || Prism.languages.javascript;
             const langName = Prism.languages.openscad ? 'openscad' : (Prism.languages.clike ? 'clike' : 'javascript');
-            if (grammar) el.innerHTML = Prism.highlight(code, grammar, langName);
-            else Prism.highlightElement(el); 
+            if (grammar) {
+                el.innerHTML = Prism.highlight(protectedCode, grammar, langName)
+                                    .replace(/\x01BANG\x01/g, '!');
+            } else {
+                Prism.highlightElement(el);
+            }
         }
         try { applyInlineBracketMatching(el); } catch (e) { console.error("Bracket match error:", e); }
     },
