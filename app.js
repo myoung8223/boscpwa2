@@ -1014,6 +1014,7 @@ btnPreview.addEventListener('click', async () => {
         }
         return false;
     })();
+	logToConsole(`🪲 [DEBUG] hasRootModifier: ${hasRootModifier}, rootModifierIndex: ${rootModifierIndex}`);
 	
     try {
         // --- INSTANCE SETTINGS BUILDER FUNCTION ---
