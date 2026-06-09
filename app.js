@@ -1109,8 +1109,19 @@ btnPreview.addEventListener('click', async () => {
                                /^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t);
                     })
                     .join('\n');
-                const subtree = scriptCode.slice(rootModifierIndex + 1).trimStart();
-                ghostSource = preamble + '\n' + subtree;
+				const subtree = scriptCode.slice(rootModifierIndex + 1).trimStart();
+                // Strip any trailing unmatched } that belong to parent scopes above !
+                let depth = 0;
+                let endPos = subtree.length;
+                for (let si = 0; si < subtree.length; si++) {
+                    const ch = subtree[si];
+                    if (ch === '{') depth++;
+                    else if (ch === '}') {
+                        depth--;
+                        if (depth < 0) { endPos = si; break; } // found unmatched closing brace
+                    }
+                }
+                ghostSource = preamble + '\n' + subtree.slice(0, endPos);
             }
             const cleanGhostCode = isolateOpenSCADGhosts(ghostSource);
 			const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
