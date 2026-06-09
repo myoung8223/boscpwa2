@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "219"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "220"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1084,7 +1084,7 @@ btnPreview.addEventListener('click', async () => {
         // 🚀 PASS 2: ISOLATED GHOST COMPILER (INSTANCE 2)
         // ---------------------------------------------------------
         let ghostData = null;
-        if (hasGhost && !hasRootModifier) {
+        if (hasGhost) {   // was: if (hasGhost && !hasRootModifier)
             logToConsole("⚡ Initializing Dedicated Ghost Geometry Compiler Instance...");
             const ghostInstance = await createWasmInstance();
             mapExternalResources(ghostInstance);
@@ -2498,11 +2498,12 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
 		let hasGhostModifier   = false;
         let hasDisableModifier = false;
-        while (i < len) {
+		while (i < len) {
             let ch = code[i];
             if (ch === '%') { hasGhostModifier = true; i++; }
             else if (ch === '*') { hasDisableModifier = true; i++; }
-            else if (ch === '!' || ch === '#') { hasGhostModifier = true; i++; }
+            else if (ch === '!') { i++; } // root modifier — consumed, handled at pipeline level
+            else if (ch === '#') { hasGhostModifier = true; i++; }
             else break;
             skipWhitespaceAndComments();
         }
