@@ -998,7 +998,8 @@ btnPreview.addEventListener('click', async () => {
     const hasGhost = ghostRegex.test(scriptCode);
     ghostRegex.lastIndex = 0; 
 
-	// Check for ! root modifier — if present, bypass parser entirely
+	// Check for ! root modifier — if present, bypass parser for solid pass
+    let rootModifierIndex = -1;
     const hasRootModifier = (() => {
         let inLineComment = false, inBlockComment = false, inString = false;
         for (let i = 0; i < scriptCode.length; i++) {
@@ -1009,7 +1010,7 @@ btnPreview.addEventListener('click', async () => {
             if (ch === '"') { inString = true; continue; }
             if (ch === '/' && scriptCode[i+1] === '/') { inLineComment = true; i++; continue; }
             if (ch === '/' && scriptCode[i+1] === '*') { inBlockComment = true; i++; continue; }
-            if (ch === '!' && scriptCode[i+1] !== '=') return true;
+            if (ch === '!' && scriptCode[i+1] !== '=') { rootModifierIndex = i; return true; }
         }
         return false;
     })();
@@ -1090,8 +1091,29 @@ btnPreview.addEventListener('click', async () => {
             mapExternalResources(ghostInstance);
 
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
-            const cleanGhostCode = isolateOpenSCADGhosts(scriptCode);
-            const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
+			
+            // When ! is present, ghost pass only processes the isolated subtree
+            // to match OpenSCAD's behavior — parent transforms above ! are ignored
+			let ghostSource = scriptCode;
+            if (hasRootModifier && rootModifierIndex !== -1) {
+                // Extract everything before the ! that is a variable/parameter assignment
+                // so the ghost pass still has access to variables like $fn, csr, etc.
+				const preamble = scriptCode.slice(0, rootModifierIndex)
+                    .split('\n')
+                    .filter(line => {
+                        const t = line.trim();
+                        return t === '' || 
+                               t.startsWith('//') || 
+                               t.startsWith('/*') || 
+                               t.startsWith('*') ||   // block comment continuation and closing */
+                               /^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t);
+                    })
+                    .join('\n');
+                const subtree = scriptCode.slice(rootModifierIndex + 1).trimStart();
+                ghostSource = preamble + '\n' + subtree;
+            }
+            const cleanGhostCode = isolateOpenSCADGhosts(ghostSource);
+			const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
             logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
