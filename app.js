@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "225"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "226"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1022,6 +1022,28 @@ btnPreview.addEventListener('click', async () => {
     })();
 	logToConsole(`🪲 [DEBUG] hasRootModifier: ${hasRootModifier}, rootModifierIndex: ${rootModifierIndex}`);
 	logToConsole(`🪲 [DEBUG] scriptCode contains !: ${scriptCode.includes('!difference')}`);
+
+	// Extract ! subtree for both passes when root modifier is present
+    let isolatedSource = null;
+    if (hasRootModifier && rootModifierIndex !== -1) {
+        const preamble = scriptCode.slice(0, rootModifierIndex)
+            .split('\n')
+            .filter(line => {
+                const t = line.trim();
+                return t === '' || t.startsWith('//') || t.startsWith('/*') ||
+                       t.startsWith('*') ||
+                       /^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t);
+            })
+            .join('\n');
+        let subtree = scriptCode.slice(rootModifierIndex + 1).trimStart();
+        let depth = 0, endPos = subtree.length;
+        for (let si = 0; si < subtree.length; si++) {
+            const ch = subtree[si];
+            if (ch === '{') depth++;
+            else if (ch === '}') { depth--; if (depth < 0) { endPos = si; break; } }
+        }
+        isolatedSource = preamble + '\n' + subtree.slice(0, endPos);
+    }
 	
     try {
         // --- INSTANCE SETTINGS BUILDER FUNCTION ---
@@ -1069,8 +1091,7 @@ btnPreview.addEventListener('click', async () => {
         const solidInstance = await createWasmInstance();
         mapExternalResources(solidInstance);
 
-        //const solidCode = scriptCode.replace(/%[^;{]*({[^}]*}|;)/g, '');
-		const solidCode = hasRootModifier ? scriptCode : isolateOpenSCADGhosts(scriptCode, true);
+		const solidCode = isolateOpenSCADGhosts(isolatedSource ?? scriptCode, true);
         logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
         logToConsole(solidCode);
         logToConsole("🪲 -----------------------------------------\n");
@@ -1100,14 +1121,8 @@ btnPreview.addEventListener('click', async () => {
 
             logToConsole("📥 Running structural scope parsing to isolate ghost layers...");
 			
-			// When ! is present, ghost pass removes just the ! character but keeps
-            // the full source so parent transforms (rotate, translate, etc.) are
-            // preserved for correct ghost geometry positioning.
-            let ghostSource = scriptCode;
-            if (hasRootModifier && rootModifierIndex !== -1) {
-                ghostSource = scriptCode.slice(0, rootModifierIndex) + 
-                              scriptCode.slice(rootModifierIndex + 1);
-            }
+			// Use isolated ! subtree for ghost pass if present, otherwise full source
+            const ghostSource = isolatedSource ?? scriptCode;
             const cleanGhostCode = isolateOpenSCADGhosts(ghostSource);
 			const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
