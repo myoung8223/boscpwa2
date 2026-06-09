@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "220"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "221"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2929,11 +2929,11 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         let ghostSpill = children
             .filter(c => c.ghostContent && c.ghostContent !== c.content && c.ghostContent !== c.solidContent)
             .map(c => c.ghostContent).join("");
-        const fullSolidBlock = `${expression}\n{\n${solidParts}}\n`;
+		const fullSolidBlock = `${expression}\n{\n${solidParts}}\n`;
         return {
             solidContent: fullSolidBlock,
             content:      fullSolidBlock,
-            ghostContent: ghostSpill ? `${expression}\n{\n${ghostSpill}}\n` : "",
+            ghostContent: ghostSpill,  // bubble up naked — no parent wrapper needed
             containsGhost: false, hasNestedGhost: false, isSelfGhost: false
         };
     }
