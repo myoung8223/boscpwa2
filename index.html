@@ -162,7 +162,8 @@
                 <input type="color" id="model-color" value="#3b82f6" style="display: none;">
                 
                 <button id="btn-preview" style="margin-left: auto; background: #ffc107; color: #000;">Preview</button>
-                <button id="btn-export" style="background: #28a745;">Export STL</button>
+                <button id="btn-render" style="background: #28a745;" disabled>Render</button>
+                <button id="btn-export" style="background: #007acc;" disabled>Export</button>
             </div>
             
             <div class="editor-wrapper">
@@ -196,7 +197,8 @@ with Extensive AI Assistance from Google Gemini & Claude</div>
                     <ul style="list-style-type: none; padding-left: 0; line-height: 2; margin-bottom: 30px;">
                         <li><code>[F1]</code> : Toggle Help and OpenSCAD Cheat Sheet Menu</li>
                         <li><code>[Ctrl]</code> + <code>[,]</code> : Toggle Workspace Settings</li>
-                        <li><code>[F5]</code>, <code>[F6]</code>, or <code>[Ctrl]</code> + <code>[Enter]</code> : Render / Preview Model</li>
+                        <li><code>[F5]</code> or <code>[Ctrl]</code> + <code>[Enter]</code> : Preview Model (with ghost layers)</li>
+                        <li><code>[F6]</code> : Render Model (solid only, % ignored)</li>
                         <li><code>[F7]</code> : Export to STL</li>
                         <li><code>[Ctrl]</code> + <code>[S]</code> : Download Editor Cache as .scad Text File</li>
                         <li><code>[Ctrl]</code> + <code>[O]</code> : Open .scad File</li>
