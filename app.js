@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "235"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "234"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1028,12 +1028,7 @@ btnPreview.addEventListener('click', async () => {
     // Isolate % modifiers (ignoring math modulo operations)
     const ghostRegex = /%(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
     const hasGhost = ghostRegex.test(scriptCode);
-    ghostRegex.lastIndex = 0;
-
-    // Detect # highlight modifiers
-    const highlightRegex = /#(?=\s*(cube|sphere|cylinder|polyhedron|square|circle|polygon|translate|rotate|scale|resize|mirror|multmatrix|color|offset|hull|minkowski|union|difference|intersection|for|intersection_for|if|linear_extrude|rotate_extrude|surface|projection|render|text|import)\b)/g;
-    const hasHighlight = highlightRegex.test(scriptCode);
-    highlightRegex.lastIndex = 0;
+    ghostRegex.lastIndex = 0; 
 
 	// Check for ! root modifier — if present, bypass parser for solid pass
     let rootModifierIndex = -1;
@@ -1207,44 +1202,10 @@ btnPreview.addEventListener('click', async () => {
         }
 
         // ---------------------------------------------------------
-        // 🚀 PASS 3: HIGHLIGHT COMPILER (INSTANCE 3) — # modifier
-        // ---------------------------------------------------------
-        let highlightData = null;
-        if (hasHighlight) {
-            logToConsole("⚡ Initializing Highlight Geometry Compiler Instance...");
-            const highlightInstance = await createWasmInstance();
-            mapExternalResources(highlightInstance);
-
-            logToConsole("📥 Running structural scope parsing to isolate highlight layers...");
-
-            const highlightSource = isolatedSource ?? scriptCode;
-            const cleanHighlightCode = isolateHighlights(highlightSource);
-            const highlightModuleHeader = `module __HIGHLIGHT__() { color([1.0, 0.3, 0.3, 0.5]) children(); }\n\n`;
-            const highlightCode = highlightModuleHeader + cleanHighlightCode;
-
-            if (consoleDebugging) {
-                logToConsole("\n🪲 [DEBUG] --- PASS 3 CODE (HIGHLIGHT GEOMETRY) ---");
-                logToConsole(highlightCode);
-                logToConsole("🪲 -----------------------------------------\n");
-            }
-
-            highlightInstance.FS.writeFile('/highlight_input.scad', highlightCode);
-
-            try {
-                highlightInstance.callMain(['/highlight_input.scad', '--backend=manifold', '-o', '/highlight.3mf']);
-                if (highlightInstance.FS.analyzePath('/highlight.3mf').exists) {
-                    highlightData = highlightInstance.FS.readFile('/highlight.3mf');
-                }
-            } catch (err) {
-                logToConsole("Pass 3 execution finished.");
-            }
-        }
-
-        // ---------------------------------------------------------
         // 📦 ASSEMBLE & RENDER DISPATCH
         // ---------------------------------------------------------
-        if (solidData || ghostData || highlightData) {
-            update3DModelViewer(solidData, ghostData, highlightData);
+        if (solidData || ghostData) {
+            update3DModelViewer(solidData, ghostData);
             if (placeholderText) placeholderText.style.display = 'none';
         } else {
             if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
@@ -1509,7 +1470,7 @@ function init3DWorkspace() {
 // ==========================================================================
 // 🎨 MULTI-PASS 3MF VIEWER (Solids + Translucent Ghosts)
 // ==========================================================================
-function update3DModelViewer(solidData, ghostData = null, highlightData = null) {
+function update3DModelViewer(solidData, ghostData = null) {
     if (!workspaceInitialized) init3DWorkspace();
 
     let savedPosition = null;
@@ -1700,58 +1661,8 @@ function update3DModelViewer(solidData, ghostData = null, highlightData = null) 
                 masterGroup.add(ghostGroup);
             }
         }
-
-        // ---------------------------------------------------------
-        // 🔴 PASS 3: HIGHLIGHT GEOMETRY PROCESSING (SEMI-TRANSPARENT RED)
-        // ---------------------------------------------------------
-        if (highlightData) {
-            if (consoleDebugging) logToConsole("🪲 [DEBUG] Parsing Highlight Data Mesh Layer...");
-            const highlightBytes = new Uint8Array(highlightData);
-            const highlightGroup = loader.parse(highlightBytes.buffer);
-
-            if (highlightGroup) {
-                let meshCount = 0;
-
-                // Highlight renders between ghost (0) and solid (1)
-                highlightGroup.renderOrder = 0;
-
-                highlightGroup.traverse((child) => {
-                    if (child.isMesh) {
-                        meshCount++;
-                        if (child.geometry) child.geometry.computeVertexNormals();
-
-                        const highlightMaterial = new THREE.MeshStandardMaterial({
-                            color: 0xff4444,
-                            transparent: true,
-                            opacity: 0.45,
-                            depthWrite: false,
-                            depthTest: true,
-                            side: THREE.DoubleSide,
-                            roughness: 0.2,
-                            metalness: 0.1
-                        });
-
-                        if (typeof wireframeMode !== 'undefined') {
-                            highlightMaterial.wireframe = wireframeMode;
-                        }
-
-                        if (Array.isArray(child.material)) {
-                            child.material = child.material.map(() => highlightMaterial.clone());
-                        } else {
-                            child.material = highlightMaterial;
-                        }
-
-                        child.renderOrder = 0;
-                        child.material.needsUpdate = true;
-                    }
-                });
-
-                if (consoleDebugging) logToConsole(`🪲 [DEBUG] Highlight Pass found and processed ${meshCount} highlight meshes.`);
-                masterGroup.add(highlightGroup);
-            }
-        }
-
-
+		
+		
 		/*
 		// ---------------------------------------------------------
         // 💎 PASS 2: GHOST GEOMETRY PROCESSING (DEBUG OPAQUE MODE)
@@ -2696,219 +2607,6 @@ if (consoleGutter && consoleBox && leftPanel) {
     });
 }
 
-// ==========================================================================
-// 🔴 HIGHLIGHT EXTRACTOR — isolates # marked geometry for red overlay pass
-// Mirrors isolateOpenSCADGhosts but targets # instead of %
-// # geometry renders solid in Pass 1, red overlay in Pass 3
-// # does NOT propagate to children (unlike % which propagates via isInsideGhostScope)
-// ==========================================================================
-function isolateHighlights(code) {
-    let i = 0;
-    const len = code.length;
-
-    function skipWS() {
-        while (i < len) {
-            const ch = code[i];
-            if (/\s/.test(ch)) { i++; }
-            else if (ch === '/' && code[i+1] === '/') { while (i < len && code[i] !== '\n') i++; }
-            else if (ch === '/' && code[i+1] === '*') {
-                i += 2;
-                while (i < len && !(code[i] === '*' && code[i+1] === '/')) i++;
-                i += 2;
-            } else if (ch === '"') {
-                i++;
-                while (i < len) {
-                    if (code[i] === '\\') i += 2;
-                    else if (code[i] === '"') { i++; break; }
-                    else i++;
-                }
-            } else break;
-        }
-    }
-
-    function skipBody() {
-        skipWS();
-        if (i >= len) return;
-        if (code[i] === '{') {
-            let depth = 1; i++;
-            while (i < len && depth > 0) {
-                const ch = code[i];
-                if (ch === '"') { i++; while (i < len) { if (code[i] === '\\') i += 2; else if (code[i] === '"') { i++; break; } else i++; } }
-                else if (ch === '/' && code[i+1] === '/') { while (i < len && code[i] !== '\n') i++; }
-                else if (ch === '/' && code[i+1] === '*') { i += 2; while (i < len && !(code[i] === '*' && code[i+1] === '/')) i++; if (i < len) i += 2; }
-                else if (ch === '{') { depth++; i++; }
-                else if (ch === '}') { depth--; i++; }
-                else i++;
-            }
-        } else {
-            parseH(false);
-        }
-    }
-
-    function parseBlock(inHighlight) {
-        const children = [];
-        while (i < len) {
-            skipWS();
-            if (i >= len || code[i] === '}') break;
-            children.push(parseH(inHighlight));
-        }
-        if (i < len && code[i] === '}') i++;
-        return children;
-    }
-
-    // Returns { solid, highlight } strings
-    function parseH(inHighlight) {
-        skipWS();
-        if (i >= len) return { solid: "", highlight: "" };
-
-        let isHighlight = false;
-        let isDisable   = false;
-        let isGhost     = false;
-        while (i < len) {
-            const ch = code[i];
-            if (ch === '#') { isHighlight = true; i++; }
-            else if (ch === '*') { isDisable = true; i++; }
-            else if (ch === '%') { isGhost = true; i++; }
-            else if (ch === '!') { i++; }
-            else break;
-            skipWS();
-        }
-
-        // * — disabled, produce nothing
-        if (isDisable) { skipBody(); return { solid: "", highlight: "" }; }
-
-        // % — ghost, skip for highlight pass (no solid, no highlight)
-        if (isGhost) { skipBody(); return { solid: "", highlight: "" }; }
-
-        if (i >= len) return { solid: "", highlight: "" };
-
-        // Bare brace block
-        if (code[i] === '{') {
-            i++;
-            const children = parseBlock(isHighlight);
-            const s = children.map(c => c.solid).join("");
-            const h = children.map(c => c.highlight).join("");
-            return { solid: `{\n${s}}\n`, highlight: h };
-        }
-
-        // Read expression
-        let expr = "";
-        let parens = 0, brackets = 0;
-        let endedSemi = false;
-        let isVarAssign = false;
-
-        while (i < len) {
-            const ch = code[i];
-            if (ch === '"') {
-                expr += ch; i++;
-                while (i < len) {
-                    const sc = code[i]; expr += sc;
-                    if (sc === '\\') { i++; if (i < len) { expr += code[i]; i++; } }
-                    else if (sc === '"') { i++; break; }
-                    else i++;
-                }
-                continue;
-            }
-            if (ch === '/' && code[i+1] === '/') { while (i < len && code[i] !== '\n') { expr += code[i]; i++; } continue; }
-            if (ch === '/' && code[i+1] === '*') {
-                expr += '/*'; i += 2;
-                while (i < len && !(code[i] === '*' && code[i+1] === '/')) { expr += code[i]; i++; }
-                if (i < len) { expr += '*/'; i += 2; }
-                continue;
-            }
-            expr += ch;
-            if (ch === '(') parens++;
-            if (ch === ')') parens--;
-            if (ch === '[') brackets++;
-            if (ch === ']') brackets--;
-            if (ch === '=' && parens === 0 && brackets === 0 && !expr.trim().startsWith('module')) isVarAssign = true;
-            i++;
-            if (ch === ';' && parens === 0 && brackets === 0) { endedSemi = true; break; }
-            if (ch === ')' && parens === 0 && brackets === 0) {
-                let peek = i;
-                while (peek < len && /\s/.test(code[peek])) peek++;
-                if (peek < len && code[peek] === ';') {
-                    while (i < peek) { expr += code[i]; i++; }
-                    expr += code[i]; i++;
-                    endedSemi = true;
-                }
-                break;
-            }
-        }
-
-        skipWS();
-
-        // Variable assignment — pass through, no highlight
-        if (isVarAssign) return { solid: `${expr}\n`, highlight: `${expr}\n` };
-
-        const isWrapper = !endedSemi && i < len &&
-            (code[i] === '{' || code[i] === '(' || code[i] === '%' || code[i] === '#' ||
-             code[i] === '*' || /[a-zA-Z0-9_$]/.test(code[i]));
-
-        // Leaf primitive
-        if (!isWrapper) {
-            if (isHighlight) {
-                return {
-                    solid:     `${expr}\n`,
-                    highlight: `__HIGHLIGHT__() ${expr}\n`
-                };
-            }
-            return { solid: `${expr}\n`, highlight: "" };
-        }
-
-        // Classify wrapper
-        const clean = expr.trim().toLowerCase();
-        const isConditional = clean.startsWith('if') || clean.startsWith('for') ||
-                              clean.startsWith('let') || clean.startsWith('each');
-
-        // # on a wrapper — wrap children in __HIGHLIGHT__(), children parsed normally
-        if (isHighlight) {
-            let children = [];
-            if (i < len && code[i] === '{') { i++; children = parseBlock(false); }
-            else children.push(parseH(false));
-            const solidParts = children.map(c => c.solid).join("");
-            return {
-                solid:     `${expr}\n{\n${solidParts}}\n`,
-                highlight: `__HIGHLIGHT__() ${expr}\n{\n${solidParts}}\n`
-            };
-        }
-
-        // Conditional — transparent pass-through
-        if (isConditional) {
-            let children = [];
-            if (i < len && code[i] === '{') { i++; children = parseBlock(false); }
-            else children.push(parseH(false));
-            const s = children.map(c => c.solid).join("");
-            const h = children.map(c => c.highlight).join("");
-            return {
-                solid:     `${expr}\n{\n${s}}\n`,
-                highlight: h ? `${expr}\n{\n${h}}\n` : ""
-            };
-        }
-
-        // Regular wrapper — parse children, bubble up highlight spill
-        let children = [];
-        if (i < len && code[i] === '{') { i++; children = parseBlock(false); }
-        else children.push(parseH(false));
-
-        const solidParts = children.map(c => c.solid).join("");
-        const highlightParts = children.map(c => c.highlight).join("");
-
-        return {
-            solid:     `${expr}\n{\n${solidParts}}\n`,
-            highlight: highlightParts ? `${expr}\n{\n${highlightParts}}\n` : ""
-        };
-    }
-
-    let output = "";
-    while (i < len) {
-        const res = parseH(false);
-        output += res.highlight;
-        skipWS();
-    }
-    return output;
-}
-
 function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
     let i = 0;
     const len = code.length;
@@ -2988,7 +2686,7 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
             if (ch === '%') { hasGhostModifier = true; i++; }
             else if (ch === '*') { hasDisableModifier = true; i++; }
             else if (ch === '!') { i++; } // root modifier — consumed, handled at pipeline level
-            else if (ch === '#') { i++; } // highlight — consumed silently, handled by isolateHighlights()
+            else if (ch === '#') { hasGhostModifier = true; i++; }
             else break;
             skipWhitespaceAndComments();
         }
