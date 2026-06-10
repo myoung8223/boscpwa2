@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "239"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "240"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1726,15 +1726,17 @@ function update3DModelViewer(solidData, ghostData = null, highlightData = null) 
                         meshCount++;
                         if (child.geometry) child.geometry.computeVertexNormals();
 
-                        const highlightMaterial = new THREE.MeshStandardMaterial({
-                            color: 0xff4444,
+						const highlightMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xff2266,
                             transparent: true,
-                            opacity: 0.45,
+                            opacity: 0.65,
                             depthWrite: false,
                             depthTest: true,
                             side: THREE.DoubleSide,
-                            roughness: 0.2,
-                            metalness: 0.1
+                            roughness: 0.1,
+                            metalness: 0.3,
+                            emissive: 0x440011,
+                            emissiveIntensity: 0.4
                         });
 
                         if (typeof wireframeMode !== 'undefined') {
