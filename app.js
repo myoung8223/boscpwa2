@@ -1062,12 +1062,14 @@ btnPreview.addEventListener('click', async () => {
 	if (hasRootModifier && rootModifierIndex !== -1) {
         const preamble = scriptCode.slice(0, rootModifierIndex)
             .split('\n')
-            .filter(line => {
-                const t = line.trim();
-                return t === '' || t.startsWith('//') || t.startsWith('/*') ||
-                       t.startsWith('*') ||
-                       /^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=(?!=)/.test(t) && !t.includes('(');
-            })
+			.filter(line => {
+			    const t = line.trim();
+			    return t === '' || 
+			           t.startsWith('//') || 
+			           t.startsWith('/*') || 
+			           t.startsWith('*') ||
+			           (/^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t) && t.endsWith(';') && !t.includes('('));
+			})
             .join('\n');
 
         // Use a mini-parser to extract exactly one complete statement after !
