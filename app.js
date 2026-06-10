@@ -1068,7 +1068,10 @@ btnPreview.addEventListener('click', async () => {
 			           t.startsWith('//') || 
 			           t.startsWith('/*') || 
 			           t.startsWith('*') ||
-			           (/^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t) && t.endsWith(';') && !t.includes('('));
+			           (/^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t) && 
+			            t.endsWith(';') && 
+			            !t.includes('(') &&
+			            !t.includes(')'));
 			})
             .join('\n');
 
