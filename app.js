@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "233"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "234"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -41,6 +41,7 @@ const fontCache = {};
 const stlCache = {}; 
 const svgCache = {}; // 📁 NEW: Caches SVG files in memory
 let rawEditorCode = "";
+let consoleDebugging = localStorage.getItem('openscad_console_debug') === 'enabled';
 
 // ==========================================================================
 // 🗄️ INDEXEDDB PERSISTENT STORAGE LAYERS
@@ -485,6 +486,21 @@ function highlightErrorLine(lineNumber) {
 function clearErrorHighlights() {
     editorElement.querySelectorAll('.editor-error-line-glow').forEach(el => el.classList.remove('editor-error-line-glow'));
     if (typeof triggerLineUpdate === 'function') triggerLineUpdate();
+}
+
+// ==========================================================================
+// 🪲 CONSOLE DEBUGGING TOGGLE
+// ==========================================================================
+const toggleDebugBtn = document.getElementById('btn-toggle-debug');
+if (toggleDebugBtn) {
+    const applyDebugLayout = (enabled) => {
+        consoleDebugging = enabled;
+        localStorage.setItem('openscad_console_debug', enabled ? 'enabled' : 'disabled');
+        toggleDebugBtn.textContent = enabled ? 'Enabled' : 'Disabled';
+        toggleDebugBtn.style.backgroundColor = enabled ? '#28a745' : '#dc3545';
+    };
+    applyDebugLayout(consoleDebugging);
+    toggleDebugBtn.addEventListener('click', () => applyDebugLayout(!consoleDebugging));
 }
 
 // ==========================================================================
@@ -1030,8 +1046,10 @@ btnPreview.addEventListener('click', async () => {
         }
         return false;
     })();
-	logToConsole(`🪲 [DEBUG] hasRootModifier: ${hasRootModifier}, rootModifierIndex: ${rootModifierIndex}`);
-	logToConsole(`🪲 [DEBUG] scriptCode contains !: ${scriptCode.includes('!difference')}`);
+	if (consoleDebugging) {
+		logToConsole(`🪲 [DEBUG] hasRootModifier: ${hasRootModifier}, rootModifierIndex: ${rootModifierIndex}`);
+		logToConsole(`🪲 [DEBUG] scriptCode contains !: ${scriptCode.includes('!difference')}`);
+	}
 
 	// Extract ! subtree for both passes when root modifier is present
     let isolatedSource = null;
@@ -1128,9 +1146,11 @@ btnPreview.addEventListener('click', async () => {
         mapExternalResources(solidInstance);
 
 		const solidCode = isolateOpenSCADGhosts(isolatedSource ?? scriptCode, true);
-        logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
-        logToConsole(solidCode);
-        logToConsole("🪲 -----------------------------------------\n");
+        if (consoleDebugging) {
+			logToConsole("\n🪲 [DEBUG] --- PASS 1 CODE (SOLID GEOMETRY) ---");
+        	logToConsole(solidCode);
+        	logToConsole("🪲 -----------------------------------------\n");
+		}
 
         solidInstance.FS.writeFile('/solid_input.scad', solidCode);
         
@@ -1163,9 +1183,11 @@ btnPreview.addEventListener('click', async () => {
 			const ghostModuleHeader = `module __GHOST__() { color([0.987, 0.012, 0.876]) children(); }\n\n`;
             const ghostCode = ghostModuleHeader + cleanGhostCode;
             
-            logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
-            logToConsole(ghostCode);
-            logToConsole("🪲 -----------------------------------------\n");
+            if (consoleDebugging) {
+				logToConsole("\n🪲 [DEBUG] --- PASS 2 CODE (GHOST GEOMETRY) ---");
+            	logToConsole(ghostCode);
+            	logToConsole("🪲 -----------------------------------------\n");
+			}
             
             ghostInstance.FS.writeFile('/ghost_input.scad', ghostCode);
             
@@ -1590,7 +1612,9 @@ function update3DModelViewer(solidData, ghostData = null) {
         // 💎 PASS 2: GHOST GEOMETRY PROCESSING (SMOKY GLASS)
         // ---------------------------------------------------------
         if (ghostData) {
-            logToConsole("🪲 [DEBUG] Parsing Ghost Data Mesh Layer...");
+            if (consoleDebugging) {
+				logToConsole("🪲 [DEBUG] Parsing Ghost Data Mesh Layer...");
+			}
             const ghostBytes = new Uint8Array(ghostData);
             const ghostGroup = loader.parse(ghostBytes.buffer);
             
@@ -1630,8 +1654,10 @@ function update3DModelViewer(solidData, ghostData = null) {
                         child.material.needsUpdate = true;
                     }
                 });
-                
-                logToConsole(`🪲 [DEBUG] Ghost Pass found and processed ${meshCount} glass meshes.`);
+
+				if (consoleDebugging) {
+                	logToConsole(`🪲 [DEBUG] Ghost Pass found and processed ${meshCount} glass meshes.`);
+				}
                 masterGroup.add(ghostGroup);
             }
         }
@@ -3036,9 +3062,9 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
                                      c.ghostContent !== c.solidContent;
                 return hasRealGhost ? c.ghostContent : "";
             }).join("");
-            if (expression.trim().startsWith('rotate')) {
-                console.log("ROTATE hasMixedChildren ghostParts length:", ghostParts.length, "preview:", JSON.stringify(ghostParts.substring(0, 80)));
-            }			
+            //if (expression.trim().startsWith('rotate')) {
+            //    console.log("ROTATE hasMixedChildren ghostParts length:", ghostParts.length, "preview:", JSON.stringify(ghostParts.substring(0, 80)));
+            //}			
             return {
                 solidContent: `${expression}\n{\n${solidParts}}\n`,
                 content:      `${expression}\n{\n${visibleParts}}\n`,
