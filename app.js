@@ -1726,6 +1726,19 @@ function update3DModelViewer(solidData, ghostData = null, highlightData = null) 
                         meshCount++;
                         if (child.geometry) child.geometry.computeVertexNormals();
 
+						/*
+						const highlightMaterial = new THREE.MeshStandardMaterial({
+                            color: 0xff4444,
+                            transparent: true,
+                            opacity: 0.45,
+                            depthWrite: false,
+                            depthTest: true,
+                            side: THREE.DoubleSide,
+                            roughness: 0.2,
+                            metalness: 0.1
+                        });
+						*/
+						
 						const highlightMaterial = new THREE.MeshStandardMaterial({
                             color: 0xff2266,
                             transparent: true,
