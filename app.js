@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "232"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "233"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -11,6 +11,7 @@ const consoleBox = document.getElementById('console');
 const btnSave = document.getElementById('btn-save');
 const fileLoad = document.getElementById('file-load');
 const btnPreview = document.getElementById('btn-preview');
+const btnRender = document.getElementById('btn-render');
 const btnExport = document.getElementById('btn-export');
 const viewer3d = document.getElementById('viewer-3d');
 const btnCameraReset = document.getElementById('btn-camera-reset');
@@ -786,17 +787,28 @@ btnWireframe.addEventListener('click', () => {
 });
 
 window.addEventListener('keydown', (event) => {
-    // 🚀 Preview / Render [F5] or [F6]
-    if (event.key === 'F5' || event.key === 'F6') {
+	
+	// 🚀 Preview [F5]
+    if (event.key === 'F5') {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
         if (!btnPreview.disabled) { 
-            logToConsole(`⌨️ Hotkey Triggered: [${event.key}] (Preview)`);
+            logToConsole('⌨️ Hotkey Triggered: [F5] (Preview)');
             btnPreview.click(); 
         }
     }
 
-	// 🚀 Export to STL [F7]
+    // 🚀 Render [F6]
+    if (event.key === 'F6') {
+        event.preventDefault(); 
+        event.stopImmediatePropagation(); 
+        if (btnRender && !btnRender.disabled) { 
+            logToConsole('⌨️ Hotkey Triggered: [F6] (Render)');
+            btnRender.click(); 
+        }
+    }
+
+    // 🚀 Export to STL [F7]
     if (event.key === 'F7') {
         event.preventDefault(); 
         event.stopImmediatePropagation(); 
@@ -975,10 +987,11 @@ hull() {                                   // hull example (D6 die)
             if (customSvgs.length > 0) logToConsole(`✔ Restored ${customSvgs.length} custom SVG(s) from local DB.`);
         } catch (err) { console.error(err); }
 
-        logToConsole('✅ Engine ready! Alter code and click Preview freely.');
+		logToConsole('✅ Engine ready! Alter code and click Preview freely.');
         btnPreview.disabled = false;
+        btnRender.disabled = false;
         btnPreview.click();
-        
+		
     } catch (err) { logToConsole(`Failed to initialize OpenSCAD: ${err.message}`); }
 }
 
@@ -1184,6 +1197,94 @@ btnPreview.addEventListener('click', async () => {
     } catch (error) {
         if (placeholderText) placeholderText.textContent = "⚠️ Engine Crash";
         logToConsole(`Execution error: ${error.message || error}`);
+    }
+});
+
+// ---------------------------------------------------------
+// 🚀 RENDER PIPELINE (F6 — single pass, % ignored, clean STL)
+// ---------------------------------------------------------
+btnRender.addEventListener('click', async () => {
+    if (!openSCADFactory) return;
+
+    if (placeholderText) {
+        placeholderText.textContent = "🛠️ Rendering...";
+        placeholderText.style.display = 'flex';
+    }
+
+    clearErrorHighlights();
+    logToConsole('--- Rendering (F6 — solid only, % ignored) ---');
+    const renderCode = rawEditorCode || jar.toString();
+    const errorLogs = [];
+
+    try {
+        const createWasmInstance = async () => {
+            return await openSCADFactory({
+                noInitialRun: true,
+                locateFile: (path) => `./libs/openscad.wasm`,
+                ENV: { HOME: '/home/web_user' },
+                preRun: [
+                    function(Module) {
+                        try { Module.FS.mkdir('/home'); } catch(e) {}
+                        try { Module.FS.mkdir('/home/web_user'); } catch(e) {}
+                        try { Module.FS.mkdir('/home/web_user/.fonts'); } catch(e) {}
+                        for (const fontName of Object.keys(fontCache)) {
+                            try {
+                                const fontData = new Uint8Array(fontCache[fontName]);
+                                Module.FS.writeFile(`/home/web_user/.fonts/${fontName}`, fontData);
+                            } catch (fsErr) {}
+                        }
+                    }
+                ],
+                print: (text) => logToConsole(`[OpenSCAD]: ${text}`),
+                printErr: (text) => {
+                    errorLogs.push(text);
+                    logToConsole(`[ERROR]: ${text}`);
+                }
+            });
+        };
+
+        logToConsole("⚡ Initializing Render Compiler Instance...");
+        const renderInstance = await createWasmInstance();
+
+        // Map external resources
+        for (const stlName of Object.keys(stlCache)) {
+            try { renderInstance.FS.writeFile(`/${stlName}`, new Uint8Array(stlCache[stlName])); } catch (e) {}
+        }
+        for (const svgName of Object.keys(svgCache)) {
+            try { renderInstance.FS.writeFile(`/${svgName}`, new Uint8Array(svgCache[svgName])); } catch (e) {}
+        }
+
+        // Single pass — raw code straight to WASM, % handled natively (ignored)
+        renderInstance.FS.writeFile('/render_input.scad', renderCode);
+
+        let renderData = null;
+        try {
+            renderInstance.callMain(['/render_input.scad', '--backend=manifold', '-o', '/render.3mf']);
+            if (renderInstance.FS.analyzePath('/render.3mf').exists) {
+                renderData = renderInstance.FS.readFile('/render.3mf');
+                currentStlBlob = new Blob([renderData], { type: 'application/vnd.ms-package.3dmanufacturing-3dmodel+xml' });
+                btnExport.disabled = false;
+            }
+        } catch (err) {
+            logToConsole("Render execution finished.");
+        }
+
+        if (renderData) {
+            update3DModelViewer(renderData, null); // null = no ghost layer
+            if (placeholderText) placeholderText.style.display = 'none';
+            logToConsole("✅ Render complete. Model ready for export.");
+        } else {
+            if (placeholderText) placeholderText.textContent = "❌ Render Failed (Check Console)";
+            let detectedErrorLine = null;
+            for (const logLine of errorLogs) {
+                const lineMatch = logLine.match(/line\s+(\d+)/i);
+                if (lineMatch) { detectedErrorLine = parseInt(lineMatch[1], 10); break; }
+            }
+            if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
+        }
+    } catch (error) {
+        if (placeholderText) placeholderText.textContent = "⚠️ Engine Crash";
+        logToConsole(`Render error: ${error.message || error}`);
     }
 });
 
@@ -1613,7 +1714,7 @@ function update3DModelViewer(solidData, ghostData = null) {
     }
 }
 
-btnPreview.disabled = true; btnExport.disabled = true;
+btnPreview.disabled = true; btnRender.disabled = true; btnExport.disabled = true;
 initOpenSCAD(); init3DWorkspace();
 btnWireframe.style.background = '#007acc'; 
 
