@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "230"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "231"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -2760,12 +2760,12 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
         // -----------------------------------------------------------------------
         // SOLID PASS (stripAllGhostsMode = true)
         // -----------------------------------------------------------------------
-        if (stripAllGhostsMode) {
+		if (stripAllGhostsMode) {
             if (hasGhostModifier) {
                 let solidParts = joinField('solidContent');
                 return {
                     solidContent: `${expression}\n{\n${solidParts}}\n`,
-                    content:      "",
+                    content:      `${expression}\n{\n${solidParts}}\n`,
                     ghostContent: "",
                     containsGhost: true, hasNestedGhost: false, isSelfGhost: true
                 };
@@ -2960,8 +2960,9 @@ function isolateOpenSCADGhosts(code, stripAllGhostsMode = false) {
 
 		// Fully solid — only propagate hull ghost spillover if present, nothing otherwise
         let solidParts = joinField('solidContent');
-        let ghostSpill = children
-            .filter(c => c.ghostContent && c.ghostContent !== c.content && c.ghostContent !== c.solidContent)
+		let ghostSpill = children
+            .filter(c => c.ghostContent && c.ghostContent !== c.content && c.ghostContent !== c.solidContent &&
+                         !c.isSelfGhost && !c.containsGhost)
             .map(c => c.ghostContent).join("");
 		const fullSolidBlock = `${expression}\n{\n${solidParts}}\n`;
 		return {
