@@ -39,6 +39,7 @@ let currentStlBlob = null;
 const fontCache = {}; 
 const stlCache = {}; 
 const svgCache = {}; // 📁 NEW: Caches SVG files in memory
+let rawEditorCode = "";
 
 // ==========================================================================
 // 🗄️ INDEXEDDB PERSISTENT STORAGE LAYERS
@@ -174,6 +175,7 @@ async function deletePersistentSvg(filename) {
 const jar = CodeJar(
     editorElement, 
     (el) => {
+        rawEditorCode = el.textContent;  // capture raw BEFORE Prism
         if (typeof Prism !== 'undefined') {
             const code = el.textContent;
             // Protect OpenSCAD ! modifier from Prism stripping (but not != operator)
@@ -530,6 +532,7 @@ if (editorElement && lineNumbersDiv && toggleLinesBtn) {
     triggerLineUpdate = updateLineNumbers;
 
     jar.onUpdate((code) => {
+		rawEditorCode = code;  // keep in sync with editor changes
         if (editorElement.querySelectorAll('.editor-error-line-glow').length > 0 && lineNumbersDiv.innerHTML.includes('gutter-error-flare')) {
             editorElement.querySelectorAll('.editor-error-line-glow').forEach(el => el.classList.remove('editor-error-line-glow'));
         }
@@ -996,7 +999,7 @@ btnPreview.addEventListener('click', async () => {
 
     clearErrorHighlights();
     logToConsole('--- Generating Preview ---');
-    const scriptCode = jar.toString(); 
+    const scriptCode = rawEditorCode || jar.toString(); 
     const errorLogs = [];
 
     // Isolate % modifiers (ignoring math modulo operations)
