@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "237"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "238"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1054,6 +1054,7 @@ btnPreview.addEventListener('click', async () => {
 	if (consoleDebugging) {
 		logToConsole(`🪲 [DEBUG] hasRootModifier: ${hasRootModifier}, rootModifierIndex: ${rootModifierIndex}`);
 		logToConsole(`🪲 [DEBUG] scriptCode contains !: ${scriptCode.includes('!difference')}`);
+		logToConsole(`🪲 [DEBUG] char at rootModifierIndex: "${scriptCode[rootModifierIndex]}" context: "${scriptCode.slice(rootModifierIndex-10, rootModifierIndex+10)}"`);
 	}
 
 	// Extract ! subtree for both passes when root modifier is present
