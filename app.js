@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "226"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "227"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1025,7 +1025,7 @@ btnPreview.addEventListener('click', async () => {
 
 	// Extract ! subtree for both passes when root modifier is present
     let isolatedSource = null;
-    if (hasRootModifier && rootModifierIndex !== -1) {
+	if (hasRootModifier && rootModifierIndex !== -1) {
         const preamble = scriptCode.slice(0, rootModifierIndex)
             .split('\n')
             .filter(line => {
@@ -1035,14 +1035,40 @@ btnPreview.addEventListener('click', async () => {
                        /^[\$a-zA-Z_][a-zA-Z0-9_]*\s*=/.test(t);
             })
             .join('\n');
-        let subtree = scriptCode.slice(rootModifierIndex + 1).trimStart();
-        let depth = 0, endPos = subtree.length;
-        for (let si = 0; si < subtree.length; si++) {
-            const ch = subtree[si];
-            if (ch === '{') depth++;
-            else if (ch === '}') { depth--; if (depth < 0) { endPos = si; break; } }
+
+        // Use a mini-parser to extract exactly one complete statement after !
+        const afterBang = scriptCode.slice(rootModifierIndex + 1).trimStart();
+        let si = 0;
+        let parenDepth = 0, braceDepth = 0, bracketDepth = 0;
+        let inStr = false, inLC = false, inBC = false;
+        let statementEnd = afterBang.length;
+
+        while (si < afterBang.length) {
+            const ch = afterBang[si];
+            if (inLC) { if (ch === '\n') inLC = false; si++; continue; }
+            if (inBC) { if (ch === '*' && afterBang[si+1] === '/') { inBC = false; si++; } si++; continue; }
+            if (inStr) { if (ch === '\\') si++; else if (ch === '"') inStr = false; si++; continue; }
+            if (ch === '"') { inStr = true; si++; continue; }
+            if (ch === '/' && afterBang[si+1] === '/') { inLC = true; si += 2; continue; }
+            if (ch === '/' && afterBang[si+1] === '*') { inBC = true; si += 2; continue; }
+            if (ch === '(') { parenDepth++; si++; continue; }
+            if (ch === ')') { parenDepth--; si++; continue; }
+            if (ch === '[') { bracketDepth++; si++; continue; }
+            if (ch === ']') { bracketDepth--; si++; continue; }
+            if (ch === '{') { braceDepth++; si++; continue; }
+            if (ch === '}') {
+                if (braceDepth === 0) { statementEnd = si; break; } // unmatched } = end
+                braceDepth--; si++;
+                if (braceDepth === 0 && parenDepth === 0) { statementEnd = si; break; } // closed block
+                continue;
+            }
+            if (ch === ';' && parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+                statementEnd = si + 1; break; // semicolon at top level = end of statement
+            }
+            si++;
         }
-        isolatedSource = preamble + '\n' + subtree.slice(0, endPos);
+
+        isolatedSource = preamble + '\n' + afterBang.slice(0, statementEnd);
     }
 	
     try {
