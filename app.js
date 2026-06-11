@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "241"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "242"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1346,7 +1346,8 @@ btnRender.addEventListener('click', async () => {
             if (placeholderText) placeholderText.style.display = 'none';
             logToConsole("✅ Render complete. Model ready for export.");
         } else {
-            if (renderCode.trim() === '') {
+            //if (renderCode.trim() === '') {
+			if (!renderCode || renderCode.trim() === '') {
                 update3DModelViewer(null, null, null);
                 if (placeholderText) {
                     placeholderText.textContent = "⚠️ Nothing to Render";
