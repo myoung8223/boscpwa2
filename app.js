@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "242"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "243"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1253,7 +1253,7 @@ btnPreview.addEventListener('click', async () => {
             update3DModelViewer(solidData, ghostData, highlightData);
             if (placeholderText) placeholderText.style.display = 'none';
 		} else {
-            if (scriptCode.trim() === '') {
+            if (scriptCode.trim() === '' || errorLogs.some(l => l.includes('Current top level object is empty'))) {
                 update3DModelViewer(null, null, null);
                 if (placeholderText) placeholderText.style.display = 'none';
             } else {
@@ -1346,8 +1346,7 @@ btnRender.addEventListener('click', async () => {
             if (placeholderText) placeholderText.style.display = 'none';
             logToConsole("✅ Render complete. Model ready for export.");
         } else {
-            //if (renderCode.trim() === '') {
-			if (!renderCode || renderCode.trim() === '') {
+			if (!renderCode || renderCode.trim() === '' || errorLogs.some(l => l.includes('Current top level object is empty'))) {
                 update3DModelViewer(null, null, null);
                 if (placeholderText) {
                     placeholderText.textContent = "⚠️ Nothing to Render";
