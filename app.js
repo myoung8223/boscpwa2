@@ -1,5 +1,5 @@
 // ---- BUILD VERSION CONTROLLER ----
-const BUILD_NUMBER = "240"; // <-- Incremented for SVG Import Database & Grid Layout
+const BUILD_NUMBER = "241"; // <-- Incremented for SVG Import Database & Grid Layout
 
 // 🍯 Import standalone, offline-ready CodeJar framework
 import { CodeJar } from './libs/codejar.min.js';
@@ -1252,14 +1252,19 @@ btnPreview.addEventListener('click', async () => {
         if (solidData || ghostData || highlightData) {
             update3DModelViewer(solidData, ghostData, highlightData);
             if (placeholderText) placeholderText.style.display = 'none';
-        } else {
-            if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
-            let detectedErrorLine = null;
-            for (const logLine of errorLogs) {
-                const lineMatch = logLine.match(/line\s+(\d+)/i);
-                if (lineMatch) { detectedErrorLine = parseInt(lineMatch[1], 10); break; }
+		} else {
+            if (scriptCode.trim() === '') {
+                update3DModelViewer(null, null, null);
+                if (placeholderText) placeholderText.style.display = 'none';
+            } else {
+                if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
+                let detectedErrorLine = null;
+                for (const logLine of errorLogs) {
+                    const lineMatch = logLine.match(/line\s+(\d+)/i);
+                    if (lineMatch) { detectedErrorLine = parseInt(lineMatch[1], 10); break; }
+                }
+                if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
             }
-            if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
     } catch (error) {
         if (placeholderText) placeholderText.textContent = "⚠️ Engine Crash";
