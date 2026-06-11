@@ -1257,7 +1257,7 @@ btnPreview.addEventListener('click', async () => {
                 update3DModelViewer(null, null, null);
                 if (placeholderText) placeholderText.style.display = 'none';
             } else {
-                if (placeholderText) placeholderText.textContent = "❌ Build Failed (Check Console)";
+                if (placeholderText) placeholderText.textContent = "❌ Preview Failed (Check Console)";
                 let detectedErrorLine = null;
                 for (const logLine of errorLogs) {
                     const lineMatch = logLine.match(/line\s+(\d+)/i);
@@ -1341,18 +1341,26 @@ btnRender.addEventListener('click', async () => {
             logToConsole("Render execution finished.");
         }
 
-        if (renderData) {
+		if (renderData) {
             update3DModelViewer(renderData, null); // null = no ghost layer
             if (placeholderText) placeholderText.style.display = 'none';
             logToConsole("✅ Render complete. Model ready for export.");
         } else {
-            if (placeholderText) placeholderText.textContent = "❌ Render Failed (Check Console)";
-            let detectedErrorLine = null;
-            for (const logLine of errorLogs) {
-                const lineMatch = logLine.match(/line\s+(\d+)/i);
-                if (lineMatch) { detectedErrorLine = parseInt(lineMatch[1], 10); break; }
+            if (renderCode.trim() === '') {
+                update3DModelViewer(null, null, null);
+                if (placeholderText) {
+                    placeholderText.textContent = "⚠️ Nothing to Render";
+                    placeholderText.style.display = 'flex';
+                }
+            } else {
+                if (placeholderText) placeholderText.textContent = "❌ Render Failed (Check Console)";
+                let detectedErrorLine = null;
+                for (const logLine of errorLogs) {
+                    const lineMatch = logLine.match(/line\s+(\d+)/i);
+                    if (lineMatch) { detectedErrorLine = parseInt(lineMatch[1], 10); break; }
+                }
+                if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
             }
-            if (detectedErrorLine) highlightErrorLine(detectedErrorLine);
         }
     } catch (error) {
         if (placeholderText) placeholderText.textContent = "⚠️ Engine Crash";
